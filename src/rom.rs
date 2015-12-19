@@ -8,22 +8,24 @@ pub enum ScreenMode {
 }
 
 pub struct Rom {
-	prg_pages: u8,
-	chr_pages: u8,
+	prg_rom_pages: u8,
+	chr_rom_pages: u8,
 	flags6: u8,
 	flags7: u8,
 }
 
 impl Rom {
+	///Parse the given bytes as an iNES 1.0 header.
+	///NES 2.0 is not supported until I can find a rom that actually uses it.
 	pub fn parse(data: Vec<u8>) -> Rom {
 		assert_eq!( &data[0 .. 4], MAGIC_NUMBERS );
-		let prg_pages = data[4];
-		let chr_pages = data[5];
+		let prg_rom_pages = data[4];
+		let chr_rom_pages = data[5];
 		let flags6 = data[6];
 		let flags7 = data[7];
 		Rom { 
-			prg_pages: prg_pages,
-			chr_pages: chr_pages,
+			prg_rom_pages: prg_rom_pages,
+			chr_rom_pages: chr_rom_pages,
 			flags6: flags6,
 			flags7: flags7
 		}
@@ -56,6 +58,10 @@ impl Rom {
 	
 	pub fn vs(&self) -> bool {
 		self.get_bit(self.flags7, 1)
+	}
+	
+	pub fn mapper(&self) -> u8 {
+		( ( self.flags6 & 0xF0 ) >> 4 ) | ( self.flags7 & 0xF0 )
 	}
 }
 
@@ -110,6 +116,11 @@ mod tests {
 			set_bit(&mut self.header[7], 1)
 		}
 		
+		fn set_mapper( &mut self, mapper: u8 ) {
+			self.header[6] = ( self.header[6] & 0x0F ) | ( ( mapper & 0x0Fu8 ) << 4 );
+			self.header[7] = ( self.header[7] & 0x0F ) | ( ( mapper & 0xF0u8 ) << 0 );
+		}
+		
 		fn build(&self) -> Vec<u8> {
 			self.header.to_vec()
 		}
@@ -122,21 +133,21 @@ mod tests {
 	}
 	
 	#[test]
-	fn parse_reads_prg_pages() {
+	fn test_prg_rom_pages() {
 		let mut builder = RomBuilder::new();
-		assert_eq!( Rom::parse( builder.build() ).prg_pages, 0 );
+		assert_eq!( Rom::parse( builder.build() ).prg_rom_pages, 0 );
 		
 		builder.set_prg_page_count( 150 );
-		assert_eq!( Rom::parse( builder.build() ).prg_pages, 150 );
+		assert_eq!( Rom::parse( builder.build() ).prg_rom_pages, 150 );
 	}
 	
 	#[test]
-	fn parse_reads_chr_pages() {
+	fn test_chr_rom_pages() {
 		let mut builder = RomBuilder::new();
-		assert_eq!( Rom::parse( builder.build() ).chr_pages, 0 );
+		assert_eq!( Rom::parse( builder.build() ).chr_rom_pages, 0 );
 		
 		builder.set_chr_page_count( 150 );
-		assert_eq!( Rom::parse( builder.build() ).chr_pages, 150 );
+		assert_eq!( Rom::parse( builder.build() ).chr_rom_pages, 150 );
 	}
 	
 	#[test]
@@ -193,5 +204,18 @@ mod tests {
 		
 		builder.set_vs();
 		assert_eq!( Rom::parse( builder.build() ).vs(), true );
+	}
+	
+	#[test]
+	fn test_mapper() {
+		let mut builder = RomBuilder::new();
+		assert_eq!( Rom::parse( builder.build() ).mapper(), 0x00u8 );
+		
+		builder.set_mapper(0x0Au8);
+		assert_eq!( Rom::parse( builder.build() ).mapper(), 0x0Au8 );
+		
+		builder.set_mapper(0xF0u8);
+		println!( "0x{:02X}, 0x{:02X}", builder.header[6], builder.header[7] );
+		assert_eq!( Rom::parse( builder.build() ).mapper(), 0xF0u8 );
 	}
 }
