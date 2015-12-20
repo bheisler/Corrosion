@@ -12,6 +12,12 @@ pub struct Rom {
 	chr_rom_pages: u8,
 	flags6: u8,
 	flags7: u8,
+	prg_ram_pages: u8,
+	trainer: Vec<u8>,
+}
+
+fn get_bit(byte: u8, bit_num: u8) -> bool {
+	!((byte & 1u8 << bit_num) == 0)
 }
 
 impl Rom {
@@ -23,11 +29,22 @@ impl Rom {
 		let chr_rom_pages = data[5];
 		let flags6 = data[6];
 		let flags7 = data[7];
+		let prg_ram_pages = data[8];
+		
+		let mut index : usize = 16;
+		let has_trainer = get_bit(flags6, 2);
+		let trainer = if !has_trainer { vec!() } else  {
+			index += 512;
+			data[(index - 512)..index].to_vec()
+		};
+		
 		Rom { 
 			prg_rom_pages: prg_rom_pages,
 			chr_rom_pages: chr_rom_pages,
 			flags6: flags6,
-			flags7: flags7
+			flags7: flags7,
+			prg_ram_pages: prg_ram_pages,
+			trainer: trainer
 		}
 	}
 	
@@ -40,24 +57,20 @@ impl Rom {
 		}
 	}
 	
-	fn get_bit(&self, byte: u8, bit_num: u8) -> bool {
-		!((byte & 1u8 << bit_num) == 0)
-	}
-	
 	pub fn sram(&self) -> bool {
-		self.get_bit(self.flags6, 1)
+		get_bit(self.flags6, 1)
 	}
 	
-	pub fn trainer(&self) -> bool {
-		self.get_bit(self.flags6, 2)
+	pub fn trainer(&self) -> &Vec<u8> {
+		&self.trainer
 	}
 	
 	pub fn pc10(&self) -> bool {
-		self.get_bit(self.flags7, 0)
+		get_bit(self.flags7, 0)
 	}
 	
 	pub fn vs(&self) -> bool {
-		self.get_bit(self.flags7, 1)
+		get_bit(self.flags7, 1)
 	}
 	
 	pub fn mapper(&self) -> u8 {
@@ -68,9 +81,11 @@ impl Rom {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use rand::{Rng, thread_rng};
 	
 	struct RomBuilder {
-		header : Vec<u8>
+		header : Vec<u8>,
+		trainer : Vec<u8>
 	}
 	
 	fn set_bit(byte: &mut u8, bit_num: u8) {
@@ -81,7 +96,7 @@ mod tests {
 		fn new() -> RomBuilder {
 			let mut header = vec![0x4Eu8, 0x45u8, 0x53u8, 0x1Au8];
 			header.extend([0; 12].iter().cloned());
-			return RomBuilder{ header: header }
+			return RomBuilder{ header: header, trainer: vec!() }
 		}
 		
 		fn set_prg_page_count( &mut self, count: u8 ) {
@@ -101,7 +116,11 @@ mod tests {
 		}
 		
 		fn set_trainer( &mut self ) {
-			set_bit(&mut self.header[6], 2)
+			set_bit(&mut self.header[6], 2);
+			let mut rng = thread_rng();
+			let mut trainer_data = [0u8; 512];
+			rng.fill_bytes(&mut trainer_data);
+			self.trainer = trainer_data.to_vec();
 		}
 		
 		fn set_fourscreen( &mut self ) {
@@ -121,8 +140,14 @@ mod tests {
 			self.header[7] = ( self.header[7] & 0x0F ) | ( ( mapper & 0xF0u8 ) << 0 );
 		}
 		
+		fn set_prg_ram_pages( &mut self, pages: u8 ) {
+			self.header[8] = pages;
+		}
+		
 		fn build(&self) -> Vec<u8> {
-			self.header.to_vec()
+			let mut buf = self.header.clone();
+			buf.extend(self.trainer.iter().clone());
+			buf
 		}
 	}
 	
@@ -181,10 +206,11 @@ mod tests {
 	#[test]
 	fn test_trainer() {
 		let mut builder = RomBuilder::new();
-		assert_eq!( Rom::parse( builder.build() ).trainer(), false );
+		assert_eq!( Rom::parse( builder.build() ).trainer(), &vec!() );
 		
 		builder.set_trainer();
-		assert_eq!( Rom::parse( builder.build() ).trainer(), true );
+		assert_eq!( Rom::parse( builder.build() ).trainer().len(), builder.trainer.len() );
+		assert_eq!( Rom::parse( builder.build() ).trainer(), &builder.trainer );
 	}
 	
 		
@@ -217,5 +243,14 @@ mod tests {
 		builder.set_mapper(0xF0u8);
 		println!( "0x{:02X}, 0x{:02X}", builder.header[6], builder.header[7] );
 		assert_eq!( Rom::parse( builder.build() ).mapper(), 0xF0u8 );
+	}
+	
+		#[test]
+	fn test_prg_ram_pages() {
+		let mut builder = RomBuilder::new();
+		assert_eq!( Rom::parse( builder.build() ).prg_ram_pages, 0 );
+		
+		builder.set_prg_ram_pages(15);
+		assert_eq!( Rom::parse( builder.build() ).prg_ram_pages, 15 );
 	}
 }
