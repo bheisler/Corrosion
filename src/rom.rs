@@ -1,4 +1,7 @@
-static MAGIC_NUMBERS : [u8; 4] = [0x4Eu8, 0x45u8, 0x53u8, 0x1Au8];
+const MAGIC_NUMBERS : [u8; 4] = [0x4Eu8, 0x45u8, 0x53u8, 0x1Au8];
+pub const PRG_ROM_PAGE_SIZE : usize = 16384;
+pub const CHR_ROM_PAGE_SIZE : usize = 8192;
+pub const PRG_RAM_PAGE_SIZE : usize = 8192;
 
 #[derive(PartialEq, Debug)]
 pub enum ScreenMode {
@@ -8,7 +11,7 @@ pub enum ScreenMode {
 }
 
 pub struct Rom {
-	prg_rom_pages: u8,
+	prg_rom: Vec<u8>,
 	chr_rom_pages: u8,
 	flags6: u8,
 	flags7: u8,
@@ -20,26 +23,36 @@ fn get_bit(byte: u8, bit_num: u8) -> bool {
 	!((byte & 1u8 << bit_num) == 0)
 }
 
+fn read_byte( iter : &mut Iterator<Item=u8> ) -> u8 {
+	iter.next().unwrap()
+}
+
+fn read_bytes( iter: &mut Iterator<Item=u8>, bytes: usize ) -> Vec<u8> {
+	iter.take( bytes ).collect()
+}
+
 impl Rom {
 	///Parse the given bytes as an iNES 1.0 header.
 	///NES 2.0 is not supported until I can find a rom that actually uses it.
 	pub fn parse(data: Vec<u8>) -> Rom {
-		assert_eq!( &data[0 .. 4], MAGIC_NUMBERS );
-		let prg_rom_pages = data[4];
-		let chr_rom_pages = data[5];
-		let flags6 = data[6];
-		let flags7 = data[7];
-		let prg_ram_pages = data[8];
+		let mut iter = data.iter().cloned();
+		assert_eq!( read_bytes( &mut iter, 4 ), MAGIC_NUMBERS );
+		let prg_rom_pages = read_byte( &mut iter );
+		let chr_rom_pages = read_byte( &mut iter );
+		let flags6 = read_byte( &mut iter );
+		let flags7 = read_byte( &mut iter );
+		let prg_ram_pages = read_byte( &mut iter );
 		
-		let mut index : usize = 16;
+		read_bytes( &mut iter, 7 );
+		
 		let has_trainer = get_bit(flags6, 2);
-		let trainer = if !has_trainer { vec!() } else  {
-			index += 512;
-			data[(index - 512)..index].to_vec()
+		let trainer = match has_trainer {
+			false => vec!(),
+			true => read_bytes( &mut iter, 512 ),
 		};
 		
 		Rom { 
-			prg_rom_pages: prg_rom_pages,
+			prg_rom: read_bytes( &mut iter, PRG_ROM_PAGE_SIZE * prg_rom_pages as usize ),
 			chr_rom_pages: chr_rom_pages,
 			flags6: flags6,
 			flags7: flags7,
@@ -85,22 +98,35 @@ mod tests {
 	
 	struct RomBuilder {
 		header : Vec<u8>,
-		trainer : Vec<u8>
+		trainer : Vec<u8>,
+		prg_rom : Vec<u8>,
 	}
 	
 	fn set_bit(byte: &mut u8, bit_num: u8) {
 		*byte = *byte | 1u8 << bit_num;
 	}
 	
+	fn generate_bytes( size: usize ) -> Vec<u8> {
+		let mut rng = thread_rng();
+		let mut bytes : Vec<u8> = vec!(0u8; size);
+		rng.fill_bytes(&mut bytes);
+		bytes
+	}
+	
 	impl RomBuilder {
 		fn new() -> RomBuilder {
 			let mut header = vec![0x4Eu8, 0x45u8, 0x53u8, 0x1Au8];
 			header.extend([0; 12].iter().cloned());
-			return RomBuilder{ header: header, trainer: vec!() }
+			return RomBuilder{ 
+				header: header, 
+				trainer: vec!(),
+				prg_rom: vec!(),
+			}
 		}
 		
 		fn set_prg_page_count( &mut self, count: u8 ) {
 			self.header[4] = count;
+			self.prg_rom = generate_bytes( count as usize * PRG_ROM_PAGE_SIZE );
 		}
 		
 		fn set_chr_page_count( &mut self, count: u8 ) {
@@ -117,10 +143,7 @@ mod tests {
 		
 		fn set_trainer( &mut self ) {
 			set_bit(&mut self.header[6], 2);
-			let mut rng = thread_rng();
-			let mut trainer_data = [0u8; 512];
-			rng.fill_bytes(&mut trainer_data);
-			self.trainer = trainer_data.to_vec();
+			self.trainer = generate_bytes( 512 );
 		}
 		
 		fn set_fourscreen( &mut self ) {
@@ -147,6 +170,7 @@ mod tests {
 		fn build(&self) -> Vec<u8> {
 			let mut buf = self.header.clone();
 			buf.extend(self.trainer.iter().clone());
+			buf.extend(self.prg_rom.iter().clone());
 			buf
 		}
 	}
@@ -160,10 +184,10 @@ mod tests {
 	#[test]
 	fn test_prg_rom_pages() {
 		let mut builder = RomBuilder::new();
-		assert_eq!( Rom::parse( builder.build() ).prg_rom_pages, 0 );
+		assert_eq!( Rom::parse( builder.build() ).prg_rom, vec!() );
 		
-		builder.set_prg_page_count( 150 );
-		assert_eq!( Rom::parse( builder.build() ).prg_rom_pages, 150 );
+		builder.set_prg_page_count( 3 );
+		assert_eq!( Rom::parse( builder.build() ).prg_rom, builder.prg_rom );
 	}
 	
 	#[test]
