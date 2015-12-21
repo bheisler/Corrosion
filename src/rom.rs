@@ -3,6 +3,10 @@ pub const PRG_ROM_PAGE_SIZE : usize = 16384;
 pub const CHR_ROM_PAGE_SIZE : usize = 8192;
 pub const PRG_RAM_PAGE_SIZE : usize = 8192;
 
+use std::io::prelude::*;
+use std::fs::File;
+use std::path::Path;
+
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum ScreenMode {
 	Horizontal,
@@ -32,6 +36,14 @@ fn read_bytes( iter: &mut Iterator<Item=u8>, bytes: usize ) -> Vec<u8> {
 }
 
 impl Rom {
+	pub fn read( path : &Path ) -> ::std::io::Result<Rom> {
+		let mut file = try!( File::open( path ) );
+		let mut buf = vec!();
+		try!( file.read_to_end( &mut buf ) );
+		let rom : Rom = Rom::parse( &buf );
+		Ok( rom )
+	}
+	
 	///Parse the given bytes as an iNES 1.0 header.
 	///NES 2.0 is not supported until I can find a rom that actually uses it.
 	pub fn parse(data: &Vec<u8>) -> Rom {
@@ -77,8 +89,20 @@ impl Rom {
 		get_bit(self.flags6, 1)
 	}
 	
+	pub fn prg_rom(&self) -> &Vec<u8> {
+		&self.prg_rom
+	}
+	
+	pub fn chr_rom(&self) -> &Vec<u8> {
+		&self.chr_rom
+	}
+	
 	pub fn trainer(&self) -> &Vec<u8> {
 		&self.trainer
+	}
+	
+	pub fn prg_ram(&self) -> &Vec<u8> {
+		&self.prg_ram
 	}
 	
 	pub fn pc10(&self) -> bool {
@@ -91,6 +115,10 @@ impl Rom {
 	
 	pub fn mapper(&self) -> u8 {
 		( ( self.flags6 & 0xF0 ) >> 4 ) | ( self.flags7 & 0xF0 )
+	}
+	
+	pub fn is_nes2(&self) -> bool {
+		(self.flags7 & 0b00001100) == 0b00001000
 	}
 }
 
@@ -191,19 +219,19 @@ mod tests {
 	#[test]
 	fn test_prg_rom() {
 		let mut builder = RomBuilder::new();
-		assert_eq!( Rom::parse( &builder.build() ).prg_rom, vec!() );
+		assert_eq!( Rom::parse( &builder.build() ).prg_rom(), &vec!() );
 		
 		builder.set_prg_page_count( 3 );
-		assert_eq!( Rom::parse( &builder.build() ).prg_rom, builder.prg_rom );
+		assert_eq!( Rom::parse( &builder.build() ).prg_rom(), &builder.prg_rom );
 	}
 	
 	#[test]
 	fn test_chr_rom() {
 		let mut builder = RomBuilder::new();
-		assert_eq!( Rom::parse( &builder.build() ).chr_rom, vec!() );
+		assert_eq!( Rom::parse( &builder.build() ).chr_rom(), &vec!() );
 		
 		builder.set_chr_page_count( 150 );
-		assert_eq!( Rom::parse( &builder.build() ).chr_rom, builder.chr_rom );
+		assert_eq!( Rom::parse( &builder.build() ).chr_rom(), &builder.chr_rom );
 	}
 	
 	#[test]
@@ -280,12 +308,12 @@ mod tests {
 	fn test_prg_ram_pages() {
 		let mut builder = RomBuilder::new();
 		builder.set_prg_ram_pages(1);
-		assert_eq!( Rom::parse( &builder.build() ).prg_ram.len(), PRG_RAM_PAGE_SIZE );
+		assert_eq!( Rom::parse( &builder.build() ).prg_ram().len(), PRG_RAM_PAGE_SIZE );
 		
 		builder.set_prg_ram_pages(0);
-		assert_eq!( Rom::parse( &builder.build() ).prg_ram.len(), PRG_RAM_PAGE_SIZE );
+		assert_eq!( Rom::parse( &builder.build() ).prg_ram().len(), PRG_RAM_PAGE_SIZE );
 		
 		builder.set_prg_ram_pages(15);
-		assert_eq!( Rom::parse( &builder.build() ).prg_ram.len(), 15 * PRG_RAM_PAGE_SIZE );
+		assert_eq!( Rom::parse( &builder.build() ).prg_ram().len(), 15 * PRG_RAM_PAGE_SIZE );
 	}
 }
