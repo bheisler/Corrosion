@@ -134,8 +134,10 @@ impl Rom {
             0 => 1,
             x => x,
         };
-
-        try!(read_bytes(&mut iter, 7));
+        
+        if try!(read_bytes(&mut iter, 7)) != vec![0u8; 7] {
+            return Err(RomError::DamagedHeader);
+        }
 
         let has_trainer = get_bit(flags6, 2);
         let trainer = match has_trainer {
@@ -376,7 +378,6 @@ mod tests {
         assert_eq!(builder.build_rom().trainer().len(), builder.trainer.len());
         assert_eq!(builder.build_rom().trainer(), &builder.trainer);
     }
-
 
     #[test]
     fn test_pc10() {

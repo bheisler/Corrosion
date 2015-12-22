@@ -1,6 +1,3 @@
-#[rustfmt_skip]
-#[cfg_attr(rustfmt, rustfmt_skip)]
-
 mod rom;
 
 use std::path::Path;
@@ -24,7 +21,6 @@ fn visit_dirs(dir: &Path, cb: &mut FnMut(&DirEntry)) -> io::Result<()> {
     Ok(())
 }
 
-#[rustfmt_skip]
 fn scan_dirs() -> io::Result<()> {
     let args = env::args();
     let path_str = args.skip(1).next().unwrap();
