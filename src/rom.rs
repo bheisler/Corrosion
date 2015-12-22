@@ -1,17 +1,78 @@
+use std::io::prelude::*;
+use std::fs::File;
+use std::path::Path;
+use std::error;
+use std::fmt;
+use std::io;
+
 const MAGIC_NUMBERS : [u8; 4] = [0x4Eu8, 0x45u8, 0x53u8, 0x1Au8];
 pub const PRG_ROM_PAGE_SIZE : usize = 16384;
 pub const CHR_ROM_PAGE_SIZE : usize = 8192;
 pub const PRG_RAM_PAGE_SIZE : usize = 8192;
-
-use std::io::prelude::*;
-use std::fs::File;
-use std::path::Path;
+pub const TRAINER_LENGTH : usize = 512;
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum ScreenMode {
 	Horizontal,
 	Vertical,
 	FourScreen
+}
+
+#[derive(Debug)]
+pub enum RomReadError {
+	Io(io::Error),
+	Parse(RomError),
+}
+
+impl fmt::Display for RomReadError {
+	fn fmt(&self, f:&mut fmt::Formatter) -> fmt::Result {
+		match *self {
+			RomReadError::Io(ref err) => write!(f, "IO Error: {}", err),
+			RomReadError::Parse(ref err) => write!(f, "ROM Error: {}", err),
+		}
+	}
+}
+
+impl error::Error for RomReadError {
+	fn description(&self) -> &str {
+		match *self {
+			RomReadError::Io(ref err) => err.description(),
+			RomReadError::Parse(ref err) => err.description(),
+		}
+	}
+}
+
+impl From<io::Error> for RomReadError {
+	fn from( err: io::Error) -> RomReadError {
+		RomReadError::Io(err)
+	}
+}
+
+impl From<RomError> for RomReadError {
+	fn from( err: RomError ) -> RomReadError {
+		RomReadError::Parse(err)
+	}
+}
+
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub enum RomError {
+	DamagedHeader,
+	UnexpectedEndOfData,
+}
+
+impl fmt::Display for RomError {
+	fn fmt(&self, f:&mut fmt::Formatter) -> fmt::Result {
+		write!(f, "{}", error::Error::description(self) )
+	}
+}
+
+impl error::Error for RomError {
+	fn description(&self) -> &str {
+		match *self {
+			RomError::DamagedHeader => "ROM data had missing or damaged header.",
+			RomError::UnexpectedEndOfData => "Unexpected end of data.",
+		}
+	}
 }
 
 pub struct Rom {
@@ -27,53 +88,61 @@ fn get_bit(byte: u8, bit_num: u8) -> bool {
 	!((byte & 1u8 << bit_num) == 0)
 }
 
-fn read_byte( iter : &mut Iterator<Item=u8> ) -> u8 {
-	iter.next().unwrap()
+fn read_byte( iter : &mut Iterator<Item=u8> ) -> Result<u8, RomError> {
+	match iter.next() {
+		Some(val) => Ok(val),
+		None => Err(RomError::UnexpectedEndOfData),
+	}
 }
 
-fn read_bytes( iter: &mut Iterator<Item=u8>, bytes: usize ) -> Vec<u8> {
-	iter.take( bytes ).collect()
+fn read_bytes( iter: &mut Iterator<Item=u8>, bytes: usize ) -> Result<Vec<u8>, RomError> {
+	let buf: Vec<_> = iter.take( bytes ).collect();
+	if buf.len() < bytes {
+		Err(RomError::UnexpectedEndOfData)
+	}
+	else { Ok(buf) }
 }
 
 impl Rom {
-	pub fn read( path : &Path ) -> ::std::io::Result<Rom> {
+	pub fn read( path : &Path ) -> Result<Rom, RomReadError> {
 		let mut file = try!( File::open( path ) );
 		let mut buf = vec!();
 		try!( file.read_to_end( &mut buf ) );
-		let rom : Rom = Rom::parse( &buf );
-		Ok( rom )
+		Ok( try!( Rom::parse( &buf ) ) )
 	}
 	
 	///Parse the given bytes as an iNES 1.0 header.
 	///NES 2.0 is not supported until I can find a rom that actually uses it.
-	pub fn parse(data: &Vec<u8>) -> Rom {
+	pub fn parse(data: &Vec<u8>) -> Result<Rom, RomError> {
 		let mut iter = data.iter().cloned();
-		assert_eq!( read_bytes( &mut iter, 4 ), MAGIC_NUMBERS );
-		let prg_rom_pages = read_byte( &mut iter );
-		let chr_rom_pages = read_byte( &mut iter );
-		let flags6 = read_byte( &mut iter );
-		let flags7 = read_byte( &mut iter );
-		let prg_ram_pages = match read_byte( &mut iter ) {
+		if try!( read_bytes( &mut iter, 4 ) ) != MAGIC_NUMBERS {
+			return Err(RomError::DamagedHeader);
+		}
+		let prg_rom_pages = try!( read_byte( &mut iter ) );
+		let chr_rom_pages = try!( read_byte( &mut iter ) );
+		let flags6 = try!( read_byte( &mut iter ) );
+		let flags7 = try!( read_byte( &mut iter ) );
+		let prg_ram_pages = match try!( read_byte( &mut iter ) ) {
 			0 => 1,
 			x => x,
 		};
 		
-		read_bytes( &mut iter, 7 );
+		try!( read_bytes( &mut iter, 7 ) );
 		
 		let has_trainer = get_bit(flags6, 2);
 		let trainer = match has_trainer {
 			false => vec!(),
-			true => read_bytes( &mut iter, 512 ),
+			true => try!( read_bytes( &mut iter, TRAINER_LENGTH ) ),
 		};
 		
-		Rom { 
-			prg_rom: read_bytes( &mut iter, PRG_ROM_PAGE_SIZE * prg_rom_pages as usize ),
-			chr_rom: read_bytes( &mut iter, CHR_ROM_PAGE_SIZE * chr_rom_pages as usize ),
+		Ok( Rom { 
+			prg_rom: try!( read_bytes( &mut iter, PRG_ROM_PAGE_SIZE * prg_rom_pages as usize ) ),
+			chr_rom: try!( read_bytes( &mut iter, CHR_ROM_PAGE_SIZE * chr_rom_pages as usize ) ),
 			flags6: flags6,
 			flags7: flags7,
 			prg_ram: vec!( 0u8; PRG_RAM_PAGE_SIZE * prg_ram_pages as usize ),
 			trainer: trainer
-		}
+		} )
 	}
 	
 	pub fn screen_mode(&self) -> ScreenMode {
@@ -177,7 +246,7 @@ mod tests {
 		
 		fn set_trainer( &mut self ) {
 			set_bit(&mut self.header[6], 2);
-			self.trainer = generate_bytes( 512 );
+			self.trainer = generate_bytes( TRAINER_LENGTH );
 		}
 		
 		fn set_fourscreen( &mut self ) {
@@ -208,112 +277,131 @@ mod tests {
 			buf.extend(self.chr_rom.iter().clone());
 			buf
 		}
+		
+		fn build_rom(&self) -> Rom {
+			Rom::parse( &self.build() ).unwrap()
+		}
 	}
 	
 	#[test]
-	#[should_panic]
-	fn parse_panics_on_empty_input() {
-		Rom::parse( &vec!() );
+	fn parse_returns_failure_on_empty_input() {
+		assert!( Rom::parse( &vec!() ).err().unwrap() == RomError::UnexpectedEndOfData );
+	}
+	
+	#[test]
+	fn parse_returns_failure_on_partial_input() {
+		let mut builder = RomBuilder::new();
+		builder.set_prg_page_count( 3 );
+		let mut buf = builder.build();
+		buf.truncate(300);
+		assert!( Rom::parse( &buf ).err().unwrap() == RomError::UnexpectedEndOfData );
+	}
+	
+	#[test]
+	fn parse_returns_failure_on_damaged_input() {
+		let mut buf = RomBuilder::new().build();
+		buf[2] = 155;
+		assert!( Rom::parse( &buf ).err().unwrap() == RomError::DamagedHeader );
 	}
 	
 	#[test]
 	fn test_prg_rom() {
 		let mut builder = RomBuilder::new();
-		assert_eq!( Rom::parse( &builder.build() ).prg_rom(), &vec!() );
+		assert_eq!( builder.build_rom().prg_rom(), &vec!() );
 		
 		builder.set_prg_page_count( 3 );
-		assert_eq!( Rom::parse( &builder.build() ).prg_rom(), &builder.prg_rom );
+		assert_eq!( builder.build_rom().prg_rom(), &builder.prg_rom );
 	}
 	
 	#[test]
 	fn test_chr_rom() {
 		let mut builder = RomBuilder::new();
-		assert_eq!( Rom::parse( &builder.build() ).chr_rom(), &vec!() );
+		assert_eq!( builder.build_rom().chr_rom(), &vec!() );
 		
 		builder.set_chr_page_count( 150 );
-		assert_eq!( Rom::parse( &builder.build() ).chr_rom(), &builder.chr_rom );
+		assert_eq!( builder.build_rom().chr_rom(), &builder.chr_rom );
 	}
 	
 	#[test]
 	fn test_screen_mode_without_fourscreen() {
 		let mut builder = RomBuilder::new();
-		assert_eq!( Rom::parse( &builder.build() ).screen_mode(), ScreenMode::Horizontal );
+		assert_eq!( builder.build_rom().screen_mode(), ScreenMode::Horizontal );
 		
 		builder.set_mirroring();
-		assert_eq!( Rom::parse( &builder.build() ).screen_mode(), ScreenMode::Vertical );
+		assert_eq!( builder.build_rom().screen_mode(), ScreenMode::Vertical );
 	}
 	
 	#[test]
 	fn test_screen_mode_with_fourscreen() {
 		let mut builder = RomBuilder::new();
 		builder.set_fourscreen();
-		assert_eq!( Rom::parse( &builder.build() ).screen_mode(), ScreenMode::FourScreen );
+		assert_eq!( builder.build_rom().screen_mode(), ScreenMode::FourScreen );
 		
 		builder.set_mirroring();
-		assert_eq!( Rom::parse( &builder.build() ).screen_mode(), ScreenMode::FourScreen );
+		assert_eq!( builder.build_rom().screen_mode(), ScreenMode::FourScreen );
 	}
 	
 	#[test]
 	fn test_sram() {
 		let mut builder = RomBuilder::new();
-		assert_eq!( Rom::parse( &builder.build() ).sram(), false );
+		assert_eq!( builder.build_rom().sram(), false );
 		
 		builder.set_sram();
-		assert_eq!( Rom::parse( &builder.build() ).sram(), true );
+		assert_eq!( builder.build_rom().sram(), true );
 	}
 	
 	#[test]
 	fn test_trainer() {
 		let mut builder = RomBuilder::new();
-		assert_eq!( Rom::parse( &builder.build() ).trainer(), &vec!() );
+		assert_eq!( builder.build_rom().trainer(), &vec!() );
 		
 		builder.set_trainer();
-		assert_eq!( Rom::parse( &builder.build() ).trainer().len(), builder.trainer.len() );
-		assert_eq!( Rom::parse( &builder.build() ).trainer(), &builder.trainer );
+		assert_eq!( builder.build_rom().trainer().len(), builder.trainer.len() );
+		assert_eq!( builder.build_rom().trainer(), &builder.trainer );
 	}
 	
 		
 	#[test]
 	fn test_pc10() {
 		let mut builder = RomBuilder::new();
-		assert_eq!( Rom::parse( &builder.build() ).pc10(), false );
+		assert_eq!( builder.build_rom().pc10(), false );
 		
 		builder.set_pc10();
-		assert_eq!( Rom::parse( &builder.build() ).pc10(), true );
+		assert_eq!( builder.build_rom().pc10(), true );
 	}
 	
 	#[test]
 	fn test_vs() {
 		let mut builder = RomBuilder::new();
-		assert_eq!( Rom::parse( &builder.build() ).vs(), false );
+		assert_eq!( builder.build_rom().vs(), false );
 		
 		builder.set_vs();
-		assert_eq!( Rom::parse( &builder.build() ).vs(), true );
+		assert_eq!( builder.build_rom().vs(), true );
 	}
 	
 	#[test]
 	fn test_mapper() {
 		let mut builder = RomBuilder::new();
-		assert_eq!( Rom::parse( &builder.build() ).mapper(), 0x00u8 );
+		assert_eq!( builder.build_rom().mapper(), 0x00u8 );
 		
 		builder.set_mapper(0x0Au8);
-		assert_eq!( Rom::parse( &builder.build() ).mapper(), 0x0Au8 );
+		assert_eq!( builder.build_rom().mapper(), 0x0Au8 );
 		
 		builder.set_mapper(0xF0u8);
 		println!( "0x{:02X}, 0x{:02X}", builder.header[6], builder.header[7] );
-		assert_eq!( Rom::parse( &builder.build() ).mapper(), 0xF0u8 );
+		assert_eq!( builder.build_rom().mapper(), 0xF0u8 );
 	}
 	
 		#[test]
 	fn test_prg_ram_pages() {
 		let mut builder = RomBuilder::new();
 		builder.set_prg_ram_pages(1);
-		assert_eq!( Rom::parse( &builder.build() ).prg_ram().len(), PRG_RAM_PAGE_SIZE );
+		assert_eq!( builder.build_rom().prg_ram().len(), PRG_RAM_PAGE_SIZE );
 		
 		builder.set_prg_ram_pages(0);
-		assert_eq!( Rom::parse( &builder.build() ).prg_ram().len(), PRG_RAM_PAGE_SIZE );
+		assert_eq!( builder.build_rom().prg_ram().len(), PRG_RAM_PAGE_SIZE );
 		
 		builder.set_prg_ram_pages(15);
-		assert_eq!( Rom::parse( &builder.build() ).prg_ram().len(), 15 * PRG_RAM_PAGE_SIZE );
+		assert_eq!( builder.build_rom().prg_ram().len(), 15 * PRG_RAM_PAGE_SIZE );
 	}
 }

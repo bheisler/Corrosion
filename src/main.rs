@@ -33,11 +33,15 @@ fn scan_dirs() -> io::Result<()> {
 		match path.extension().and_then( |ext| ext.to_str() ) {
 			Some("NES") | Some( "nes" ) => {
 				println!( "{}", path.to_str().unwrap() );
-				let rom = rom::Rom::read( &path ).ok().unwrap();
-				println!( "PRG Size: {}, CHR Size: {}, PRG_RAM Size:{}, trainer size: {}", rom.prg_rom().len(), rom.chr_rom().len(), rom.prg_ram().len(), rom.trainer().len() );
-				println!( "SRAM:{}, Screen Mode: {:?}, PC10: {}, VS: {}, Mapper: {}, NES 2.0:{}", rom.sram(), rom.screen_mode(), rom.pc10(), rom.vs(), rom.mapper(), rom.is_nes2() );
+				match rom::Rom::read( &path ) {
+					Ok(ref rom) => {
+						println!( "PRG Size: {}, CHR Size: {}, PRG_RAM Size:{}, trainer size: {}", rom.prg_rom().len(), rom.chr_rom().len(), rom.prg_ram().len(), rom.trainer().len() );
+						println!( "SRAM:{}, Screen Mode: {:?}, PC10: {}, VS: {}, Mapper: {}, NES 2.0:{}", rom.sram(), rom.screen_mode(), rom.pc10(), rom.vs(), rom.mapper(), rom.is_nes2() );
+						mappers.insert( rom.mapper() );
+					}
+					Err(ref err) => println!( "{}", err )
+				};
 				println!("");
-				mappers.insert( rom.mapper() );
 			}
 			_ => ()
 		};
