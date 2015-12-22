@@ -36,7 +36,7 @@ fn scan_dirs() -> io::Result<()> {
 				match rom::Rom::read( &path ) {
 					Ok(ref rom) => {
 						println!( "PRG Size: {}, CHR Size: {}, PRG_RAM Size:{}, trainer size: {}", rom.prg_rom().len(), rom.chr_rom().len(), rom.prg_ram().len(), rom.trainer().len() );
-						println!( "SRAM:{}, Screen Mode: {:?}, PC10: {}, VS: {}, Mapper: {}, NES 2.0:{}", rom.sram(), rom.screen_mode(), rom.pc10(), rom.vs(), rom.mapper(), rom.is_nes2() );
+						println!( "SRAM:{}, Screen Mode: {:?}, PC10: {}, VS: {}, Mapper: {}", rom.sram(), rom.screen_mode(), rom.pc10(), rom.vs(), rom.mapper() );
 						mappers.insert( rom.mapper() );
 					}
 					Err(ref err) => println!( "{}", err )

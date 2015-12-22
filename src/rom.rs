@@ -58,6 +58,7 @@ impl From<RomError> for RomReadError {
 pub enum RomError {
 	DamagedHeader,
 	UnexpectedEndOfData,
+	Nes2NotSupported,
 }
 
 impl fmt::Display for RomError {
@@ -71,6 +72,7 @@ impl error::Error for RomError {
 		match *self {
 			RomError::DamagedHeader => "ROM data had missing or damaged header.",
 			RomError::UnexpectedEndOfData => "Unexpected end of data.",
+			RomError::Nes2NotSupported => "NES 2.0 ROMs are not currently supported.",
 		}
 	}
 }
@@ -112,7 +114,7 @@ impl Rom {
 	}
 	
 	///Parse the given bytes as an iNES 1.0 header.
-	///NES 2.0 is not supported until I can find a rom that actually uses it.
+	///NES 2.0 is not supported yet.
 	pub fn parse(data: &Vec<u8>) -> Result<Rom, RomError> {
 		let mut iter = data.iter().cloned();
 		if try!( read_bytes( &mut iter, 4 ) ) != MAGIC_NUMBERS {
@@ -122,6 +124,11 @@ impl Rom {
 		let chr_rom_pages = try!( read_byte( &mut iter ) );
 		let flags6 = try!( read_byte( &mut iter ) );
 		let flags7 = try!( read_byte( &mut iter ) );
+		
+		if ( flags7 & 0b0000_1100u8 ) == 0b0000_1000u8 {
+			return Err(RomError::Nes2NotSupported);
+		}
+		
 		let prg_ram_pages = match try!( read_byte( &mut iter ) ) {
 			0 => 1,
 			x => x,
@@ -184,10 +191,6 @@ impl Rom {
 	
 	pub fn mapper(&self) -> u8 {
 		( ( self.flags6 & 0xF0 ) >> 4 ) | ( self.flags7 & 0xF0 )
-	}
-	
-	pub fn is_nes2(&self) -> bool {
-		(self.flags7 & 0b00001100) == 0b00001000
 	}
 }
 
@@ -270,6 +273,10 @@ mod tests {
 			self.header[8] = pages;
 		}
 		
+		fn set_nes2(&mut self) {
+			self.header[7] = ( self.header[7] & 0b00001100 ) | 0b0000_1000;
+		}
+		
 		fn build(&self) -> Vec<u8> {
 			let mut buf = self.header.clone();
 			buf.extend(self.trainer.iter().clone());
@@ -302,6 +309,14 @@ mod tests {
 		let mut buf = RomBuilder::new().build();
 		buf[2] = 155;
 		assert!( Rom::parse( &buf ).err().unwrap() == RomError::DamagedHeader );
+	}
+	
+	#[test]
+	fn parse_returns_failure_on_nes2_input() {
+		let mut builder = RomBuilder::new();
+		builder.set_nes2();
+		let buf = builder.build();
+		assert!( Rom::parse( &buf ).err().unwrap() == RomError::Nes2NotSupported );
 	}
 	
 	#[test]
