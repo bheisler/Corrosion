@@ -1,5 +1,3 @@
-extern crate rand;
-
 mod rom;
 
 use std::path::Path;

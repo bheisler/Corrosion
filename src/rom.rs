@@ -196,8 +196,9 @@ impl Rom {
 
 #[cfg(test)]
 mod tests {
+	extern crate rand;
 	use super::*;
-	use rand::{Rng, thread_rng};
+	use self::rand::{Rng, thread_rng};
 	
 	struct RomBuilder {
 		header : Vec<u8>,
