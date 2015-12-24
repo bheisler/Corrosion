@@ -80,10 +80,10 @@ impl error::Error for RomError {
 pub struct Rom {
     flags6: u8,
     flags7: u8,
-    prg_rom: Vec<u8>,
-    chr_rom: Vec<u8>,
-    prg_ram: Vec<u8>,
-    trainer: Vec<u8>,
+    pub prg_rom: Vec<u8>,
+    pub chr_rom: Vec<u8>,
+    pub prg_ram: Vec<u8>,
+    pub trainer: Vec<u8>,
 }
 
 fn get_bit(byte: u8, bit_num: u8) -> bool {
@@ -167,23 +167,7 @@ impl Rom {
     pub fn sram(&self) -> bool {
         get_bit(self.flags6, 1)
     }
-
-    pub fn prg_rom(&self) -> &Vec<u8> {
-        &self.prg_rom
-    }
-
-    pub fn chr_rom(&self) -> &Vec<u8> {
-        &self.chr_rom
-    }
-
-    pub fn trainer(&self) -> &Vec<u8> {
-        &self.trainer
-    }
-
-    pub fn prg_ram(&self) -> &Vec<u8> {
-        &self.prg_ram
-    }
-
+    
     pub fn pc10(&self) -> bool {
         get_bit(self.flags7, 0)
     }
@@ -326,19 +310,19 @@ mod tests {
     #[test]
     fn test_prg_rom() {
         let mut builder = RomBuilder::new();
-        assert_eq!(builder.build_rom().prg_rom(), &vec![]);
+        assert_eq!(&builder.build_rom().prg_rom, &vec![]);
 
         builder.set_prg_page_count(3);
-        assert_eq!(builder.build_rom().prg_rom(), &builder.prg_rom);
+        assert_eq!(&builder.build_rom().prg_rom, &builder.prg_rom);
     }
 
     #[test]
     fn test_chr_rom() {
         let mut builder = RomBuilder::new();
-        assert_eq!(builder.build_rom().chr_rom(), &vec![]);
+        assert_eq!(&builder.build_rom().chr_rom, &vec![]);
 
         builder.set_chr_page_count(150);
-        assert_eq!(builder.build_rom().chr_rom(), &builder.chr_rom);
+        assert_eq!(&builder.build_rom().chr_rom, &builder.chr_rom);
     }
 
     #[test]
@@ -372,11 +356,11 @@ mod tests {
     #[test]
     fn test_trainer() {
         let mut builder = RomBuilder::new();
-        assert_eq!(builder.build_rom().trainer(), &vec![]);
+        assert_eq!(&builder.build_rom().trainer, &vec![]);
 
         builder.set_trainer();
-        assert_eq!(builder.build_rom().trainer().len(), builder.trainer.len());
-        assert_eq!(builder.build_rom().trainer(), &builder.trainer);
+        assert_eq!(builder.build_rom().trainer.len(), builder.trainer.len());
+        assert_eq!(&builder.build_rom().trainer, &builder.trainer);
     }
 
     #[test]
@@ -414,12 +398,12 @@ mod tests {
     fn test_prg_ram_pages() {
         let mut builder = RomBuilder::new();
         builder.set_prg_ram_pages(1);
-        assert_eq!(builder.build_rom().prg_ram().len(), PRG_RAM_PAGE_SIZE);
+        assert_eq!(builder.build_rom().prg_ram.len(), PRG_RAM_PAGE_SIZE);
 
         builder.set_prg_ram_pages(0);
-        assert_eq!(builder.build_rom().prg_ram().len(), PRG_RAM_PAGE_SIZE);
+        assert_eq!(builder.build_rom().prg_ram.len(), PRG_RAM_PAGE_SIZE);
 
         builder.set_prg_ram_pages(15);
-        assert_eq!(builder.build_rom().prg_ram().len(), 15 * PRG_RAM_PAGE_SIZE);
+        assert_eq!(builder.build_rom().prg_ram.len(), 15 * PRG_RAM_PAGE_SIZE);
     }
 }

@@ -27,6 +27,7 @@ pub struct CpuMemory {
     ram: RAM,
     //ppu: &MemSegment,
     //apu: &MemSegment,
+    //input
     //cart: &MemSegment,
 }
 
