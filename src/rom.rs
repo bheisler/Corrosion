@@ -134,7 +134,7 @@ impl Rom {
             0 => 1,
             x => x,
         };
-        
+
         if try!(read_bytes(&mut iter, 7)) != vec![0u8; 7] {
             return Err(RomError::DamagedHeader);
         }
@@ -167,7 +167,7 @@ impl Rom {
     pub fn sram(&self) -> bool {
         get_bit(self.flags6, 1)
     }
-    
+
     pub fn pc10(&self) -> bool {
         get_bit(self.flags7, 0)
     }
