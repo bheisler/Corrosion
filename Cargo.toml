@@ -10,8 +10,8 @@ rand = "0.3"
 
 [[bin]]
 name = "main"
-path = "src/main.rs"
+path = "src/bin/main.rs"
 
 [[bin]]
 name = "scanner"
-path = "src/scanner.rs"
+path = "src/bin/scanner.rs"
