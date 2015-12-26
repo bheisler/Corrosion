@@ -35,7 +35,7 @@ fn scan_dirs() -> io::Result<()> {
                 println!( "{}", path.to_str().unwrap() );
                 match Rom::read( &path ) {
                     Ok(ref rom) => {
-                        println!( "PRG Size: {}, CHR Size: {}, PRG_RAM Size:{}, trainer size: {}", rom.prg_rom().len(), rom.chr_rom().len(), rom.prg_ram.len(), rom.trainer.len() );
+                        println!( "PRG Size: {}, CHR Size: {}, PRG_RAM Size:{}, trainer size: {}", rom.prg_rom.len(), rom.chr_rom.len(), rom.prg_ram.len(), rom.trainer.len() );
                         println!( "SRAM:{}, Screen Mode: {:?}, PC10: {}, VS: {}, Mapper: {}", rom.sram(), rom.screen_mode(), rom.pc10(), rom.vs(), rom.mapper() );
                         mappers.insert( rom.mapper() );
                     }
