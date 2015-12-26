@@ -1,4 +1,4 @@
-use super::Mapper;
+use super::*;
 
 pub struct NROM {
     prg_rom: Vec<u8>,
@@ -21,7 +21,7 @@ impl Mapper for NROM {
         match idx {
             0x6000 ... 0x7FFF => self.prg_ram[((idx - 0x6000) as usize % self.prg_ram.len())],
             0x8000 ... 0xFFFF => self.prg_rom[((idx - 0x8000) as usize % self.prg_ram.len())],
-            _ => panic!("Invalid NES Memory address"),
+            x => invalid_address!(x),
         }
     }
     
@@ -32,7 +32,7 @@ impl Mapper for NROM {
                 self.prg_ram[idx] = val;
             }
             0x8000 ... 0xFFFF => (),//Do nothing
-            _ => panic!("Invalid NES Memory address"),
+            x => invalid_address!(x),
         }
     }
     
