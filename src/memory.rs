@@ -78,34 +78,34 @@ mod tests {
     
     #[test]
     fn can_read_write_ram_through_memory() {
-    	let mut mem = create_test_memory();
-    	
-    	mem.write( 0x0000, 0x24 );
-    	assert_eq!( mem.read( 0x0000 ), 0x24 );
-    	
-    	mem.write( 0x0799, 0x25 );
-    	assert_eq!( mem.read( 0x0799 ), 0x25 );
+        let mut mem = create_test_memory();
+        
+        mem.write( 0x0000, 0x24 );
+        assert_eq!( mem.read( 0x0000 ), 0x24 );
+        
+        mem.write( 0x0799, 0x25 );
+        assert_eq!( mem.read( 0x0799 ), 0x25 );
     }
     
     #[test]
     fn test_ram_mirroring() {
-    	let mut mem = create_test_memory();
-    	
-    	mem.write(0x0800, 12);
-    	assert_eq!( mem.read( 0x0000 ), 12 );
-    	    
-	    mem.write(0x1952, 12);
-    	assert_eq!( mem.read( 0x0152 ), 12 );
+        let mut mem = create_test_memory();
+        
+        mem.write(0x0800, 12);
+        assert_eq!( mem.read( 0x0000 ), 12 );
+            
+        mem.write(0x1952, 12);
+        assert_eq!( mem.read( 0x0152 ), 12 );
     }
     
     #[test]
     fn can_read_write_prg_ram_through_memory() {
-    	let mut mem = create_test_memory();
-    	
-    	mem.write( 0x6111, 0x24 );
-    	assert_eq!( mem.read( 0x6111 ), 0x24 );
-    	
-    	mem.write( 0x6799, 0x25 );
-    	assert_eq!( mem.read( 0x6799 ), 0x25 );
+        let mut mem = create_test_memory();
+        
+        mem.write( 0x6111, 0x24 );
+        assert_eq!( mem.read( 0x6111 ), 0x24 );
+        
+        mem.write( 0x6799, 0x25 );
+        assert_eq!( mem.read( 0x6799 ), 0x25 );
     }
 }
