@@ -5,6 +5,7 @@ macro_rules! invalid_address {
 }
 
 use mappers::Mapper;
+use ppu::PPU;
 use std::cell::RefCell;
 
 pub trait MemSegment {
@@ -34,16 +35,17 @@ impl MemSegment for RAM {
 
 pub struct CpuMemory {
     ram: RAM,
-    // ppu: &MemSegment,
+    ppu: PPU,
     // apu: &MemSegment,
     // input
     cart: RefCell<Box<Mapper>>,
 }
 
 impl CpuMemory {
-    pub fn new(cart: RefCell<Box<Mapper>>) -> CpuMemory {
+    pub fn new(ppu: PPU, cart: RefCell<Box<Mapper>>) -> CpuMemory {
         CpuMemory {
             ram: RAM::new(),
+            ppu: ppu,
             cart: cart,
         }
     }
@@ -53,6 +55,8 @@ impl MemSegment for CpuMemory {
     fn read(&mut self, idx: u16) -> u8 {
         match idx {
             0x0000...0x1FFF => self.ram.read(idx),
+            0x2000...0x3FFF => self.ppu.read(idx),
+            // APU & controller registers
             0x4020...0xFFFF => self.cart.borrow().prg_read(idx),
             x => invalid_address!(x),
         }
@@ -61,6 +65,8 @@ impl MemSegment for CpuMemory {
     fn write(&mut self, idx: u16, val: u8) {
         match idx {
             0x0000...0x1FFF => self.ram.write(idx, val),
+            0x2000...0x3FFF => self.ppu.write(idx, val),
+            // APU & controller registers
             0x4020...0xFFFF => self.cart.borrow_mut().prg_write(idx, val),
             x => invalid_address!(x),
         }
@@ -76,7 +82,7 @@ mod tests {
                                           vec!(0u8; 0x4000),
                                           vec!(0u8; 0x4000),
                                           vec!(0u8; 0x1000));
-        CpuMemory::new(nrom)
+        CpuMemory::new(::ppu::PPU::new(), nrom)
     }
 
     #[test]
@@ -110,5 +116,17 @@ mod tests {
 
         mem.write(0x6799, 0x25);
         assert_eq!(mem.read(0x6799), 0x25);
+    }
+
+    #[test]
+    fn can_read_write_to_ppu_registers_through_memory() {
+        let mut mem = create_test_memory();
+
+        // We're relying on the PPU dynamic latch effect to get the right answers
+        mem.write(0x2000, 0x45);
+        assert_eq!(mem.ppu.read(0x2000), 0x45);
+
+        mem.write(0x2000, 0x48);
+        assert_eq!(mem.read(0x2000), 0x48);
     }
 }

@@ -17,8 +17,6 @@ pub struct PPU {
     ///Whether we're writing into the first (false) or second (true) byte of the
     ///address registers.
     address_latch: bool,
-
-    ppudata_buffer: u8,
 }
 
 impl PPU {
@@ -33,45 +31,44 @@ impl PPU {
             dyn_latch: 0,
             address_latch: false,
             oam: [0u8; 256],
-            ppudata_buffer: 0,
         }
     }
 }
 
 impl MemSegment for PPU {
     fn read(&mut self, idx: u16) -> u8 {
-        match idx {
-            0x2000 => self.dyn_latch,
-            0x2001 => self.dyn_latch,
-            0x2002 => {
+        match idx % 8 {
+            0x0000 => self.dyn_latch,
+            0x0001 => self.dyn_latch,
+            0x0002 => {
                 self.address_latch = false;
                 (self.ppustat & 0b1110_0000) | (self.dyn_latch & 0b0001_1111)
             }
-            0x2003 => self.dyn_latch,
-            0x2004 => {
+            0x0003 => self.dyn_latch,
+            0x0004 => {
                 let res = self.oam[self.oamaddr as usize];
                 self.oamaddr = self.oamaddr.wrapping_add(1);
                 res
             }
-            0x2005 => self.dyn_latch,
-            0x2006 => self.dyn_latch,
-            0x2007 => 0u8,
+            0x0005 => self.dyn_latch,
+            0x0006 => self.dyn_latch,
+            0x0007 => 0u8,
             x => invalid_address!(x),
         }
     }
 
     fn write(&mut self, idx: u16, val: u8) {
         self.dyn_latch = val;
-        match idx {
-            0x2000 => self.ppuctrl = val,
-            0x2001 => self.ppumask = val,
-            0x2002 => (),
-            0x2003 => self.oamaddr = val,
-            0x2004 => {
+        match idx % 8 {
+            0x0000 => self.ppuctrl = val,
+            0x0001 => self.ppumask = val,
+            0x0002 => (),
+            0x0003 => self.oamaddr = val,
+            0x0004 => {
                 self.oam[self.oamaddr as usize] = val;
                 self.oamaddr = self.oamaddr.wrapping_add(1);
             }
-            0x2005 => {
+            0x0005 => {
                 if self.address_latch {
                     self.ppuscroll = (self.ppuscroll & 0xFF00) | ((val as u16) << 0);
                 } else {
@@ -79,7 +76,7 @@ impl MemSegment for PPU {
                 }
                 self.address_latch = true;
             }
-            0x2006 => {
+            0x0006 => {
                 if self.address_latch {
                     self.ppuaddr = (self.ppuaddr & 0xFF00) | ((val as u16) << 0);
                 } else {
@@ -87,7 +84,7 @@ impl MemSegment for PPU {
                 }
                 self.address_latch = true;
             }
-            0x2007 => (),
+            0x0007 => (),
             x => invalid_address!(x),
         }
     }
@@ -156,6 +153,12 @@ mod tests {
         assert_register_single_writable(0x2000, &|ref ppu| ppu.ppuctrl);
         assert_writing_register_fills_latch(0x2000);
         assert_register_not_readable(0x2000);
+    }
+
+    #[test]
+    fn ppu_mirrors_address() {
+        assert_register_single_writable(0x2008, &|ref ppu| ppu.ppuctrl);
+        assert_register_single_writable(0x2010, &|ref ppu| ppu.ppuctrl);
     }
 
     #[test]
