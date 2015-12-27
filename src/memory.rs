@@ -7,6 +7,7 @@ macro_rules! invalid_address {
 use mappers::Mapper;
 use ppu::PPU;
 use apu::APU;
+use io::IO;
 use std::cell::RefCell;
 
 pub trait MemSegment {
@@ -38,16 +39,17 @@ pub struct CpuMemory {
     ram: RAM,
     ppu: PPU,
     apu: APU,
-    // input
+    io: IO,
     cart: RefCell<Box<Mapper>>,
 }
 
 impl CpuMemory {
-    pub fn new(ppu: PPU, apu: APU, cart: RefCell<Box<Mapper>>) -> CpuMemory {
+    pub fn new(ppu: PPU, apu: APU, io: IO, cart: RefCell<Box<Mapper>>) -> CpuMemory {
         CpuMemory {
             ram: RAM::new(),
             ppu: ppu,
             apu: apu,
+            io: io,
             cart: cart,
         }
     }
@@ -59,7 +61,7 @@ impl MemSegment for CpuMemory {
             0x0000...0x1FFF => self.ram.read(idx),
             0x2000...0x3FFF => self.ppu.read(idx),
             0x4000...0x4015 => self.apu.read(idx),
-            //Controller registers
+            0x4016...0x4017 => self.io.read(idx),
             0x4018...0x4019 => self.apu.read(idx),
             0x4020...0xFFFF => self.cart.borrow().prg_read(idx),
             x => invalid_address!(x),
@@ -71,7 +73,7 @@ impl MemSegment for CpuMemory {
             0x0000...0x1FFF => self.ram.write(idx, val),
             0x2000...0x3FFF => self.ppu.write(idx, val),
             0x4000...0x4015 => self.apu.write(idx, val),
-            //Controller registers
+            0x4016 => self.io.write(idx, val),
             0x4017...0x4019 => self.apu.write(idx, val),
             0x4020...0xFFFF => self.cart.borrow_mut().prg_write(idx, val),
             x => invalid_address!(x),
@@ -88,8 +90,7 @@ mod tests {
                                           vec!(0u8; 0x4000),
                                           vec!(0u8; 0x4000),
                                           vec!(0u8; 0x1000));
-        CpuMemory::new(::ppu::PPU::new(),
-            ::apu::APU::new(), nrom)
+        CpuMemory::new(::ppu::PPU::new(), ::apu::APU::new(), ::io::IO::new(), nrom)
     }
 
     #[test]

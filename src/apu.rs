@@ -95,14 +95,14 @@ impl APU {
 }
 
 impl MemSegment for APU {
-    fn read(&mut self, idx:u16) -> u8 {
+    fn read(&mut self, idx: u16) -> u8 {
         match idx % 0x20 {
             0x0015 => self.status,
-            _ => 0
+            _ => 0,
         }
     }
-    
-    fn write(&mut self, idx: u16, val: u8) { 
+
+    fn write(&mut self, idx: u16, val: u8) {
         match idx % 0x20 {
             0x0000 => self.pulse1.flags = val,
             0x0001 => self.pulse1.sweep = val,
@@ -128,7 +128,7 @@ impl MemSegment for APU {
             0x0015 => self.control = val,
             0x0016 => (),
             0x0017 => self.frame = val,
-            _ => ()
+            _ => (),
         }
     }
 }
@@ -145,7 +145,7 @@ mod tests {
         apu.write(idx, 125);
         assert_eq!(getter(&apu), 125);
     }
-    
+
     fn assert_register_not_readable(idx: u16) {
         let mut apu = APU::new();
         apu.write(idx, 12);
@@ -153,32 +153,32 @@ mod tests {
         apu.write(idx, 125);
         assert_eq!(apu.read(idx), 0);
     }
-    
+
     fn test_writable_register(idx: u16, getter: &Fn(&APU) -> u8) {
         assert_register_writable(idx, getter);
         assert_register_not_readable(idx);
     }
-    
+
     #[test]
     fn test_writable_registers() {
-    	test_writable_register(0x4000, &|ref apu| apu.pulse1.flags);
-    	test_writable_register(0x4001, &|ref apu| apu.pulse1.sweep);
-    	test_writable_register(0x4002, &|ref apu| apu.pulse1.timer);
-    	test_writable_register(0x4003, &|ref apu| apu.pulse1.length);
-    	test_writable_register(0x4004, &|ref apu| apu.pulse2.flags);
-    	test_writable_register(0x4005, &|ref apu| apu.pulse2.sweep);
-    	test_writable_register(0x4006, &|ref apu| apu.pulse2.timer);
-    	test_writable_register(0x4007, &|ref apu| apu.pulse2.length);
-    	test_writable_register(0x4008, &|ref apu| apu.triangle.counter);
-    	test_writable_register(0x400A, &|ref apu| apu.triangle.timer);
-    	test_writable_register(0x400B, &|ref apu| apu.triangle.length);
-    	test_writable_register(0x400C, &|ref apu| apu.noise.volume);
-    	test_writable_register(0x400E, &|ref apu| apu.noise.mode);
-    	test_writable_register(0x400F, &|ref apu| apu.noise.length);
-    	test_writable_register(0x4010, &|ref apu| apu.dmc.freq);
-    	test_writable_register(0x4011, &|ref apu| apu.dmc.direct);
-    	test_writable_register(0x4012, &|ref apu| apu.dmc.addr);
-    	test_writable_register(0x4013, &|ref apu| apu.dmc.length);
-    	test_writable_register(0x4017, &|ref apu| apu.frame);
+        test_writable_register(0x4000, &|ref apu| apu.pulse1.flags);
+        test_writable_register(0x4001, &|ref apu| apu.pulse1.sweep);
+        test_writable_register(0x4002, &|ref apu| apu.pulse1.timer);
+        test_writable_register(0x4003, &|ref apu| apu.pulse1.length);
+        test_writable_register(0x4004, &|ref apu| apu.pulse2.flags);
+        test_writable_register(0x4005, &|ref apu| apu.pulse2.sweep);
+        test_writable_register(0x4006, &|ref apu| apu.pulse2.timer);
+        test_writable_register(0x4007, &|ref apu| apu.pulse2.length);
+        test_writable_register(0x4008, &|ref apu| apu.triangle.counter);
+        test_writable_register(0x400A, &|ref apu| apu.triangle.timer);
+        test_writable_register(0x400B, &|ref apu| apu.triangle.length);
+        test_writable_register(0x400C, &|ref apu| apu.noise.volume);
+        test_writable_register(0x400E, &|ref apu| apu.noise.mode);
+        test_writable_register(0x400F, &|ref apu| apu.noise.length);
+        test_writable_register(0x4010, &|ref apu| apu.dmc.freq);
+        test_writable_register(0x4011, &|ref apu| apu.dmc.direct);
+        test_writable_register(0x4012, &|ref apu| apu.dmc.addr);
+        test_writable_register(0x4013, &|ref apu| apu.dmc.length);
+        test_writable_register(0x4017, &|ref apu| apu.frame);
     }
 }
