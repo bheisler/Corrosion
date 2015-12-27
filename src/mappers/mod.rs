@@ -24,7 +24,7 @@ impl Mapper {
 }
 
 impl MemSegment for Mapper {
-    fn read(&self, idx: u16) -> u8 {
+    fn read(&mut self, idx: u16) -> u8 {
         self.prg_read(idx)
     }
     fn write(&mut self, idx: u16, val: u8) {

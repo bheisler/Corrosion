@@ -8,7 +8,7 @@ use mappers::Mapper;
 use std::cell::RefCell;
 
 pub trait MemSegment {
-    fn read(&self, idx: u16) -> u8;
+    fn read(&mut self, idx: u16) -> u8;
     fn write(&mut self, idx: u16, val: u8);
 }
 
@@ -23,7 +23,7 @@ impl RAM {
 }
 
 impl MemSegment for RAM {
-    fn read(&self, idx: u16) -> u8 {
+    fn read(&mut self, idx: u16) -> u8 {
         self.memory[idx as usize % 0x800]
     }
 
@@ -50,7 +50,7 @@ impl CpuMemory {
 }
 
 impl MemSegment for CpuMemory {
-    fn read(&self, idx: u16) -> u8 {
+    fn read(&mut self, idx: u16) -> u8 {
         match idx {
             0x0000...0x1FFF => self.ram.read(idx),
             0x4020...0xFFFF => self.cart.borrow().prg_read(idx),

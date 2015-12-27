@@ -6,10 +6,10 @@ use std::fmt;
 use std::io;
 
 const MAGIC_NUMBERS: [u8; 4] = [0x4Eu8, 0x45u8, 0x53u8, 0x1Au8];
-const PRG_ROM_PAGE_SIZE: usize = 16384;
-const CHR_ROM_PAGE_SIZE: usize = 8192;
-const PRG_RAM_PAGE_SIZE: usize = 8192;
-const TRAINER_LENGTH: usize = 512;
+pub const PRG_ROM_PAGE_SIZE: usize = 16384;
+pub const CHR_ROM_PAGE_SIZE: usize = 8192;
+pub const PRG_RAM_PAGE_SIZE: usize = 8192;
+pub const TRAINER_LENGTH: usize = 512;
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum ScreenMode {
