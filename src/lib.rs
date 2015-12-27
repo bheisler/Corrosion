@@ -2,6 +2,7 @@ pub mod rom;
 pub mod memory;
 pub mod mappers;
 pub mod ppu;
+pub mod apu;
 
 use rom::Rom;
 use mappers::Mapper;
