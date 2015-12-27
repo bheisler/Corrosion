@@ -8,7 +8,11 @@ pub mod io;
 use rom::Rom;
 use mappers::Mapper;
 
+use std::rc::Rc;
+use std::cell::RefCell;
+
 pub fn start_emulator(rom: Rom) {
     let mapper = Mapper::new(rom.mapper() as u16, rom.prg_rom, rom.chr_rom, rom.prg_ram);
-    mapper.borrow();
+    let mapper: Rc<RefCell<Box<Mapper>>> = Rc::new(RefCell::new(mapper));
+    (*mapper).borrow();
 }

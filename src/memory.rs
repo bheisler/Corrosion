@@ -8,6 +8,7 @@ use mappers::Mapper;
 use ppu::PPU;
 use apu::APU;
 use io::IO;
+use std::rc::Rc;
 use std::cell::RefCell;
 
 pub trait MemSegment {
@@ -40,11 +41,11 @@ pub struct CpuMemory {
     ppu: PPU,
     apu: APU,
     io: IO,
-    cart: RefCell<Box<Mapper>>,
+    cart: Rc<RefCell<Box<Mapper>>>,
 }
 
 impl CpuMemory {
-    pub fn new(ppu: PPU, apu: APU, io: IO, cart: RefCell<Box<Mapper>>) -> CpuMemory {
+    pub fn new(ppu: PPU, apu: APU, io: IO, cart: Rc<RefCell<Box<Mapper>>>) -> CpuMemory {
         CpuMemory {
             ram: RAM::new(),
             ppu: ppu,
@@ -84,13 +85,17 @@ impl MemSegment for CpuMemory {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::rc::Rc;
+    use std::cell::RefCell;
 
     fn create_test_memory() -> CpuMemory {
         let nrom = ::mappers::Mapper::new(0,
                                           vec!(0u8; 0x4000),
                                           vec!(0u8; 0x4000),
                                           vec!(0u8; 0x1000));
-        CpuMemory::new(::ppu::PPU::new(), ::apu::APU::new(), ::io::IO::new(), nrom)
+        let nrom = Rc::new(RefCell::new(nrom));
+        let ppu = ::ppu::PPU::new(::ppu::PPUMemory::new(nrom.clone()));
+        CpuMemory::new(ppu, ::apu::APU::new(), ::io::IO::new(), nrom)
     }
 
     #[test]

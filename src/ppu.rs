@@ -1,4 +1,65 @@
 use super::memory::MemSegment;
+use mappers::Mapper;
+use std::rc::Rc;
+use std::cell::RefCell;
+
+pub struct PPUMemory {
+    cart: Rc<RefCell<Box<Mapper>>>,
+    vram: [u8; 0x0800],
+    palette: [u8; 0x20],
+}
+
+impl PPUMemory {
+    pub fn new(cart: Rc<RefCell<Box<Mapper>>>) -> PPUMemory {
+        PPUMemory {
+            cart: cart,
+            vram: [0u8; 0x0800],
+            palette: [0u8; 0x20],
+        }
+    }
+}
+
+impl MemSegment for PPUMemory {
+    fn read(&mut self, idx: u16) -> u8 {
+        match idx {
+            0x0000...0x1FFF => {
+                let cart = self.cart.borrow_mut();
+                cart.chr_read(idx)
+            }
+            0x2000...0x3EFF => self.vram[(idx % 0x800) as usize],
+            0x3F00...0x3FFF => {
+                match (idx - 0x3F00) as usize {
+                    0x10 => self.palette[0x00],
+                    0x14 => self.palette[0x04],
+                    0x18 => self.palette[0x08],
+                    0x1C => self.palette[0x0C],
+                    x => self.palette[x],
+                }
+            }
+            x => invalid_address!(x),
+        }
+    }
+
+    fn write(&mut self, idx: u16, val: u8) {
+        match idx {
+            0x0000...0x1FFF => {
+                let mut cart = self.cart.borrow_mut();
+                cart.chr_write(idx, val)
+            }
+            0x2000...0x3EFF => self.vram[(idx % 0x800) as usize] = val,
+            0x3F00...0x3FFF => {
+                match (idx - 0x3F00) as usize {
+                    0x10 => self.palette[0x00] = val,
+                    0x14 => self.palette[0x04] = val,
+                    0x18 => self.palette[0x08] = val,
+                    0x1C => self.palette[0x0C] = val,
+                    x => self.palette[x] = val,
+                }
+            }
+            x => invalid_address!(x),
+        }
+    }
+}
 
 pub struct PPU {
     ppuctrl: u8,
@@ -17,10 +78,12 @@ pub struct PPU {
     ///Whether we're writing into the first (false) or second (true) byte of the
     ///address registers.
     address_latch: bool,
+
+    ppu_mem: PPUMemory,
 }
 
 impl PPU {
-    pub fn new() -> PPU {
+    pub fn new(ppu_mem: PPUMemory) -> PPU {
         PPU {
             ppuctrl: 0,
             ppumask: 0,
@@ -31,7 +94,17 @@ impl PPU {
             dyn_latch: 0,
             address_latch: false,
             oam: [0u8; 256],
+            ppu_mem: ppu_mem,
         }
+    }
+
+    fn incr_ppuaddr(&mut self) {
+        let incr_size = if (self.ppuctrl & 0b0000_0100) == 0 {
+            1
+        } else {
+            32
+        };
+        self.ppuaddr = self.ppuaddr.wrapping_add(incr_size);
     }
 }
 
@@ -52,7 +125,11 @@ impl MemSegment for PPU {
             }
             0x0005 => self.dyn_latch,
             0x0006 => self.dyn_latch,
-            0x0007 => 0u8,
+            0x0007 => {
+                let res = self.ppu_mem.read(self.ppuaddr);
+                self.incr_ppuaddr();
+                res
+            }
             x => invalid_address!(x),
         }
     }
@@ -84,7 +161,10 @@ impl MemSegment for PPU {
                 }
                 self.address_latch = true;
             }
-            0x0007 => (),
+            0x0007 => {
+                self.ppu_mem.write(self.ppuaddr, val);
+                self.incr_ppuaddr();
+            }
             x => invalid_address!(x),
         }
     }
@@ -94,9 +174,22 @@ impl MemSegment for PPU {
 mod tests {
     use super::*;
     use memory::MemSegment;
+    use mappers::Mapper;
+    use std::rc::Rc;
+    use std::cell::RefCell;
+
+    fn create_test_ppu() -> PPU {
+        create_test_ppu_with_rom(vec![0u8; 0x1000])
+    }
+
+    fn create_test_ppu_with_rom(chr_rom: Vec<u8>) -> PPU {
+        let mut cart = Mapper::new(0, vec![0u8; 0x1000], chr_rom, vec![0u8; 0x1000]);
+        let mut ppu_mem = PPUMemory::new(Rc::new(RefCell::new(cart)));
+        PPU::new(ppu_mem)
+    }
 
     fn assert_register_single_writable(idx: u16, getter: &Fn(&PPU) -> u8) {
-        let mut ppu = PPU::new();
+        let mut ppu = create_test_ppu();
         ppu.write(idx, 12);
         assert_eq!(getter(&ppu), 12);
         ppu.write(idx, 125);
@@ -104,7 +197,7 @@ mod tests {
     }
 
     fn assert_register_double_writable(idx: u16, getter: &Fn(&PPU) -> u16) {
-        let mut ppu = PPU::new();
+        let mut ppu = create_test_ppu();
         ppu.write(idx, 0xDE);
         assert_eq!(getter(&ppu), 0xDE00);
         ppu.write(idx, 0xAD);
@@ -117,7 +210,7 @@ mod tests {
     }
 
     fn assert_register_ignores_writes(idx: u16, getter: &Fn(&PPU) -> u8) {
-        let mut ppu = PPU::new();
+        let mut ppu = create_test_ppu();
         ppu.write(idx, 12);
         assert_eq!(getter(&ppu), 0);
         ppu.write(idx, 125);
@@ -125,7 +218,7 @@ mod tests {
     }
 
     fn assert_writing_register_fills_latch(idx: u16) {
-        let mut ppu = PPU::new();
+        let mut ppu = create_test_ppu();
         ppu.write(idx, 12);
         assert_eq!(ppu.dyn_latch, 12);
         ppu.write(idx, 125);
@@ -133,7 +226,7 @@ mod tests {
     }
 
     fn assert_register_is_readable(idx: u16, setter: &Fn(&mut PPU, u8) -> ()) {
-        let mut ppu = PPU::new();
+        let mut ppu = create_test_ppu();
         setter(&mut ppu, 12);
         assert_eq!(ppu.read(idx), 12);
         setter(&mut ppu, 125);
@@ -141,7 +234,7 @@ mod tests {
     }
 
     fn assert_register_not_readable(idx: u16) {
-        let mut ppu = PPU::new();
+        let mut ppu = create_test_ppu();
         ppu.dyn_latch = 12;
         assert_eq!(ppu.read(idx), 12);
         ppu.dyn_latch = 125;
@@ -181,7 +274,7 @@ mod tests {
 
     #[test]
     fn reading_ppustat_returns_part_of_dynlatch() {
-        let mut ppu = PPU::new();
+        let mut ppu = create_test_ppu();
         ppu.dyn_latch = 0b0001_0101;
         ppu.ppustat = 0b1010_0101;
         assert_eq!(ppu.read(0x2002), 0b1011_0101);
@@ -189,7 +282,7 @@ mod tests {
 
     #[test]
     fn reading_ppustat_clears_addr_latch() {
-        let mut ppu = PPU::new();
+        let mut ppu = create_test_ppu();
         ppu.address_latch = true;
         ppu.read(0x2002);
         assert_eq!(ppu.address_latch, false);
@@ -218,7 +311,7 @@ mod tests {
 
     #[test]
     fn reading_oamdata_uses_oamaddr_as_index_into_oam() {
-        let mut ppu = PPU::new();
+        let mut ppu = create_test_ppu();
         for x in 0..255 {
             ppu.oam[x] = (255 - x) as u8;
         }
@@ -230,7 +323,7 @@ mod tests {
 
     #[test]
     fn reading_oamdata_increments_oamaddr() {
-        let mut ppu = PPU::new();
+        let mut ppu = create_test_ppu();
         ppu.oamaddr = 0;
         ppu.read(0x2004);
         assert_eq!(ppu.oamaddr, 1);
@@ -241,7 +334,7 @@ mod tests {
 
     #[test]
     fn writing_oamdata_uses_oamaddr_as_index_into_oam() {
-        let mut ppu = PPU::new();
+        let mut ppu = create_test_ppu();
         ppu.oamaddr = 0;
         ppu.write(0x2004, 12);
         assert_eq!(ppu.oam[0], 12);
@@ -252,12 +345,103 @@ mod tests {
 
     #[test]
     fn writing_oamdata_increments_oamaddr() {
-        let mut ppu = PPU::new();
+        let mut ppu = create_test_ppu();
         ppu.oamaddr = 0;
         ppu.write(0x2004, 12);
         assert_eq!(ppu.oamaddr, 1);
         ppu.oamaddr = 255;
         ppu.write(0x2004, 12);
         assert_eq!(ppu.oamaddr, 0);
+    }
+
+    #[test]
+    fn ppu_can_read_chr_rom() {
+        let mut chr_rom = vec![0u8; 0x2000];
+        chr_rom[0x0ABC] = 12;
+        chr_rom[0x0DBA] = 212;
+        let mut ppu = create_test_ppu_with_rom(chr_rom);
+
+        ppu.ppuaddr = 0x0ABC;
+        assert_eq!(ppu.read(0x2007), 12);
+
+        ppu.ppuaddr = 0x0DBA;
+        assert_eq!(ppu.read(0x2007), 212);
+    }
+
+    #[test]
+    fn ppu_can_read_write_vram() {
+        let mut ppu = create_test_ppu();
+
+        ppu.ppuaddr = 0x2ABC;
+        ppu.write(0x2007, 12);
+        ppu.ppuaddr = 0x2ABC;
+        assert_eq!(ppu.read(0x2007), 12);
+
+        ppu.ppuaddr = 0x2DBA;
+        ppu.write(0x2007, 212);
+        ppu.ppuaddr = 0x2DBA;
+        assert_eq!(ppu.read(0x2007), 212);
+
+        // Mirroring
+        ppu.ppuaddr = 0x2EFC;
+        ppu.write(0x2007, 128);
+        ppu.ppuaddr = 0x3EFC;
+        assert_eq!(ppu.read(0x2007), 128);
+    }
+
+    #[test]
+    fn accessing_ppudata_increments_ppuaddr() {
+        let mut ppu = create_test_ppu();
+        ppu.ppuaddr = 0x2000;
+        ppu.read(0x2007);
+        assert_eq!(ppu.ppuaddr, 0x2001);
+        ppu.write(0x2007, 0);
+        assert_eq!(ppu.ppuaddr, 0x2002);
+    }
+
+    #[test]
+    fn accessing_ppudata_increments_ppuaddr_by_32_when_ctrl_flag_is_set() {
+        let mut ppu = create_test_ppu();
+        ppu.ppuctrl = 0b0000_0100;
+        ppu.ppuaddr = 0x2000;
+        ppu.read(0x2007);
+        assert_eq!(ppu.ppuaddr, 0x2020);
+        ppu.write(0x2007, 0);
+        assert_eq!(ppu.ppuaddr, 0x2040);
+    }
+
+    #[test]
+    fn ppu_can_read_write_palette() {
+        let mut ppu = create_test_ppu();
+
+        ppu.ppuaddr = 0x3F00;
+        ppu.write(0x2007, 12);
+        ppu.ppuaddr = 0x3F00;
+        assert_eq!(ppu.ppu_mem.palette[0], 12);
+
+        ppu.ppuaddr = 0x3F01;
+        ppu.write(0x2007, 212);
+        ppu.ppuaddr = 0x3F01;
+        assert_eq!(ppu.read(0x2007), 212);
+    }
+
+    #[test]
+    fn test_palette_mirroring() {
+        let mut ppu = create_test_ppu();
+
+        let mirrors = [0x3F10, 0x3F14, 0x3F18, 0x3F1C];
+        let targets = [0x3F00, 0x3F04, 0x3F08, 0x3F0C];
+        for x in 0..4 {
+
+            ppu.ppuaddr = targets[x];
+            ppu.write(0x2007, 12);
+            ppu.ppuaddr = mirrors[x];
+            assert_eq!(ppu.read(0x2007), 12);
+
+            ppu.ppuaddr = mirrors[x];
+            ppu.write(0x2007, 12);
+            ppu.ppuaddr = targets[x];
+            assert_eq!(ppu.read(0x2007), 12);
+        }
     }
 }
