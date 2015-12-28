@@ -13,6 +13,10 @@ use std::cell::RefCell;
 
 pub trait MemSegment {
     fn read(&mut self, idx: u16) -> u8;
+    fn read_w(&mut self, idx: u16) -> u16 {
+        ((self.read(idx) as u16) << 8) | ((self.read(idx + 1) as u16) << 0)
+    }
+
     fn write(&mut self, idx: u16, val: u8);
 }
 

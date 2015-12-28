@@ -4,9 +4,16 @@ pub mod mappers;
 pub mod ppu;
 pub mod apu;
 pub mod io;
+pub mod cpu;
+pub mod disasm;
 
 use rom::Rom;
 use mappers::Mapper;
+use cpu::CPU;
+use memory::CpuMemory;
+use io::IO;
+use apu::APU;
+use ppu::{PPU, PPUMemory};
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -14,5 +21,15 @@ use std::cell::RefCell;
 pub fn start_emulator(rom: Rom) {
     let mapper = Mapper::new(rom.mapper() as u16, rom.prg_rom, rom.chr_rom, rom.prg_ram);
     let mapper: Rc<RefCell<Box<Mapper>>> = Rc::new(RefCell::new(mapper));
-    (*mapper).borrow();
+    let ppu_mem = PPUMemory::new(mapper.clone());
+    let ppu = PPU::new(ppu_mem);
+    let apu = APU::new();
+    let io = IO::new();
+    let mem = CpuMemory::new(ppu, apu, io, mapper);
+    let mut cpu = CPU::new(mem);
+    cpu.init();
+
+    loop {
+        cpu.step();
+    }
 }
