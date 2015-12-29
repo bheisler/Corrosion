@@ -4,6 +4,13 @@
 
 macro_rules! decode_opcode {
     ($opcode:expr, $this:expr) => { match $opcode {
+		//LDX
+		0xA2 => { let mode = $this.immediate(); $this.ldx( mode ) },
+		0xA6 => { let mode = $this.zero_page(); $this.ldx( mode ) },
+		0xB6 => { let mode = $this.zero_page_y(); $this.ldx( mode ) },
+		0xAE => { let mode = $this.absolute(); $this.ldx( mode ) },
+		0xBE => { let mode = $this.absolute_y(); $this.ldx( mode ) },
+            
         //JMP
         0x4C => $this.jmp(),
         0x6C => $this.jmpi(),
@@ -17,17 +24,17 @@ use memory::MemSegment;
 use disasm::Disassembler;
 
 trait AddressingMode {
-    fn read(&mut self, cpu: &mut CPU) -> u8;
-    fn write(&mut self, cpu: &mut CPU, val: u8);
+    fn read(self, cpu: &mut CPU) -> u8;
+    fn write(self, cpu: &mut CPU, val: u8);
 }
 
 struct ImmediateAddressingMode;
 impl AddressingMode for ImmediateAddressingMode {
-    fn read(&mut self, cpu: &mut CPU) -> u8 {
+    fn read(self, cpu: &mut CPU) -> u8 {
         cpu.load_incr_pc()
     }
     #[allow(unused_variables)]
-    fn write(&mut self, cpu: &mut CPU, val: u8) {
+    fn write(self, cpu: &mut CPU, val: u8) {
         panic!("Tried to write {:0X} to an immediate address.", val)
     }
 }
@@ -36,26 +43,23 @@ struct MemoryAddressingMode {
     ptr: u16,
 }
 impl AddressingMode for MemoryAddressingMode {
-    fn read(&mut self, cpu: &mut CPU) -> u8 {
-        let val = cpu.read(self.ptr);
-        self.ptr = self.ptr.wrapping_add(1);
-        val
+    fn read(self, cpu: &mut CPU) -> u8 {
+        cpu.read(self.ptr)
     }
-    fn write(&mut self, cpu: &mut CPU, val: u8) {
-        cpu.write(self.ptr, val);
-        self.ptr = self.ptr + 1;
+    fn write(self, cpu: &mut CPU, val: u8) {
+        cpu.write(self.ptr, val)
     }
 }
 
 pub struct CPU {
-    a: u8,
-    x: u8,
-    y: u8,
-    p: u8,
-    s: u8,
-    pc: u16,
+    pub a: u8,
+    pub x: u8,
+    pub y: u8,
+    pub p: u8,
+    pub s: u8,
+    pub pc: u16,
 
-    mem: CpuMemory,
+    pub mem: CpuMemory,
 }
 
 impl MemSegment for CPU {
@@ -69,10 +73,9 @@ impl MemSegment for CPU {
 
 impl CPU {
     fn trace(&mut self) {
-        let disasm = Disassembler::new(self.pc, &mut self.mem);
-        let opcode = disasm.decode();
+        let opcode = Disassembler::new(self).decode();
         println!(
-            "{:X} {:8}  {:30}  A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:3} SL:{:3}",
+            "{:X} {:9}  {:30}  A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:3} SL:{:3}",
             self.pc,
             opcode.bytes.iter()
             	.map(|byte| format!("{:02X}", byte))
@@ -92,8 +95,30 @@ impl CPU {
     fn immediate(&mut self) -> ImmediateAddressingMode {
         ImmediateAddressingMode
     }
+    fn absolute(&mut self) -> MemoryAddressingMode {
+        MemoryAddressingMode { ptr: self.load_w_incr_pc() }
+    }
+    fn absolute_x(&mut self) -> MemoryAddressingMode {
+        MemoryAddressingMode { ptr: self.load_w_incr_pc().wrapping_add(self.x as u16) }
+    }
+    fn absolute_y(&mut self) -> MemoryAddressingMode {
+        MemoryAddressingMode { ptr: self.load_w_incr_pc().wrapping_add(self.y as u16) }
+    }
+    fn zero_page(&mut self) -> MemoryAddressingMode {
+        MemoryAddressingMode { ptr: self.load_incr_pc() as u16 }
+    }
+    fn zero_page_x(&mut self) -> MemoryAddressingMode {
+        MemoryAddressingMode { ptr: self.load_incr_pc().wrapping_add(self.x) as u16 }
+    }
+    fn zero_page_y(&mut self) -> MemoryAddressingMode {
+        MemoryAddressingMode { ptr: self.load_incr_pc().wrapping_add(self.y) as u16 }
+    }
 
     // Instructions
+    fn ldx<M: AddressingMode>(&mut self, mode: M) {
+        self.x = mode.read(self);
+    }
+
     fn jmp(&mut self) {
         self.pc = self.load_w_incr_pc();
     }
@@ -133,7 +158,6 @@ impl CPU {
     }
 
     pub fn step(&mut self) {
-        println!("{:04X}", self.pc);
         self.trace();
         let opcode: u8 = self.load_incr_pc();
         decode_opcode!(opcode, self);

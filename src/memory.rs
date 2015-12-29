@@ -148,14 +148,14 @@ mod tests {
         mem.write(0x2000, 0x48);
         assert_eq!(mem.read(0x2000), 0x48);
     }
-    
+
     #[test]
     fn test_read_w_reads_low_byte_first() {
         let mut mem = create_test_memory();
-        
-    	mem.write(0x1000, 0xCD);
-    	mem.write(0x1001, 0xAB);
-    	
-    	assert_eq!(mem.read_w(0x1000), 0xABCD);
+
+        mem.write(0x1000, 0xCD);
+        mem.write(0x1001, 0xAB);
+
+        assert_eq!(mem.read_w(0x1000), 0xABCD);
     }
 }
