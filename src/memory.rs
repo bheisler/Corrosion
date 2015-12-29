@@ -14,7 +14,9 @@ use std::cell::RefCell;
 pub trait MemSegment {
     fn read(&mut self, idx: u16) -> u8;
     fn read_w(&mut self, idx: u16) -> u16 {
-        ((self.read(idx) as u16) << 8) | ((self.read(idx + 1) as u16) << 0)
+        let low = self.read(idx) as u16;
+        let high = self.read(idx + 1) as u16;
+        (high << 8) | low
     }
 
     fn write(&mut self, idx: u16, val: u8);
@@ -145,5 +147,15 @@ mod tests {
 
         mem.write(0x2000, 0x48);
         assert_eq!(mem.read(0x2000), 0x48);
+    }
+    
+    #[test]
+    fn test_read_w_reads_low_byte_first() {
+        let mut mem = create_test_memory();
+        
+    	mem.write(0x1000, 0xCD);
+    	mem.write(0x1001, 0xAB);
+    	
+    	assert_eq!(mem.read_w(0x1000), 0xABCD);
     }
 }

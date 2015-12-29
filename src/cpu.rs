@@ -5,8 +5,8 @@
 macro_rules! decode_opcode {
     ($opcode:expr, $this:expr) => { match $opcode {
         //JMP
-        0x4C => { let mode = $this.absolute(); $this.jmp( mode ) },
-        0x6C => { let mode = $this.indirect(); $this.jmp( mode ) },
+        0x4C => $this.jmp(),
+        0x6C => $this.jmpi(),
         //Else
         x => panic!( "Unknown or unsupported opcode: {:02X}", x ),
     } }
@@ -18,11 +18,6 @@ use disasm::Disassembler;
 
 trait AddressingMode {
     fn read(&mut self, cpu: &mut CPU) -> u8;
-    fn read_w(&mut self, cpu: &mut CPU) -> u16 {
-        let low = self.read(cpu) as u16;
-        let high = self.read(cpu) as u16;
-        (high << 8) | low
-    }
     fn write(&mut self, cpu: &mut CPU, val: u8);
 }
 
@@ -94,16 +89,17 @@ impl CPU {
     }
 
     // Addressing modes
-    fn indirect(&mut self) -> MemoryAddressingMode {
-        MemoryAddressingMode { ptr: self.load_w_incr_pc() }
-    }
-    fn absolute(&mut self) -> ImmediateAddressingMode {
+    fn immediate(&mut self) -> ImmediateAddressingMode {
         ImmediateAddressingMode
     }
 
     // Instructions
-    fn jmp<M : AddressingMode>(&mut self, mut mode: M) {
-        self.pc = mode.read_w(self);
+    fn jmp(&mut self) {
+        self.pc = self.load_w_incr_pc();
+    }
+    fn jmpi(&mut self) {
+        let arg = self.load_w_incr_pc();
+        self.pc = self.mem.read_w(arg);
     }
 
     pub fn new(mem: CpuMemory) -> CPU {
@@ -137,6 +133,7 @@ impl CPU {
     }
 
     pub fn step(&mut self) {
+        println!("{:04X}", self.pc);
         self.trace();
         let opcode: u8 = self.load_incr_pc();
         decode_opcode!(opcode, self);

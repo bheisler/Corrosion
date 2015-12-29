@@ -27,24 +27,15 @@ impl<'a, M: MemSegment> Disassembler<'a, M> {
     }
 
     // Addressing modes
-    fn absolute(&mut self) -> PartialInstruction {
-        let low = self.read_incr_pc();
-        let high = self.read_incr_pc();
-        PartialInstruction {
-            pattern: format!("$$$ {:02X}{:02X}", high, low),
-        }
-    }
-    fn indirect(&mut self) -> PartialInstruction {
-        let arg = self.read_w_incr_pc();
-        PartialInstruction {
-            pattern: format!("$$$ ({:04X}) = {:04X}", arg, self.mem.read_w(arg)),
-        }
-    }
 
     // Instructions
-    fn jmp(&mut self, instr: PartialInstruction) -> String {
-        instr.finish("JMP")
+    fn jmp(&mut self) -> String {
+        format!( "JMP {:04X}", self.read_w_incr_pc() )
     }
+	fn jmpi(&mut self) -> String {
+	    let arg = self.read_w_incr_pc(); 
+	    format!("JMP ({:04X}) = {:04X}", arg, self.mem.read_w(arg))
+	}
 
     pub fn decode(mut self) -> Instruction {
         let opcode = self.read_incr_pc();
