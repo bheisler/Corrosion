@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate bitflags;
+
 pub mod rom;
 pub mod memory;
 pub mod mappers;

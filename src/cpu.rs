@@ -1,7 +1,5 @@
 #![macro_use]
 
-
-
 macro_rules! decode_opcode {
     ($opcode:expr, $this:expr) => { match $opcode {
         //Stores
@@ -61,11 +59,30 @@ impl AddressingMode for MemoryAddressingMode {
     }
 }
 
+bitflags! {
+    flags Status : u8 {
+        const C = 0b0000_0001, //Carry flag
+        const Z = 0b0000_0010, //Zero flag
+        const I = 0b0000_0100, //Enable Interrupts
+        const D = 0b0000_1000, //Enable BCD mode
+        const B = 0b0001_0000, //BRK
+        const U = 0b0010_0000, //Unused, should always be 1
+        const V = 0b0100_0000, //Overflow
+        const S = 0b1000_0000, //Sign
+    }
+}
+
+impl Status {
+    fn init() -> Status {
+        I | U
+    }
+}
+
 pub struct CPU {
     pub a: u8,
     pub x: u8,
     pub y: u8,
-    pub p: u8,
+    pub p: Status,
     pub sp: u8,
     pub pc: u16,
 
@@ -94,7 +111,7 @@ impl CPU {
             self.a,
             self.x,
             self.y,
-            self.p,
+            self.p.bits(),
             self.sp,
             0, //TODO: Add cycle counting
             0, //TODO: Add scanline counting
@@ -159,7 +176,7 @@ impl CPU {
             a: 0,
             x: 0,
             y: 0,
-            p: 0x24,
+            p: Status::init(),
             sp: 0xFD,
             pc: 0,
 

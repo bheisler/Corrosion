@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Brook Heisler <redattack34@gmail.com>"]
 
 [dependencies]
+bitflags = "0.3.3"
 
 [dev-dependencies]
 rand = "0.3"
