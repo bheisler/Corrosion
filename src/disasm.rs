@@ -89,16 +89,32 @@ impl<'a> Disassembler<'a> {
     }
 
     // Instructions
+    // Stores
+    fn stx(&mut self, instr: PartialInstruction) -> String {
+        instr.finish("STX")
+    }
+
+    // Loads
     fn ldx(&mut self, instr: PartialInstruction) -> String {
         instr.finish("LDX")
     }
 
+    // Jumps
     fn jmp(&mut self) -> String {
         format!("JMP ${:04X}", self.read_w_incr_pc())
     }
     fn jmpi(&mut self) -> String {
         let arg = self.read_w_incr_pc();
         format!("JMP ({:04X}) = {:04X}", arg, self.cpu.mem.read_w(arg))
+    }
+    fn jsr(&mut self) -> String {
+        let arg = self.read_w_incr_pc();
+        format!("JSR {:04X}", arg)
+    }
+
+    // Misc
+    fn nop(&mut self) -> String {
+        "NOP".to_string()
     }
 
     pub fn decode(mut self) -> Instruction {

@@ -4,16 +4,26 @@
 
 macro_rules! decode_opcode {
     ($opcode:expr, $this:expr) => { match $opcode {
-		//LDX
-		0xA2 => { let mode = $this.immediate(); $this.ldx( mode ) },
-		0xA6 => { let mode = $this.zero_page(); $this.ldx( mode ) },
-		0xB6 => { let mode = $this.zero_page_y(); $this.ldx( mode ) },
-		0xAE => { let mode = $this.absolute(); $this.ldx( mode ) },
-		0xBE => { let mode = $this.absolute_y(); $this.ldx( mode ) },
-            
-        //JMP
+        //Stores
+        0x86 => { let mode = $this.zero_page();   $this.stx( mode ) },
+        0x96 => { let mode = $this.zero_page_y(); $this.stx( mode ) },
+        0x8E => { let mode = $this.absolute();    $this.stx( mode ) },
+
+        //Loads
+        0xA2 => { let mode = $this.immediate();   $this.ldx( mode ) },
+        0xA6 => { let mode = $this.zero_page();   $this.ldx( mode ) },
+        0xB6 => { let mode = $this.zero_page_y(); $this.ldx( mode ) },
+        0xAE => { let mode = $this.absolute();    $this.ldx( mode ) },
+        0xBE => { let mode = $this.absolute_y();  $this.ldx( mode ) },
+
+        //Jumps
         0x4C => $this.jmp(),
         0x6C => $this.jmpi(),
+        0x20 => $this.jsr(),
+
+        //Misc
+        0xEA => $this.nop(),
+
         //Else
         x => panic!( "Unknown or unsupported opcode: {:02X}", x ),
     } }
@@ -56,7 +66,7 @@ pub struct CPU {
     pub x: u8,
     pub y: u8,
     pub p: u8,
-    pub s: u8,
+    pub sp: u8,
     pub pc: u16,
 
     pub mem: CpuMemory,
@@ -78,14 +88,14 @@ impl CPU {
             "{:X} {:9}  {:30}  A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:3} SL:{:3}",
             self.pc,
             opcode.bytes.iter()
-            	.map(|byte| format!("{:02X}", byte))
-            	.fold("".to_string(), |left, right| left + " " + &right ),
+                .map(|byte| format!("{:02X}", byte))
+                .fold("".to_string(), |left, right| left + " " + &right ),
             opcode.str,
             self.a,
             self.x,
             self.y,
             self.p,
-            self.s,
+            self.sp,
             0, //TODO: Add cycle counting
             0, //TODO: Add scanline counting
         );
@@ -115,10 +125,18 @@ impl CPU {
     }
 
     // Instructions
+    // Stores
+    fn stx<M: AddressingMode>(&mut self, mode: M) {
+        let val = self.x;
+        mode.write(self, val);
+    }
+
+    // Loads
     fn ldx<M: AddressingMode>(&mut self, mode: M) {
         self.x = mode.read(self);
     }
 
+    // Jumps
     fn jmp(&mut self) {
         self.pc = self.load_w_incr_pc();
     }
@@ -126,6 +144,15 @@ impl CPU {
         let arg = self.load_w_incr_pc();
         self.pc = self.mem.read_w(arg);
     }
+    fn jsr(&mut self) {
+        let old_pc = self.pc - 1;
+        self.stack_push(((old_pc >> 8) & 0xFF) as u8);
+        self.stack_push(((old_pc >> 0) & 0xFF) as u8);
+        self.pc = self.load_w_incr_pc();
+    }
+
+    // Misc
+    fn nop(&mut self) {}
 
     pub fn new(mem: CpuMemory) -> CPU {
         CPU {
@@ -133,7 +160,7 @@ impl CPU {
             x: 0,
             y: 0,
             p: 0x24,
-            s: 0xFD,
+            sp: 0xFD,
             pc: 0,
 
             mem: mem,
@@ -155,6 +182,11 @@ impl CPU {
         let res = self.mem.read_w(self.pc);
         self.pc = self.pc.wrapping_add(2);
         res
+    }
+
+    fn stack_push(&mut self, val: u8) {
+        self.mem.write(self.sp as u16 + 0x0100, val);
+        self.sp = self.sp - 1;
     }
 
     pub fn step(&mut self) {
