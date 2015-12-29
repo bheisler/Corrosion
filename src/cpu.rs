@@ -14,13 +14,28 @@ macro_rules! decode_opcode {
         0xAE => { let mode = $this.absolute();    $this.ldx( mode ) },
         0xBE => { let mode = $this.absolute_y();  $this.ldx( mode ) },
 
+        0xA9 => { let mode = $this.immediate();   $this.lda( mode ) },
+        0xA5 => { let mode = $this.zero_page();   $this.lda( mode ) },
+        0xB5 => { let mode = $this.zero_page_x(); $this.lda( mode ) },
+        0xAD => { let mode = $this.absolute();    $this.lda( mode ) },
+        0xBD => { let mode = $this.absolute_x();  $this.lda( mode ) },
+        0xB9 => { let mode = $this.absolute_y();  $this.lda( mode ) },
+        0xA1 => { let mode = $this.indirect_x();  $this.lda( mode ) },
+        0xB1 => { let mode = $this.indirect_y();  $this.lda( mode ) },
+
         //Jumps
         0x4C => $this.jmp(),
         0x6C => $this.jmpi(),
         0x20 => $this.jsr(),
 
+        //Branches
+        0x90 => $this.bcc(),
+        0xB0 => $this.bcs(),
+
         //Misc
         0xEA => $this.nop(),
+        0x38 => $this.sec(),
+        0x18 => $this.clc(),
 
         //Else
         x => panic!( "Unknown or unsupported opcode: {:02X}", x ),
@@ -140,6 +155,17 @@ impl CPU {
     fn zero_page_y(&mut self) -> MemoryAddressingMode {
         MemoryAddressingMode { ptr: self.load_incr_pc().wrapping_add(self.y) as u16 }
     }
+    fn indirect_x(&mut self) -> MemoryAddressingMode {
+        let arg = self.load_incr_pc();
+        let zp_idx = arg.wrapping_add(self.x);
+        MemoryAddressingMode { ptr: self.mem.read_w(zp_idx as u16) }
+    }
+    fn indirect_y(&mut self) -> MemoryAddressingMode {
+        let arg = self.load_incr_pc();
+        let ptr_base = self.mem.read_w(arg as u16);
+        let ptr = ptr_base.wrapping_add(self.y as u16);
+        MemoryAddressingMode { ptr: ptr }
+    }
 
     // Instructions
     // Stores
@@ -150,7 +176,16 @@ impl CPU {
 
     // Loads
     fn ldx<M: AddressingMode>(&mut self, mode: M) {
-        self.x = mode.read(self);
+        let arg = mode.read(self);
+        self.set_sign(arg);
+        self.set_zero(arg);
+        self.x = arg;
+    }
+    fn lda<M: AddressingMode>(&mut self, mode: M) {
+        let arg = mode.read(self);
+        self.set_sign(arg);
+        self.set_zero(arg);
+        self.a = arg;
     }
 
     // Jumps
@@ -168,8 +203,28 @@ impl CPU {
         self.pc = self.load_w_incr_pc();
     }
 
+    // Branches
+    fn bcc(&mut self) {
+        let arg = self.load_incr_pc();
+        if !self.p.contains(C) {
+            self.pc = self.relative_addr(arg);
+        }
+    }
+    fn bcs(&mut self) {
+        let arg = self.load_incr_pc();
+        if self.p.contains(C) {
+            self.pc = self.relative_addr(arg);
+        }
+    }
+
     // Misc
     fn nop(&mut self) {}
+    fn sec(&mut self) {
+        self.p.insert(C);
+    }
+    fn clc(&mut self) {
+        self.p.remove(C);
+    }
 
     pub fn new(mem: CpuMemory) -> CPU {
         CPU {
@@ -199,6 +254,28 @@ impl CPU {
         let res = self.mem.read_w(self.pc);
         self.pc = self.pc.wrapping_add(2);
         res
+    }
+
+    fn set_sign(&mut self, arg: u8) {
+        if (arg & 0b1000_0000 == 0) {
+            self.p.remove(S);
+        } else {
+            self.p.insert(S);
+        }
+    }
+
+    fn set_zero(&mut self, arg: u8) {
+        if arg == 0 {
+            self.p.insert(Z);
+        } else {
+            self.p.remove(Z);
+        }
+    }
+
+    fn relative_addr(&self, disp: u8) -> u16 {
+        let disp = disp as i16;
+        let pc = self.pc as i16;
+        pc.wrapping_add(disp) as u16
     }
 
     fn stack_push(&mut self, val: u8) {
