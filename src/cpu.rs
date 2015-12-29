@@ -1,16 +1,20 @@
 #![macro_use]
 
+
+
 macro_rules! decode_opcode {
     ($opcode:expr, $this:expr) => { match $opcode {
-        0x4C => { let mut mode = $this.absolute( $opcode ); $this.jmp( &mut mode ) },
-        0x6C => { let mut mode = $this.indirect( $opcode ); $this.jmp( &mut mode ) },
+        //JMP
+        0x4C => { let mode = $this.absolute(); $this.jmp( mode ) },
+        0x6C => { let mode = $this.indirect(); $this.jmp( mode ) },
+        //Else
         x => panic!( "Unknown or unsupported opcode: {:02X}", x ),
     } }
 }
 
 use memory::CpuMemory;
 use memory::MemSegment;
-use disasm::{Disassembler, Instruction};
+use disasm::Disassembler;
 
 trait AddressingMode {
     fn read(&mut self, cpu: &mut CPU) -> u8;
@@ -27,8 +31,9 @@ impl AddressingMode for ImmediateAddressingMode {
     fn read(&mut self, cpu: &mut CPU) -> u8 {
         cpu.load_incr_pc()
     }
+    #[allow(unused_variables)]
     fn write(&mut self, cpu: &mut CPU, val: u8) {
-        panic!("Tried to write an immediate address.")
+        panic!("Tried to write {:0X} to an immediate address.", val)
     }
 }
 
@@ -89,15 +94,15 @@ impl CPU {
     }
 
     // Addressing modes
-    fn indirect(&mut self, opcode: u8) -> MemoryAddressingMode {
+    fn indirect(&mut self) -> MemoryAddressingMode {
         MemoryAddressingMode { ptr: self.load_w_incr_pc() }
     }
-    fn absolute(&mut self, opcode: u8) -> ImmediateAddressingMode {
+    fn absolute(&mut self) -> ImmediateAddressingMode {
         ImmediateAddressingMode
     }
 
     // Instructions
-    fn jmp(&mut self, mode: &mut AddressingMode) {
+    fn jmp<M : AddressingMode>(&mut self, mut mode: M) {
         self.pc = mode.read_w(self);
     }
 
