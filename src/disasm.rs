@@ -130,6 +130,9 @@ impl<'a> Disassembler<'a> {
     fn lda(&mut self, instr: PartialInstruction) -> String {
         instr.finish("LDA")
     }
+    fn ldy(&mut self, instr: PartialInstruction) -> String {
+        instr.finish("LDY")
+    }
 
     // Logic/Math Ops
     fn bit(&mut self, instr: PartialInstruction) -> String {
@@ -147,8 +150,35 @@ impl<'a> Disassembler<'a> {
     fn adc(&mut self, instr: PartialInstruction) -> String {
         instr.finish("ADC")
     }
+    fn sbc(&mut self, instr: PartialInstruction) -> String {
+        instr.finish("SBC")
+    }
     fn cmp(&mut self, instr: PartialInstruction) -> String {
         instr.finish("CMP")
+    }
+    fn cpx(&mut self, instr: PartialInstruction) -> String {
+        instr.finish("CPX")
+    }
+    fn cpy(&mut self, instr: PartialInstruction) -> String {
+        instr.finish("CPY")
+    }
+    fn inc(&mut self, instr: PartialInstruction) -> String {
+        instr.finish("INC")
+    }
+    fn iny(&mut self) -> String {
+        "INY".to_string()
+    }
+    fn inx(&mut self) -> String {
+        "INX".to_string()
+    }
+    fn dec(&mut self, instr: PartialInstruction) -> String {
+        instr.finish("DEC")
+    }
+    fn dey(&mut self) -> String {
+        "DEY".to_string()
+    }
+    fn dex(&mut self) -> String {
+        "DEX".to_string()
     }
 
     // Jumps
@@ -233,6 +263,12 @@ impl<'a> Disassembler<'a> {
     }
     fn clv(&mut self) -> String {
         "CLV".to_string()
+    }
+    fn tax(&mut self) -> String {
+        "TAX".to_string()
+    }
+    fn tay(&mut self) -> String {
+        "TAY".to_string()
     }
 
     pub fn decode(mut self) -> Instruction {
