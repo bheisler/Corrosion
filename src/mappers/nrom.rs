@@ -20,7 +20,7 @@ impl Mapper for NROM {
     fn prg_read(&self, idx: u16) -> u8 {
         match idx {
             0x6000...0x7FFF => self.prg_ram[((idx - 0x6000) as usize % self.prg_ram.len())],
-            0x8000...0xFFFF => self.prg_rom[((idx - 0x8000) as usize % self.prg_ram.len())],
+            0x8000...0xFFFF => self.prg_rom[((idx - 0x8000) as usize % self.prg_rom.len())],
             x => invalid_address!(x),
         }
     }
@@ -80,6 +80,14 @@ mod tests {
         let mapper = NROM::new(prg_rom, vec!(0u8; 0x4000), vec!(0u8; 0x1000));
 
         assert_eq!(mapper.prg_read(0x8111), mapper.prg_read(0xC111));
+    }
+    
+    #[test]
+    fn test_prg_rom_mirroring() {
+    	let mut prg_rom: Vec<_> = vec!(0u8; 0x4000);
+    	prg_rom[0x2612] = 0x15;
+        let mapper = NROM::new(prg_rom, vec!(0u8; 0x1000), vec!(0u8; 0x1000));
+        assert_eq!(mapper.prg_read(0xA612), 0x15);
     }
 
     #[test]
