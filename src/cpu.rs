@@ -21,6 +21,12 @@ macro_rules! decode_opcode {
         0xB6 => { let mode = $this.zero_page_y(); $this.ldx( mode ) },
         0xAE => { let mode = $this.absolute();    $this.ldx( mode ) },
         0xBE => { let mode = $this.absolute_y();  $this.ldx( mode ) },
+        
+        0xA0 => { let mode = $this.immediate();   $this.ldy( mode ) },
+        0xA4 => { let mode = $this.zero_page();   $this.ldy( mode ) },
+        0xB4 => { let mode = $this.zero_page_y(); $this.ldy( mode ) },
+        0xAC => { let mode = $this.absolute();    $this.ldy( mode ) },
+        0xBC => { let mode = $this.absolute_y();  $this.ldy( mode ) },
 
         0xA9 => { let mode = $this.immediate();   $this.lda( mode ) },
         0xA5 => { let mode = $this.zero_page();   $this.lda( mode ) },
@@ -70,6 +76,15 @@ macro_rules! decode_opcode {
         0x79 => { let mode = $this.absolute_y();  $this.adc( mode ) },
         0x61 => { let mode = $this.indirect_x();  $this.adc( mode ) },
         0x71 => { let mode = $this.indirect_y();  $this.adc( mode ) },
+        
+        0xE9 => { let mode = $this.immediate();   $this.sbc( mode ) },
+        0xE5 => { let mode = $this.zero_page();   $this.sbc( mode ) },
+        0xF5 => { let mode = $this.zero_page_x(); $this.sbc( mode ) },
+        0xED => { let mode = $this.absolute();    $this.sbc( mode ) },
+        0xFD => { let mode = $this.absolute_x();  $this.sbc( mode ) },
+        0xF9 => { let mode = $this.absolute_y();  $this.sbc( mode ) },
+        0xE1 => { let mode = $this.indirect_x();  $this.sbc( mode ) },
+        0xF1 => { let mode = $this.indirect_y();  $this.sbc( mode ) },
 
         0xC9 => { let mode = $this.immediate();   $this.cmp( mode ) },
         0xC5 => { let mode = $this.zero_page();   $this.cmp( mode ) },
@@ -79,6 +94,30 @@ macro_rules! decode_opcode {
         0xD9 => { let mode = $this.absolute_y();  $this.cmp( mode ) },
         0xC1 => { let mode = $this.indirect_x();  $this.cmp( mode ) },
         0xD1 => { let mode = $this.indirect_y();  $this.cmp( mode ) },
+        
+        0xE0 => { let mode = $this.immediate();   $this.cpx( mode ) },
+        0xE4 => { let mode = $this.zero_page();   $this.cpx( mode ) },
+        0xEC => { let mode = $this.absolute();    $this.cpx( mode ) },
+        
+        0xC0 => { let mode = $this.immediate();   $this.cpy( mode ) },
+        0xC4 => { let mode = $this.zero_page();   $this.cpy( mode ) },
+        0xCC => { let mode = $this.absolute();    $this.cpy( mode ) },
+        
+        0xE6 => { let mode = $this.zero_page();   $this.inc( mode ) },
+        0xF6 => { let mode = $this.zero_page_x(); $this.inc( mode ) },
+        0xEE => { let mode = $this.absolute();    $this.inc( mode ) },
+        0xFE => { let mode = $this.absolute_x();  $this.inc( mode ) },
+        
+        0xE8 => $this.inx(),
+        0xC8 => $this.iny(),
+        
+        0xC6 => { let mode = $this.zero_page();   $this.dec( mode ) },
+        0xD6 => { let mode = $this.zero_page_x(); $this.dec( mode ) },
+        0xCE => { let mode = $this.absolute();    $this.dec( mode ) },
+        0xDE => { let mode = $this.absolute_x();  $this.dec( mode ) },
+        
+        0xCA => $this.dex(),
+        0x88 => $this.dey(),
 
         //Jumps
         0x4C => $this.jmp(),
@@ -110,6 +149,8 @@ macro_rules! decode_opcode {
         0xF8 => $this.sed(),
         0xD8 => $this.cld(),
         0xB8 => $this.clv(),
+        0xAA => $this.tax(),
+        0xA8 => $this.tay(),
 
         //Else
         x => panic!( "Unknown or unsupported opcode: {:02X}", x ),
@@ -120,11 +161,12 @@ use memory::CpuMemory;
 use memory::MemSegment;
 use disasm::Disassembler;
 
-trait AddressingMode {
+trait AddressingMode : Copy {
     fn read(self, cpu: &mut CPU) -> u8;
     fn write(self, cpu: &mut CPU, val: u8);
 }
 
+#[derive(Debug, Copy, Clone)]
 struct ImmediateAddressingMode;
 impl AddressingMode for ImmediateAddressingMode {
     fn read(self, cpu: &mut CPU) -> u8 {
@@ -136,6 +178,7 @@ impl AddressingMode for ImmediateAddressingMode {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
 struct MemoryAddressingMode {
     ptr: u16,
 }
@@ -201,7 +244,7 @@ impl CPU {
                     .fold("".to_string(), |left, right| left + " " + &right )
             }
         }
-
+        
         let opcode = Disassembler::new(self).decode();
         println!(
             "{:X} {:9}  {:30}  A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:3} SL:{:3}",
@@ -268,15 +311,15 @@ impl CPU {
     // Loads
     fn ldx<M: AddressingMode>(&mut self, mode: M) {
         let arg = mode.read(self);
-        self.set_sign(arg);
-        self.set_zero(arg);
-        self.x = arg;
+        self.x = self.set_sign_zero(arg);
     }
     fn lda<M: AddressingMode>(&mut self, mode: M) {
         let arg = mode.read(self);
-        self.set_sign(arg);
-        self.set_zero(arg);
-        self.a = arg;
+        self.a = self.set_sign_zero(arg);
+    }
+    fn ldy<M: AddressingMode>(&mut self, mode: M) {
+        let arg = mode.read(self);
+        self.y = self.set_sign_zero(arg);
     }
 
     // Logic/Math operations
@@ -288,37 +331,71 @@ impl CPU {
         self.set_overflow((arg & 0x40) != 0);
     }
     fn and<M: AddressingMode>(&mut self, mode: M) {
-        let arg = mode.read(self);
-        let ac = self.a & arg;
-        self.a = ac;
-        self.set_zero(ac);
-        self.set_sign(ac);
+        let ac = self.a & mode.read(self);
+        self.a = self.set_sign_zero(ac);
     }
     fn ora<M: AddressingMode>(&mut self, mode: M) {
-        let arg = mode.read(self);
-        let ac = self.a | arg;
-        self.a = ac;
-        self.set_zero(ac);
-        self.set_sign(ac);
+        let ac = self.a | mode.read(self);
+        self.a = self.set_sign_zero(ac);
     }
     fn eor<M: AddressingMode>(&mut self, mode: M) {
-        let arg = mode.read(self);
-        let ac = self.a ^ arg;
-        self.a = ac;
-        self.set_zero(ac);
-        self.set_sign(ac);
+        let ac = self.a ^ mode.read(self);
+        self.a = self.set_sign_zero(ac);
     }
     fn adc<M: AddressingMode>(&mut self, mode: M) {
         let arg = mode.read(self);
         self.do_adc(arg);
+    }
+    fn sbc<M: AddressingMode>(&mut self, mode: M) {
+        let arg = mode.read(self);
+        self.do_adc(!arg);
     }
     fn cmp<M: AddressingMode>(&mut self, mode: M) {
         let arg = mode.read(self);
         let ac = self.a;
         self.set_carry(!(ac < arg));
         let res = ac.wrapping_sub(arg);
-        self.set_zero(res);
-        self.set_sign(res);
+        self.set_sign_zero(res);
+    }
+    fn cpx<M: AddressingMode>(&mut self, mode: M) {
+        let arg = mode.read(self);
+        let x = self.x;
+        self.set_carry(!(x < arg));
+        let res = x.wrapping_sub(arg);
+        self.set_sign_zero(res);
+    }
+    fn cpy<M: AddressingMode>(&mut self, mode: M) {
+        let arg = mode.read(self);
+        let y = self.y;
+        self.set_carry(!(y < arg));
+        let res = y.wrapping_sub(arg);
+        self.set_sign_zero(res);
+    }
+    fn inc<M : AddressingMode>(&mut self, mode: M) {
+        let arg = mode.read(self);
+        let res = self.set_sign_zero(arg.wrapping_add(1));
+        mode.write(self, res);
+    }
+    fn inx(&mut self) {
+        let res = self.x.wrapping_add(1);
+        self.x = self.set_sign_zero(res);
+    }
+    fn iny(&mut self) {
+        let res = self.y.wrapping_add(1);
+        self.y = self.set_sign_zero(res);
+    }
+    fn dec<M : AddressingMode>(&mut self, mode: M) {
+        let arg = mode.read(self);
+        let res = self.set_sign_zero(arg.wrapping_sub(1));
+        mode.write(self, res);
+    }
+    fn dex(&mut self) {
+        let res = self.x.wrapping_sub(1);
+        self.x = self.set_sign_zero(res);
+    }
+    fn dey(&mut self) {
+        let res = self.y.wrapping_sub(1);
+        self.y = self.set_sign_zero(res);
     }
 
     // Jumps
@@ -386,9 +463,7 @@ impl CPU {
     }
     fn pla(&mut self) {
         let val = self.stack_pop();
-        self.a = val;
-        self.set_sign(val);
-        self.set_zero(val);
+        self.a = self.set_sign_zero(val);
     }
     fn pha(&mut self) {
         let a = self.a;
@@ -414,6 +489,14 @@ impl CPU {
     }
     fn clv(&mut self) {
         self.p.remove(V);
+    }
+    fn tax(&mut self) {
+        let res = self.a;
+        self.x = self.set_sign_zero(res);
+    }
+    fn tay(&mut self) {
+        let res = self.a;
+        self.y = self.set_sign_zero(res);
     }
 
     pub fn new(mem: CpuMemory) -> CPU {
@@ -461,6 +544,12 @@ impl CPU {
             self.p.remove(Z);
         }
     }
+    
+    fn set_sign_zero(&mut self, arg: u8) -> u8 {
+        self.set_sign( arg );
+        self.set_zero( arg );
+        arg
+    }
 
     fn set_overflow(&mut self, arg: bool) {
         if arg {
@@ -495,9 +584,7 @@ impl CPU {
         let result = result as u8;
         let a = self.a;
         self.set_overflow((a ^ arg) & 0x80 == 0 && (a ^ result) & 0x80 == 0x80);
-        self.set_zero(result);
-        self.set_sign(result);
-        self.a = result;
+        self.a = self.set_sign_zero(result);
     }
 
     fn branch(&mut self, cond: bool) {
