@@ -119,6 +119,9 @@ impl<'a> Disassembler<'a> {
     fn stx(&mut self, instr: PartialInstruction) -> String {
         instr.finish("STX")
     }
+    fn sta(&mut self, instr: PartialInstruction) -> String {
+        instr.finish("STA")
+    }
 
     // Loads
     fn ldx(&mut self, instr: PartialInstruction) -> String {
@@ -126,6 +129,11 @@ impl<'a> Disassembler<'a> {
     }
     fn lda(&mut self, instr: PartialInstruction) -> String {
         instr.finish("LDA")
+    }
+
+    // Logic/Math Ops
+    fn bit(&mut self, instr: PartialInstruction) -> String {
+        instr.finish("BIT")
     }
 
     // Jumps
@@ -140,15 +148,39 @@ impl<'a> Disassembler<'a> {
         let arg = self.read_w_incr_pc();
         format!("JSR {:04X}", arg)
     }
+    fn rts(&mut self) -> String {
+        "RTS".to_string()
+    }
 
     // Branches
-    fn bcc(&mut self) -> String {
-        let arg = self.read_incr_pc();
-        format!("BCS {:04X}", self.relative_addr(arg))
-    }
     fn bcs(&mut self) -> String {
+        self.branch("BCS")
+    }
+    fn bcc(&mut self) -> String {
+        self.branch("BCC")
+    }
+    fn beq(&mut self) -> String {
+        self.branch("BEQ")
+    }
+    fn bne(&mut self) -> String {
+        self.branch("BNE")
+    }
+    fn bvs(&mut self) -> String {
+        self.branch("BVS")
+    }
+    fn bvc(&mut self) -> String {
+        self.branch("BVC")
+    }
+    fn bmi(&mut self) -> String {
+        self.branch("BMI")
+    }
+    fn bpl(&mut self) -> String {
+        self.branch("BPL")
+    }
+
+    fn branch(&mut self, instr: &str) -> String {
         let arg = self.read_incr_pc();
-        format!("BCS {:04X}", self.relative_addr(arg))
+        format!("{:3} ${:04X}", instr, self.relative_addr(arg))
     }
 
     // Misc

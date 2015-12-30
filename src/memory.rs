@@ -20,6 +20,12 @@ pub trait MemSegment {
     }
 
     fn write(&mut self, idx: u16, val: u8);
+    fn write_w(&mut self, idx: u16, val: u16) {
+        let low = ((val & 0x00FF) >> 0) as u8;
+        let high = ((val & 0xFF00) >> 8) as u8;
+        self.write(idx, low);
+        self.write(idx + 1, high);
+    }
 }
 
 struct RAM {
