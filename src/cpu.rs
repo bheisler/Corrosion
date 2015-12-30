@@ -31,9 +31,54 @@ macro_rules! decode_opcode {
         0xA1 => { let mode = $this.indirect_x();  $this.lda( mode ) },
         0xB1 => { let mode = $this.indirect_y();  $this.lda( mode ) },
 
-		//Logic/math operations
-		0x24 => { let mode = $this.zero_page();   $this.bit( mode ) },
-		0x2C => { let mode = $this.absolute();    $this.bit( mode ) },
+        //Logic/math operations
+        0x24 => { let mode = $this.zero_page();   $this.bit( mode ) },
+        0x2C => { let mode = $this.absolute();    $this.bit( mode ) },
+
+        0x29 => { let mode = $this.immediate();   $this.and( mode ) },
+        0x25 => { let mode = $this.zero_page();   $this.and( mode ) },
+        0x35 => { let mode = $this.zero_page_x(); $this.and( mode ) },
+        0x2D => { let mode = $this.absolute();    $this.and( mode ) },
+        0x3D => { let mode = $this.absolute_x();  $this.and( mode ) },
+        0x39 => { let mode = $this.absolute_y();  $this.and( mode ) },
+        0x21 => { let mode = $this.indirect_x();  $this.and( mode ) },
+        0x31 => { let mode = $this.indirect_y();  $this.and( mode ) },
+
+        0x09 => { let mode = $this.immediate();   $this.ora( mode ) },
+        0x05 => { let mode = $this.zero_page();   $this.ora( mode ) },
+        0x15 => { let mode = $this.zero_page_x(); $this.ora( mode ) },
+        0x0D => { let mode = $this.absolute();    $this.ora( mode ) },
+        0x1D => { let mode = $this.absolute_x();  $this.ora( mode ) },
+        0x19 => { let mode = $this.absolute_y();  $this.ora( mode ) },
+        0x01 => { let mode = $this.indirect_x();  $this.ora( mode ) },
+        0x11 => { let mode = $this.indirect_y();  $this.ora( mode ) },
+
+        0x49 => { let mode = $this.immediate();   $this.eor( mode ) },
+        0x45 => { let mode = $this.zero_page();   $this.eor( mode ) },
+        0x55 => { let mode = $this.zero_page_x(); $this.eor( mode ) },
+        0x4D => { let mode = $this.absolute();    $this.eor( mode ) },
+        0x5D => { let mode = $this.absolute_x();  $this.eor( mode ) },
+        0x59 => { let mode = $this.absolute_y();  $this.eor( mode ) },
+        0x41 => { let mode = $this.indirect_x();  $this.eor( mode ) },
+        0x51 => { let mode = $this.indirect_y();  $this.eor( mode ) },
+
+        0x69 => { let mode = $this.immediate();   $this.adc( mode ) },
+        0x65 => { let mode = $this.zero_page();   $this.adc( mode ) },
+        0x75 => { let mode = $this.zero_page_x(); $this.adc( mode ) },
+        0x6D => { let mode = $this.absolute();    $this.adc( mode ) },
+        0x7D => { let mode = $this.absolute_x();  $this.adc( mode ) },
+        0x79 => { let mode = $this.absolute_y();  $this.adc( mode ) },
+        0x61 => { let mode = $this.indirect_x();  $this.adc( mode ) },
+        0x71 => { let mode = $this.indirect_y();  $this.adc( mode ) },
+
+        0xC9 => { let mode = $this.immediate();   $this.cmp( mode ) },
+        0xC5 => { let mode = $this.zero_page();   $this.cmp( mode ) },
+        0xD5 => { let mode = $this.zero_page_x(); $this.cmp( mode ) },
+        0xCD => { let mode = $this.absolute();    $this.cmp( mode ) },
+        0xDD => { let mode = $this.absolute_x();  $this.cmp( mode ) },
+        0xD9 => { let mode = $this.absolute_y();  $this.cmp( mode ) },
+        0xC1 => { let mode = $this.indirect_x();  $this.cmp( mode ) },
+        0xD1 => { let mode = $this.indirect_y();  $this.cmp( mode ) },
 
         //Jumps
         0x4C => $this.jmp(),
@@ -51,10 +96,20 @@ macro_rules! decode_opcode {
         0x30 => $this.bmi(),
         0x10 => $this.bpl(),
 
+        //Stack
+        0x28 => $this.plp(),
+        0x08 => $this.php(),
+        0x68 => $this.pla(),
+        0x48 => $this.pha(),
+
         //Misc
         0xEA => $this.nop(),
         0x38 => $this.sec(),
         0x18 => $this.clc(),
+        0x78 => $this.sei(),
+        0xF8 => $this.sed(),
+        0xD8 => $this.cld(),
+        0xB8 => $this.clv(),
 
         //Else
         x => panic!( "Unknown or unsupported opcode: {:02X}", x ),
@@ -132,8 +187,21 @@ impl MemSegment for CPU {
     }
 }
 
+// TODO: Make this a feature?
+const DUMP_STACK: bool = false;
+
 impl CPU {
     fn trace(&mut self) {
+        if DUMP_STACK {
+            println!{
+                "Stack: {:>30}",
+                (self.sp..0xFF)
+                    .map(|idx| self.mem.read(0x0100 + idx as u16))
+                    .map(|byte| format!("{:02X}", byte))
+                    .fold("".to_string(), |left, right| left + " " + &right )
+            }
+        }
+
         let opcode = Disassembler::new(self).decode();
         println!(
             "{:X} {:9}  {:30}  A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:3} SL:{:3}",
@@ -150,14 +218,6 @@ impl CPU {
             0, //TODO: Add cycle counting
             0, //TODO: Add scanline counting
         );
-
-        // println!{
-        // "Stack: {:>30}",
-        // (self.sp..0xFF)
-        // .map(|idx| self.mem.read(0x0100 + idx as u16))
-        // .map(|byte| format!("{:02X}", byte))
-        // .fold("".to_string(), |left, right| left + " " + &right )
-        // }
     }
 
     // Addressing modes
@@ -227,6 +287,39 @@ impl CPU {
         self.set_zero(arg & ac);
         self.set_overflow((arg & 0x40) != 0);
     }
+    fn and<M: AddressingMode>(&mut self, mode: M) {
+        let arg = mode.read(self);
+        let ac = self.a & arg;
+        self.a = ac;
+        self.set_zero(ac);
+        self.set_sign(ac);
+    }
+    fn ora<M: AddressingMode>(&mut self, mode: M) {
+        let arg = mode.read(self);
+        let ac = self.a | arg;
+        self.a = ac;
+        self.set_zero(ac);
+        self.set_sign(ac);
+    }
+    fn eor<M: AddressingMode>(&mut self, mode: M) {
+        let arg = mode.read(self);
+        let ac = self.a ^ arg;
+        self.a = ac;
+        self.set_zero(ac);
+        self.set_sign(ac);
+    }
+    fn adc<M: AddressingMode>(&mut self, mode: M) {
+        let arg = mode.read(self);
+        self.do_adc(arg);
+    }
+    fn cmp<M: AddressingMode>(&mut self, mode: M) {
+        let arg = mode.read(self);
+        let ac = self.a;
+        self.set_carry(!(ac < arg));
+        let res = ac.wrapping_sub(arg);
+        self.set_zero(res);
+        self.set_sign(res);
+    }
 
     // Jumps
     fn jmp(&mut self) {
@@ -245,7 +338,6 @@ impl CPU {
     fn rts(&mut self) {
         self.pc = self.stack_pop_w().wrapping_add(1);
     }
-
 
     // Branches
     fn bcs(&mut self) {
@@ -281,6 +373,28 @@ impl CPU {
         self.branch(cond);
     }
 
+    // Stack
+    fn plp(&mut self) {
+        let p = self.stack_pop();
+        self.p = Status::from_bits_truncate(p);
+        self.p.remove(B);
+        self.p.insert(U);
+    }
+    fn php(&mut self) {
+        let p = self.p;
+        self.stack_push(p.bits() | 0b0011_0000);
+    }
+    fn pla(&mut self) {
+        let val = self.stack_pop();
+        self.a = val;
+        self.set_sign(val);
+        self.set_zero(val);
+    }
+    fn pha(&mut self) {
+        let a = self.a;
+        self.stack_push(a);
+    }
+
     // Misc
     fn nop(&mut self) {}
     fn sec(&mut self) {
@@ -288,6 +402,18 @@ impl CPU {
     }
     fn clc(&mut self) {
         self.p.remove(C);
+    }
+    fn sei(&mut self) {
+        self.p.insert(I);
+    }
+    fn sed(&mut self) {
+        self.p.insert(D);
+    }
+    fn cld(&mut self) {
+        self.p.remove(D);
+    }
+    fn clv(&mut self) {
+        self.p.remove(V);
     }
 
     pub fn new(mem: CpuMemory) -> CPU {
@@ -344,10 +470,34 @@ impl CPU {
         }
     }
 
+    fn set_carry(&mut self, arg: bool) {
+        if arg {
+            self.p.insert(C);
+        } else {
+            self.p.remove(C);
+        }
+    }
+
     fn relative_addr(&self, disp: u8) -> u16 {
         let disp = disp as i16;
         let pc = self.pc as i16;
         pc.wrapping_add(disp) as u16
+    }
+
+    fn do_adc(&mut self, arg: u8) {
+        let mut result = self.a as u16 + arg as u16;
+        if self.p.contains(C) {
+            result += 1;
+        }
+
+        self.set_carry(result > 0xFF);
+
+        let result = result as u8;
+        let a = self.a;
+        self.set_overflow((a ^ arg) & 0x80 == 0 && (a ^ result) & 0x80 == 0x80);
+        self.set_zero(result);
+        self.set_sign(result);
+        self.a = result;
     }
 
     fn branch(&mut self, cond: bool) {
@@ -357,18 +507,18 @@ impl CPU {
         }
     }
 
-    //    fn stack_push(&mut self, val: u8) {
-    //        self.sp = self.sp - 1;
-    //        self.mem.write(self.sp as u16 + 0x0101, val);
-    //    }
+    fn stack_push(&mut self, val: u8) {
+        self.sp = self.sp.wrapping_sub(1);
+        self.mem.write(self.sp as u16 + 0x0101, val);
+    }
     fn stack_push_w(&mut self, val: u16) {
-        self.sp = self.sp - 2;
+        self.sp = self.sp.wrapping_sub(2);
         self.mem.write_w(self.sp as u16 + 0x0101, val);
     }
-    //    fn stack_pop(&mut self) -> u8 {
-    //        self.sp = self.sp.wrapping_add(1);
-    //        self.mem.read(self.sp as u16 + 0x0100)
-    //    }
+    fn stack_pop(&mut self) -> u8 {
+        self.sp = self.sp.wrapping_add(1);
+        self.mem.read(self.sp as u16 + 0x0100)
+    }
     fn stack_pop_w(&mut self) -> u16 {
         self.sp = self.sp.wrapping_add(2);
         self.mem.read_w(self.sp as u16 + 0x00FF)

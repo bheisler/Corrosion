@@ -64,7 +64,7 @@ impl<'a> Disassembler<'a> {
     fn zero_page(&mut self) -> PartialInstruction {
         let arg = self.read_incr_pc();
         PartialInstruction {
-            pattern: format!("$$$ #${:02X} = {:02X}", arg, self.cpu.mem.read(arg as u16)),
+            pattern: format!("$$$ ${:02X} = {:02X}", arg, self.cpu.mem.read(arg as u16)),
         }
     }
     fn zero_page_x(&mut self) -> PartialInstruction {
@@ -135,6 +135,21 @@ impl<'a> Disassembler<'a> {
     fn bit(&mut self, instr: PartialInstruction) -> String {
         instr.finish("BIT")
     }
+    fn and(&mut self, instr: PartialInstruction) -> String {
+        instr.finish("AND")
+    }
+    fn ora(&mut self, instr: PartialInstruction) -> String {
+        instr.finish("ORA")
+    }
+    fn eor(&mut self, instr: PartialInstruction) -> String {
+        instr.finish("EOR")
+    }
+    fn adc(&mut self, instr: PartialInstruction) -> String {
+        instr.finish("ADC")
+    }
+    fn cmp(&mut self, instr: PartialInstruction) -> String {
+        instr.finish("CMP")
+    }
 
     // Jumps
     fn jmp(&mut self) -> String {
@@ -146,7 +161,7 @@ impl<'a> Disassembler<'a> {
     }
     fn jsr(&mut self) -> String {
         let arg = self.read_w_incr_pc();
-        format!("JSR {:04X}", arg)
+        format!("JSR ${:04X}", arg)
     }
     fn rts(&mut self) -> String {
         "RTS".to_string()
@@ -183,6 +198,20 @@ impl<'a> Disassembler<'a> {
         format!("{:3} ${:04X}", instr, self.relative_addr(arg))
     }
 
+    // Stack
+    fn plp(&mut self) -> String {
+        "PLP".to_string()
+    }
+    fn php(&mut self) -> String {
+        "PHP".to_string()
+    }
+    fn pla(&mut self) -> String {
+        "PLA".to_string()
+    }
+    fn pha(&mut self) -> String {
+        "PHA".to_string()
+    }
+
     // Misc
     fn nop(&mut self) -> String {
         "NOP".to_string()
@@ -192,6 +221,18 @@ impl<'a> Disassembler<'a> {
     }
     fn clc(&mut self) -> String {
         "CLC".to_string()
+    }
+    fn sei(&mut self) -> String {
+        "SEI".to_string()
+    }
+    fn sed(&mut self) -> String {
+        "SED".to_string()
+    }
+    fn cld(&mut self) -> String {
+        "CLD".to_string()
+    }
+    fn clv(&mut self) -> String {
+        "CLV".to_string()
     }
 
     pub fn decode(mut self) -> Instruction {
