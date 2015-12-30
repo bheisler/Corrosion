@@ -34,7 +34,7 @@ struct RAM {
 
 impl RAM {
     fn new() -> RAM {
-        RAM { memory: vec!(0u8; 0x07ff).into_boxed_slice() }
+        RAM { memory: vec!(0u8; 0x0800).into_boxed_slice() }
     }
 }
 
