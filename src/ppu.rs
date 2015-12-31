@@ -61,6 +61,12 @@ impl MemSegment for PPUMemory {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
+enum AddrByte {
+    First,
+    Second,
+}
+
 pub struct PPU {
     ppuctrl: u8,
     ppumask: u8,
@@ -75,9 +81,8 @@ pub struct PPU {
     ///PPU that we have to emulate.
     dyn_latch: u8,
 
-    ///Whether we're writing into the first (false) or second (true) byte of the
-    ///address registers.
-    address_latch: bool,
+    ///The address registers are two bytes but we can only write one at a time.
+    address_latch: AddrByte,
 
     ppu_mem: PPUMemory,
 }
@@ -92,12 +97,12 @@ impl PPU {
             ppuscroll: 0,
             ppuaddr: 0,
             dyn_latch: 0,
-            address_latch: false,
+            address_latch: AddrByte::First,
             oam: [0u8; 256],
             ppu_mem: ppu_mem,
         }
     }
-
+    
     fn incr_ppuaddr(&mut self) {
         let incr_size = if (self.ppuctrl & 0b0000_0100) == 0 {
             1
@@ -108,13 +113,21 @@ impl PPU {
     }
 }
 
+fn write_addr_byte(latch: &mut AddrByte, target: &mut u16, val: u8) {
+    match *latch {
+        AddrByte::First =>  { *target = (*target & 0x00FF) | ((val as u16) << 8); }
+        AddrByte::Second => { *target = (*target & 0xFF00) | ((val as u16) << 0); }
+    }
+    *latch = AddrByte::Second;
+}
+
 impl MemSegment for PPU {
     fn read(&mut self, idx: u16) -> u8 {
         match idx % 8 {
             0x0000 => self.dyn_latch,
             0x0001 => self.dyn_latch,
             0x0002 => {
-                self.address_latch = false;
+                self.address_latch = AddrByte::First;
                 (self.ppustat & 0b1110_0000) | (self.dyn_latch & 0b0001_1111)
             }
             0x0003 => self.dyn_latch,
@@ -145,22 +158,8 @@ impl MemSegment for PPU {
                 self.oam[self.oamaddr as usize] = val;
                 self.oamaddr = self.oamaddr.wrapping_add(1);
             }
-            0x0005 => {
-                if self.address_latch {
-                    self.ppuscroll = (self.ppuscroll & 0xFF00) | ((val as u16) << 0);
-                } else {
-                    self.ppuscroll = (self.ppuscroll & 0x00FF) | ((val as u16) << 8);
-                }
-                self.address_latch = true;
-            }
-            0x0006 => {
-                if self.address_latch {
-                    self.ppuaddr = (self.ppuaddr & 0xFF00) | ((val as u16) << 0);
-                } else {
-                    self.ppuaddr = (self.ppuaddr & 0x00FF) | ((val as u16) << 8);
-                }
-                self.address_latch = true;
-            }
+            0x0005 => write_addr_byte(&mut self.address_latch, &mut self.ppuscroll, val),
+            0x0006 => write_addr_byte(&mut self.address_latch, &mut self.ppuaddr, val),
             0x0007 => {
                 self.ppu_mem.write(self.ppuaddr, val);
                 self.incr_ppuaddr();
@@ -177,6 +176,7 @@ mod tests {
     use mappers::Mapper;
     use std::rc::Rc;
     use std::cell::RefCell;
+    use ppu::AddrByte;
 
     fn create_test_ppu() -> PPU {
         create_test_ppu_with_rom(vec![0u8; 0x1000])
@@ -204,7 +204,7 @@ mod tests {
         assert_eq!(getter(&ppu), 0xDEAD);
         ppu.write(idx, 0xED);
         assert_eq!(getter(&ppu), 0xDEED);
-        ppu.address_latch = false;
+        ppu.address_latch = AddrByte::First;
         ppu.write(idx, 0xAD);
         assert_eq!(getter(&ppu), 0xADED);
     }
@@ -283,9 +283,9 @@ mod tests {
     #[test]
     fn reading_ppustat_clears_addr_latch() {
         let mut ppu = create_test_ppu();
-        ppu.address_latch = true;
+        ppu.address_latch = AddrByte::Second;
         ppu.read(0x2002);
-        assert_eq!(ppu.address_latch, false);
+        assert_eq!(ppu.address_latch, AddrByte::First);
     }
 
     #[test]
