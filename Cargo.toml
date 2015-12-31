@@ -3,6 +3,11 @@ name = "nes-emulator"
 version = "0.1.0"
 authors = ["Brook Heisler <redattack34@gmail.com>"]
 
+[features]
+default = []
+cputrace = []
+stacktrace = []
+
 [dependencies]
 bitflags = "0.3.3"
 

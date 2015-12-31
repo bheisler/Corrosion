@@ -262,6 +262,8 @@ macro_rules! decode_opcode {
 
 use memory::CpuMemory;
 use memory::MemSegment;
+
+#[cfg(feature="cputrace")]
 use disasm::Disassembler;
 
 trait AddressingMode : Copy {
@@ -340,21 +342,10 @@ impl MemSegment for CPU {
     }
 }
 
-// TODO: Make this a feature?
-const DUMP_STACK: bool = false;
-
 impl CPU {
+    
+    #[cfg(feature="cputrace")]
     fn trace(&mut self) {
-        if DUMP_STACK {
-            println!{
-                "Stack: {:>30}",
-                (self.sp..0xFF)
-                    .map(|idx| self.mem.read(0x0100 + idx as u16))
-                    .map(|byte| format!("{:02X}", byte))
-                    .fold("".to_string(), |left, right| left + " " + &right )
-            }
-        }
-        
         let opcode = Disassembler::new(self).decode();
         println!(
             "{:04X} {:9} {}{:30}  A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:3} SL:{:3}",
@@ -373,6 +364,23 @@ impl CPU {
             0, //TODO: Add scanline counting
         );
     }
+    
+    #[cfg(not(feature="cputrace"))]
+    fn trace(&self) {}
+    
+    #[cfg(feature="stacktrace")]
+    fn stack_dump(&mut self) {
+        println!{
+            "Stack: {:>60}",
+            (self.sp..0xFF)
+                .map(|idx| self.mem.read(0x0100 + idx as u16))
+                .map(|byte| format!("{:02X}", byte))
+                .fold("".to_string(), |left, right| left + " " + &right )
+        }
+    }
+    
+    #[cfg(not(feature="stacktrace"))]
+    fn stack_dump(&self) {}
 
     // Addressing modes
     fn immediate(&mut self) -> ImmediateAddressingMode {
@@ -828,6 +836,7 @@ impl CPU {
     
     pub fn step(&mut self) {
         self.trace();
+        self.stack_dump();
         let opcode: u8 = self.load_incr_pc();
         decode_opcode!(opcode, self);
     }

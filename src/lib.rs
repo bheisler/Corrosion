@@ -8,6 +8,8 @@ pub mod ppu;
 pub mod apu;
 pub mod io;
 pub mod cpu;
+
+#[cfg(feature="cputrace")]
 pub mod disasm;
 
 use rom::Rom;
