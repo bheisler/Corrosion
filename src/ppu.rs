@@ -67,10 +67,82 @@ enum AddrByte {
     Second,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
+enum SpriteSize {
+    Normal,
+    Tall,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+enum MasterSlave {
+    Master,
+    Slave,
+}
+
+struct PPUCtrl{bits: u8}
+impl PPUCtrl {
+    fn empty() -> PPUCtrl {
+        PPUCtrl{ bits: 0 }
+    }
+    
+    fn new( bits: u8 ) -> PPUCtrl {
+        PPUCtrl{ bits: bits }
+    }
+    
+    fn nametable_addr(&self) -> u16 {
+        (self.bits & 0b0000_0011) as u16 & 0x0400 + 0x2000
+    }
+    
+    fn vram_addr_step(&self) -> u16 {
+        if self.bits & 0b0000_0100 != 0 { 32 } else { 1 } 
+    }
+    
+    fn sprite_table(&self) -> u16 {
+        if self.bits & 0b0000_1000 != 0 { 0x1000 } else { 0x0000 }
+    }
+    
+    fn background_table(&self) -> u16 {
+        if self.bits & 0b0001_0000 != 0 { 0x1000 } else { 0x0000 }
+    }
+    
+    fn sprite_size(&self) -> SpriteSize {
+        if self.bits & 0b0010_0000 != 0 { SpriteSize::Tall } else { SpriteSize::Normal }
+    }
+    
+	fn master_slave(&self) -> MasterSlave {
+	    if self.bits & 0b0100_0000 != 0 { MasterSlave::Master } else { MasterSlave::Slave }
+	}
+	
+	fn generate_vblank_nmi(&self) -> bool {
+	    self.bits & 0b1000_0000 != 0
+	}
+}
+
+bitflags! {
+    flags PPUMask : u8 {
+        const GREY =    0b0000_0001, //Greyscale
+        const S_BCK_L = 0b0000_0010, //Show background in the leftmost 8 pixels
+        const S_SPR_L = 0b0000_0100, //Show sprites in the leftmost 8 pixels
+        const S_BCK =   0b0000_1000, //Show background
+        const S_SPR =   0b0001_0000, //Show sprites
+        const EM_R =    0b0010_0000, //Emphasize Red
+        const EM_G =    0b0100_0000, //Emphasize Green
+        const EM_B =    0b1000_0000, //Emphasize Blue
+    }
+}
+
+bitflags! {
+    flags PPUStat : u8 {
+        const VBLANK =          0b1000_0000, //Currently in the vertical blank interval
+        const SPRITE_0 =        0b0100_0000, //Sprite 0 hit
+        const SPRITE_OVERFLOW = 0b0010_0000, //Greater than 8 sprites on current scanline
+    }
+}
+
 pub struct PPU {
-    ppuctrl: u8,
-    ppumask: u8,
-    ppustat: u8,
+    ppuctrl: PPUCtrl,
+    ppumask: PPUMask,
+    ppustat: PPUStat,
     oamaddr: u8,
     ppuscroll: u16,
     ppuaddr: u16,
@@ -90,9 +162,9 @@ pub struct PPU {
 impl PPU {
     pub fn new(ppu_mem: PPUMemory) -> PPU {
         PPU {
-            ppuctrl: 0,
-            ppumask: 0,
-            ppustat: 0,
+            ppuctrl: PPUCtrl::empty(),
+            ppumask: PPUMask::empty(),
+            ppustat: PPUStat::empty(),
             oamaddr: 0,
             ppuscroll: 0,
             ppuaddr: 0,
@@ -104,11 +176,7 @@ impl PPU {
     }
     
     fn incr_ppuaddr(&mut self) {
-        let incr_size = if (self.ppuctrl & 0b0000_0100) == 0 {
-            1
-        } else {
-            32
-        };
+        let incr_size = self.ppuctrl.vram_addr_step();
         self.ppuaddr = self.ppuaddr.wrapping_add(incr_size);
     }
 }
@@ -128,7 +196,7 @@ impl MemSegment for PPU {
             0x0001 => self.dyn_latch,
             0x0002 => {
                 self.address_latch = AddrByte::First;
-                (self.ppustat & 0b1110_0000) | (self.dyn_latch & 0b0001_1111)
+                self.ppustat.bits | (self.dyn_latch & 0b0001_1111)
             }
             0x0003 => self.dyn_latch,
             0x0004 => {
@@ -150,8 +218,8 @@ impl MemSegment for PPU {
     fn write(&mut self, idx: u16, val: u8) {
         self.dyn_latch = val;
         match idx % 8 {
-            0x0000 => self.ppuctrl = val,
-            0x0001 => self.ppumask = val,
+            0x0000 => self.ppuctrl = PPUCtrl::new( val ),
+            0x0001 => self.ppumask = PPUMask::from_bits_truncate(val),
             0x0002 => (),
             0x0003 => self.oamaddr = val,
             0x0004 => {
@@ -176,7 +244,7 @@ mod tests {
     use mappers::Mapper;
     use std::rc::Rc;
     use std::cell::RefCell;
-    use ppu::AddrByte;
+    use ppu::{AddrByte, PPUCtrl};
 
     fn create_test_ppu() -> PPU {
         create_test_ppu_with_rom(vec![0u8; 0x1000])
@@ -243,31 +311,31 @@ mod tests {
 
     #[test]
     fn ppuctrl_is_write_only_register() {
-        assert_register_single_writable(0x2000, &|ref ppu| ppu.ppuctrl);
+        assert_register_single_writable(0x2000, &|ref ppu| ppu.ppuctrl.bits);
         assert_writing_register_fills_latch(0x2000);
         assert_register_not_readable(0x2000);
     }
 
     #[test]
     fn ppu_mirrors_address() {
-        assert_register_single_writable(0x2008, &|ref ppu| ppu.ppuctrl);
-        assert_register_single_writable(0x2010, &|ref ppu| ppu.ppuctrl);
+        assert_register_single_writable(0x2008, &|ref ppu| ppu.ppuctrl.bits);
+        assert_register_single_writable(0x2010, &|ref ppu| ppu.ppuctrl.bits);
     }
 
     #[test]
     fn ppumask_is_write_only_register() {
-        assert_register_single_writable(0x2001, &|ref ppu| ppu.ppumask);
+        assert_register_single_writable(0x2001, &|ref ppu| ppu.ppumask.bits());
         assert_writing_register_fills_latch(0x2001);
         assert_register_not_readable(0x2001);
     }
 
     #[test]
     fn ppustat_is_read_only_register() {
-        assert_register_ignores_writes(0x2002, &|ref ppu| ppu.ppustat);
+        assert_register_ignores_writes(0x2002, &|ref ppu| ppu.ppustat.bits);
         assert_writing_register_fills_latch(0x2002);
         assert_register_is_readable(0x2002,
                                     &|ref mut ppu, val| {
-                                        ppu.ppustat = val;
+                                        ppu.ppustat = PPUStat::from_bits_truncate(val);
                                         ppu.dyn_latch = val;
                                     });
     }
@@ -276,7 +344,7 @@ mod tests {
     fn reading_ppustat_returns_part_of_dynlatch() {
         let mut ppu = create_test_ppu();
         ppu.dyn_latch = 0b0001_0101;
-        ppu.ppustat = 0b1010_0101;
+        ppu.ppustat = PPUStat::from_bits_truncate(0b1010_0101);
         assert_eq!(ppu.read(0x2002), 0b1011_0101);
     }
 
@@ -402,7 +470,7 @@ mod tests {
     #[test]
     fn accessing_ppudata_increments_ppuaddr_by_32_when_ctrl_flag_is_set() {
         let mut ppu = create_test_ppu();
-        ppu.ppuctrl = 0b0000_0100;
+        ppu.ppuctrl = PPUCtrl::new(0b0000_0100);
         ppu.ppuaddr = 0x2000;
         ppu.read(0x2007);
         assert_eq!(ppu.ppuaddr, 0x2020);
