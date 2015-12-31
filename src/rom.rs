@@ -1,8 +1,6 @@
 use std::io::prelude::*;
 use std::fs::File;
 use std::path::Path;
-use std::error;
-use std::fmt;
 use std::io;
 
 const MAGIC_NUMBERS: [u8; 4] = [0x4Eu8, 0x45u8, 0x53u8, 0x1Au8];
@@ -18,61 +16,35 @@ pub enum ScreenMode {
     FourScreen,
 }
 
-#[derive(Debug)]
-pub enum RomReadError {
-    Io(io::Error),
-    Parse(RomError),
-}
-
-impl fmt::Display for RomReadError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            RomReadError::Io(ref err) => write!(f, "IO Error: {}", err),
-            RomReadError::Parse(ref err) => write!(f, "ROM Error: {}", err),
+quick_error! {
+    #[derive(Debug)]
+    pub enum RomReadError {
+        Io(err: io::Error) {
+            display("IO Error: {}", err)
+            description(err.description())
+            cause(err)
+            from()
+        }
+        Parse(err: RomError) {
+            display("ROM Error: {}", err)
+            description(err.description())
+            cause(err)
+            from()
         }
     }
 }
 
-impl error::Error for RomReadError {
-    fn description(&self) -> &str {
-        match *self {
-            RomReadError::Io(ref err) => err.description(),
-            RomReadError::Parse(ref err) => err.description(),
+quick_error! {
+    #[derive(Debug, PartialEq)]
+	pub enum RomError {
+        DamagedHeader {
+            description("ROM data had missing or damaged header.")
         }
-    }
-}
-
-impl From<io::Error> for RomReadError {
-    fn from(err: io::Error) -> RomReadError {
-        RomReadError::Io(err)
-    }
-}
-
-impl From<RomError> for RomReadError {
-    fn from(err: RomError) -> RomReadError {
-        RomReadError::Parse(err)
-    }
-}
-
-#[derive(PartialEq, Debug, Clone, Copy)]
-pub enum RomError {
-    DamagedHeader,
-    UnexpectedEndOfData,
-    Nes2NotSupported,
-}
-
-impl fmt::Display for RomError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", error::Error::description(self))
-    }
-}
-
-impl error::Error for RomError {
-    fn description(&self) -> &str {
-        match *self {
-            RomError::DamagedHeader => "ROM data had missing or damaged header.",
-            RomError::UnexpectedEndOfData => "Unexpected end of data.",
-            RomError::Nes2NotSupported => "NES 2.0 ROMs are not currently supported.",
+        UnexpectedEndOfData {
+            description("Unexpected end of data.")
+        }
+        Nes2NotSupported {
+            description("NES 2.0 ROMs are not currently supported.")
         }
     }
 }

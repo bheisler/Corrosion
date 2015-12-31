@@ -10,6 +10,7 @@ stacktrace = []
 
 [dependencies]
 bitflags = "0.3.3"
+quick-error = "0.2.1"
 
 [dev-dependencies]
 rand = "0.3"
