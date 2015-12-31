@@ -183,8 +183,8 @@ mod tests {
     }
 
     fn create_test_ppu_with_rom(chr_rom: Vec<u8>) -> PPU {
-        let mut cart = Mapper::new(0, vec![0u8; 0x1000], chr_rom, vec![0u8; 0x1000]);
-        let mut ppu_mem = PPUMemory::new(Rc::new(RefCell::new(cart)));
+        let cart = Mapper::new(0, vec![0u8; 0x1000], chr_rom, vec![0u8; 0x1000]);
+        let ppu_mem = PPUMemory::new(Rc::new(RefCell::new(cart)));
         PPU::new(ppu_mem)
     }
 
