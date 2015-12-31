@@ -6,6 +6,10 @@ macro_rules! decode_opcode {
         0x86 => { let mode = $this.zero_page();   $this.stx( mode ) },
         0x96 => { let mode = $this.zero_page_y(); $this.stx( mode ) },
         0x8E => { let mode = $this.absolute();    $this.stx( mode ) },
+        
+        0x84 => { let mode = $this.zero_page();   $this.sty( mode ) },
+        0x94 => { let mode = $this.zero_page_x(); $this.sty( mode ) },
+        0x8C => { let mode = $this.absolute();    $this.sty( mode ) },
 
         0x85 => { let mode = $this.zero_page();   $this.sta( mode ) },
         0x95 => { let mode = $this.zero_page_x(); $this.sta( mode ) },
@@ -24,9 +28,9 @@ macro_rules! decode_opcode {
         
         0xA0 => { let mode = $this.immediate();   $this.ldy( mode ) },
         0xA4 => { let mode = $this.zero_page();   $this.ldy( mode ) },
-        0xB4 => { let mode = $this.zero_page_y(); $this.ldy( mode ) },
+        0xB4 => { let mode = $this.zero_page_x(); $this.ldy( mode ) },
         0xAC => { let mode = $this.absolute();    $this.ldy( mode ) },
-        0xBC => { let mode = $this.absolute_y();  $this.ldy( mode ) },
+        0xBC => { let mode = $this.absolute_x();  $this.ldy( mode ) },
 
         0xA9 => { let mode = $this.immediate();   $this.lda( mode ) },
         0xA5 => { let mode = $this.zero_page();   $this.lda( mode ) },
@@ -118,12 +122,37 @@ macro_rules! decode_opcode {
         
         0xCA => $this.dex(),
         0x88 => $this.dey(),
+        
+        0x4A => { let mode = $this.accumulator(); $this.lsr( mode ) },
+        0x46 => { let mode = $this.zero_page();   $this.lsr( mode ) },
+        0x56 => { let mode = $this.zero_page_x(); $this.lsr( mode ) },
+        0x4E => { let mode = $this.absolute();    $this.lsr( mode ) },
+        0x5E => { let mode = $this.absolute_x();  $this.lsr( mode ) },
+        
+        0x0A => { let mode = $this.accumulator(); $this.asl( mode ) },
+        0x06 => { let mode = $this.zero_page();   $this.asl( mode ) },
+        0x16 => { let mode = $this.zero_page_x(); $this.asl( mode ) },
+        0x0E => { let mode = $this.absolute();    $this.asl( mode ) },
+        0x1E => { let mode = $this.absolute_x();  $this.asl( mode ) },
+        
+        0x6A => { let mode = $this.accumulator(); $this.ror( mode ) },
+        0x66 => { let mode = $this.zero_page();   $this.ror( mode ) },
+        0x76 => { let mode = $this.zero_page_x(); $this.ror( mode ) },
+        0x6E => { let mode = $this.absolute();    $this.ror( mode ) },
+        0x7E => { let mode = $this.absolute_x();  $this.ror( mode ) },
+        
+        0x2A => { let mode = $this.accumulator(); $this.rol( mode ) },
+        0x26 => { let mode = $this.zero_page();   $this.rol( mode ) },
+        0x36 => { let mode = $this.zero_page_x(); $this.rol( mode ) },
+        0x2E => { let mode = $this.absolute();    $this.rol( mode ) },
+        0x3E => { let mode = $this.absolute_x();  $this.rol( mode ) },
 
         //Jumps
         0x4C => $this.jmp(),
         0x6C => $this.jmpi(),
         0x20 => $this.jsr(),
         0x60 => $this.rts(),
+        0x40 => $this.rti(),
 
         //Branches
         0xB0 => $this.bcs(),
@@ -151,6 +180,80 @@ macro_rules! decode_opcode {
         0xB8 => $this.clv(),
         0xAA => $this.tax(),
         0xA8 => $this.tay(),
+        0xBA => $this.tsx(),
+        0x8A => $this.txa(),
+        0x9A => $this.txs(),
+        0x98 => $this.tya(),
+
+        //Unofficial NOPs
+        0x04 | 0x44 | 0x64 => { $this.unofficial( ); let mode = $this.zero_page(); $this.u_nop(mode) }
+        0x0C => { $this.unofficial( ); let mode = $this.absolute(); $this.u_nop(mode) }
+        0x14 | 0x34 | 0x54 | 0x74 | 0xD4 | 0xF4 => { $this.unofficial( ); let mode = $this.zero_page_x(); $this.u_nop(mode) }
+        0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xFA => { $this.unofficial( ); $this.nop() }
+        0x80 => { $this.unofficial( ); let mode = $this.immediate(); $this.u_nop(mode) }
+        0x1C | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC => { $this.unofficial( ); let mode = $this.absolute_x(); $this.u_nop(mode) } 
+
+        0xA3 => { $this.unofficial(); let mode = $this.indirect_x();  $this.lax(mode) }
+        0xB3 => { $this.unofficial(); let mode = $this.indirect_y();  $this.lax(mode) }
+        0xA7 => { $this.unofficial(); let mode = $this.zero_page();   $this.lax(mode) }
+        0xB7 => { $this.unofficial(); let mode = $this.zero_page_y(); $this.lax(mode) }
+        0xAF => { $this.unofficial(); let mode = $this.absolute();    $this.lax(mode) }
+        0xBF => { $this.unofficial(); let mode = $this.absolute_y();  $this.lax(mode) }
+        
+        0x87 => { $this.unofficial(); let mode = $this.zero_page();   $this.sax(mode) }
+        0x97 => { $this.unofficial(); let mode = $this.zero_page_y(); $this.sax(mode) }
+        0x83 => { $this.unofficial(); let mode = $this.indirect_x();  $this.sax(mode) }
+        0x8F => { $this.unofficial(); let mode = $this.absolute();    $this.sax(mode) }
+        
+        0xEB => { $this.unofficial(); let mode = $this.immediate();   $this.sbc(mode) }
+        
+        0xC7 => { $this.unofficial(); let mode = $this.zero_page();   $this.dcp(mode) }
+        0xD7 => { $this.unofficial(); let mode = $this.zero_page_x(); $this.dcp(mode) }
+        0xC3 => { $this.unofficial(); let mode = $this.indirect_x();  $this.dcp(mode) }
+        0xD3 => { $this.unofficial(); let mode = $this.indirect_y();  $this.dcp(mode) }
+        0xCF => { $this.unofficial(); let mode = $this.absolute();    $this.dcp(mode) }
+        0xDF => { $this.unofficial(); let mode = $this.absolute_x();  $this.dcp(mode) }
+        0xDB => { $this.unofficial(); let mode = $this.absolute_y();  $this.dcp(mode) }
+
+        0xE7 => { $this.unofficial(); let mode = $this.zero_page();   $this.isc(mode) }
+        0xF7 => { $this.unofficial(); let mode = $this.zero_page_x(); $this.isc(mode) }
+        0xE3 => { $this.unofficial(); let mode = $this.indirect_x();  $this.isc(mode) }
+        0xF3 => { $this.unofficial(); let mode = $this.indirect_y();  $this.isc(mode) }
+        0xEF => { $this.unofficial(); let mode = $this.absolute();    $this.isc(mode) }
+        0xFF => { $this.unofficial(); let mode = $this.absolute_x();  $this.isc(mode) }
+        0xFB => { $this.unofficial(); let mode = $this.absolute_y();  $this.isc(mode) }
+
+        0x07 => { $this.unofficial(); let mode = $this.zero_page();   $this.slo(mode) }
+        0x17 => { $this.unofficial(); let mode = $this.zero_page_x(); $this.slo(mode) }
+        0x03 => { $this.unofficial(); let mode = $this.indirect_x();  $this.slo(mode) }
+        0x13 => { $this.unofficial(); let mode = $this.indirect_y();  $this.slo(mode) }
+        0x0F => { $this.unofficial(); let mode = $this.absolute();    $this.slo(mode) }
+        0x1F => { $this.unofficial(); let mode = $this.absolute_x();  $this.slo(mode) }
+        0x1B => { $this.unofficial(); let mode = $this.absolute_y();  $this.slo(mode) }
+
+        0x27 => { $this.unofficial(); let mode = $this.zero_page();   $this.rla(mode) }
+        0x37 => { $this.unofficial(); let mode = $this.zero_page_x(); $this.rla(mode) }
+        0x23 => { $this.unofficial(); let mode = $this.indirect_x();  $this.rla(mode) }
+        0x33 => { $this.unofficial(); let mode = $this.indirect_y();  $this.rla(mode) }
+        0x2F => { $this.unofficial(); let mode = $this.absolute();    $this.rla(mode) }
+        0x3F => { $this.unofficial(); let mode = $this.absolute_x();  $this.rla(mode) }
+        0x3B => { $this.unofficial(); let mode = $this.absolute_y();  $this.rla(mode) }
+
+        0x47 => { $this.unofficial(); let mode = $this.zero_page();   $this.sre(mode) }
+        0x57 => { $this.unofficial(); let mode = $this.zero_page_x(); $this.sre(mode) }
+        0x43 => { $this.unofficial(); let mode = $this.indirect_x();  $this.sre(mode) }
+        0x53 => { $this.unofficial(); let mode = $this.indirect_y();  $this.sre(mode) }
+        0x4F => { $this.unofficial(); let mode = $this.absolute();    $this.sre(mode) }
+        0x5F => { $this.unofficial(); let mode = $this.absolute_x();  $this.sre(mode) }
+        0x5B => { $this.unofficial(); let mode = $this.absolute_y();  $this.sre(mode) }
+
+        0x67 => { $this.unofficial(); let mode = $this.zero_page();   $this.rra(mode) }
+        0x77 => { $this.unofficial(); let mode = $this.zero_page_x(); $this.rra(mode) }
+        0x63 => { $this.unofficial(); let mode = $this.indirect_x();  $this.rra(mode) }
+        0x73 => { $this.unofficial(); let mode = $this.indirect_y();  $this.rra(mode) }
+        0x6F => { $this.unofficial(); let mode = $this.absolute();    $this.rra(mode) }
+        0x7F => { $this.unofficial(); let mode = $this.absolute_x();  $this.rra(mode) }
+        0x7B => { $this.unofficial(); let mode = $this.absolute_y();  $this.rra(mode) }
 
         //Else
         x => panic!( "Unknown or unsupported opcode: {:02X}", x ),
@@ -176,6 +279,13 @@ impl AddressingMode for ImmediateAddressingMode {
     fn write(self, cpu: &mut CPU, val: u8) {
         panic!("Tried to write {:0X} to an immediate address.", val)
     }
+}
+
+#[derive(Debug, Copy, Clone)]
+struct AccumulatorAddressingMode;
+impl AddressingMode for AccumulatorAddressingMode {
+    fn read(self, cpu:&mut CPU) -> u8 { cpu.a }
+    fn write(self, cpu:&mut CPU, val: u8) { cpu.a = val }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -247,11 +357,12 @@ impl CPU {
         
         let opcode = Disassembler::new(self).decode();
         println!(
-            "{:X} {:9}  {:30}  A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:3} SL:{:3}",
+            "{:04X} {:9} {}{:30}  A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:3} SL:{:3}",
             self.pc,
             opcode.bytes.iter()
                 .map(|byte| format!("{:02X}", byte))
                 .fold("".to_string(), |left, right| left + " " + &right ),
+            if opcode.unofficial { "*" } else { " " },
             opcode.str,
             self.a,
             self.x,
@@ -288,19 +399,27 @@ impl CPU {
     fn indirect_x(&mut self) -> MemoryAddressingMode {
         let arg = self.load_incr_pc();
         let zp_idx = arg.wrapping_add(self.x);
-        MemoryAddressingMode { ptr: self.mem.read_w(zp_idx as u16) }
+        let ptr = self.mem.read_w_zero_page(zp_idx);
+        MemoryAddressingMode { ptr: ptr }
     }
     fn indirect_y(&mut self) -> MemoryAddressingMode {
         let arg = self.load_incr_pc();
-        let ptr_base = self.mem.read_w(arg as u16);
+        let ptr_base = self.mem.read_w_zero_page(arg);
         let ptr = ptr_base.wrapping_add(self.y as u16);
         MemoryAddressingMode { ptr: ptr }
+    }
+    fn accumulator(&mut self) -> AccumulatorAddressingMode {
+        AccumulatorAddressingMode
     }
 
     // Instructions
     // Stores
     fn stx<M: AddressingMode>(&mut self, mode: M) {
         let val = self.x;
+        mode.write(self, val);
+    }
+    fn sty<M: AddressingMode>(&mut self, mode: M) {
+        let val = self.y;
         mode.write(self, val);
     }
     fn sta<M: AddressingMode>(&mut self, mode: M) {
@@ -397,6 +516,40 @@ impl CPU {
         let res = self.y.wrapping_sub(1);
         self.y = self.set_sign_zero(res);
     }
+    fn lsr<M: AddressingMode>(&mut self, mode: M) {
+        let arg = mode.read(self);
+        self.set_carry(arg & 0x01 != 0);
+        let res = self.set_sign_zero(arg >> 1);
+        mode.write(self, res);
+    }
+    fn asl<M: AddressingMode>(&mut self, mode: M) {
+        let arg = mode.read(self);
+        self.set_carry(arg & 0x80 != 0);
+        let res = self.set_sign_zero(arg << 1);
+        mode.write(self, res);
+    }
+    fn ror<M: AddressingMode>(&mut self, mode: M) {
+        let arg = mode.read(self);
+        let new_carry = arg & 0x01 != 0;
+        let mut res = arg >> 1;
+        if self.p.contains(C) {
+            res |= 0x80;
+        }
+        let res = self.set_sign_zero(res);
+        self.set_carry(new_carry);
+        mode.write(self, res);
+    }
+    fn rol<M: AddressingMode>(&mut self, mode: M) {
+        let arg = mode.read(self);
+        let new_carry = arg & 0x80 != 0;
+        let mut res = arg << 1;
+        if self.p.contains(C) {
+            res |= 0x01;
+        }
+        let res = self.set_sign_zero(res);
+        self.set_carry(new_carry);
+        mode.write(self, res);
+    }
 
     // Jumps
     fn jmp(&mut self) {
@@ -404,7 +557,7 @@ impl CPU {
     }
     fn jmpi(&mut self) {
         let arg = self.load_w_incr_pc();
-        self.pc = self.mem.read_w(arg);
+        self.pc = self.mem.read_w_same_page(arg);
     }
     fn jsr(&mut self) {
         let target = self.load_w_incr_pc();
@@ -414,6 +567,12 @@ impl CPU {
     }
     fn rts(&mut self) {
         self.pc = self.stack_pop_w().wrapping_add(1);
+    }
+    fn rti(&mut self) {
+        let status = self.stack_pop();
+        self.p = Status::from_bits_truncate(status);
+        self.p.insert(U);
+        self.pc = self.stack_pop_w();
     }
 
     // Branches
@@ -498,6 +657,59 @@ impl CPU {
         let res = self.a;
         self.y = self.set_sign_zero(res);
     }
+    fn tsx(&mut self) {
+        let res = self.sp;
+        self.x = self.set_sign_zero(res);
+    }
+    fn txa(&mut self) {
+        let res = self.x;
+        self.a = self.set_sign_zero(res);
+    }
+    fn txs(&mut self) {
+        self.sp = self.x;
+    }
+    fn tya(&mut self) {
+        let res = self.y;
+        self.a = self.set_sign_zero(res);
+    }
+    
+    //Unofficial opcodes
+    fn u_nop<M: AddressingMode>(&mut self, mode: M) {
+        mode.read(self);
+    }
+    fn lax<M: AddressingMode>(&mut self, mode: M) {
+        let arg = mode.read(self);
+        self.a = self.set_sign_zero(arg);
+        self.x = self.a;
+    }
+    fn sax<M: AddressingMode>(&mut self, mode: M) {
+        let res = self.a & self.x;
+        mode.write(self, res);
+    }
+    fn dcp<M: AddressingMode>(&mut self, mode: M) {
+        self.dec(mode);
+        self.cmp(mode);
+    }
+    fn isc<M: AddressingMode>(&mut self, mode: M) {
+        self.inc(mode);
+        self.sbc(mode);
+    }
+    fn slo<M: AddressingMode>(&mut self, mode: M) {
+        self.asl(mode);
+        self.ora(mode);
+    }
+    fn rla<M: AddressingMode>(&mut self, mode: M) {
+        self.rol(mode);
+        self.and(mode);
+    }
+    fn sre<M: AddressingMode>(&mut self, mode: M) {
+        self.lsr(mode);
+        self.eor(mode);
+    }
+    fn rra<M: AddressingMode>(&mut self, mode: M) {
+        self.ror(mode);
+        self.adc(mode);
+    }
 
     pub fn new(mem: CpuMemory) -> CPU {
         CPU {
@@ -568,7 +780,8 @@ impl CPU {
     }
 
     fn relative_addr(&self, disp: u8) -> u16 {
-        let disp = disp as i16;
+        //Double-cast to force sign-extension
+        let disp = (disp as i8) as i16;
         let pc = self.pc as i16;
         pc.wrapping_add(disp) as u16
     }
@@ -610,7 +823,9 @@ impl CPU {
         self.sp = self.sp.wrapping_add(2);
         self.mem.read_w(self.sp as u16 + 0x00FF)
     }
-
+    
+    fn unofficial(&self) {}
+    
     pub fn step(&mut self) {
         self.trace();
         let opcode: u8 = self.load_incr_pc();
