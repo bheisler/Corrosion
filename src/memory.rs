@@ -66,7 +66,7 @@ impl CpuMemory {
             cart: cart,
         }
     }
-    
+
     pub fn read_w_zero_page(&mut self, zp_idx: u8) -> u16 {
         let low = self.read(zp_idx as u16) as u16;
         let high = self.read(zp_idx.wrapping_add(1) as u16) as u16;

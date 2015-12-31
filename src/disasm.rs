@@ -40,9 +40,7 @@ impl<'a> Disassembler<'a> {
     }
     fn absolute(&mut self) -> PartialInstruction {
         let arg = self.read_w_incr_pc();
-        PartialInstruction {
-            pattern: format!("$$$ ${:04X} = {:02X}", arg, self.cpu.mem.read(arg)),
-        }
+        PartialInstruction { pattern: format!("$$$ ${:04X} = {:02X}", arg, self.cpu.mem.read(arg)) }
     }
     fn absolute_x(&mut self) -> PartialInstruction {
         let arg = self.read_w_incr_pc();
@@ -306,8 +304,8 @@ impl<'a> Disassembler<'a> {
     fn tya(&mut self) -> String {
         "TYA".to_string()
     }
-    
-    //Unofficial instructions
+
+    // Unofficial instructions
     fn u_nop(&mut self, instr: PartialInstruction) -> String {
         instr.finish("NOP")
     }
@@ -321,8 +319,8 @@ impl<'a> Disassembler<'a> {
         instr.finish("DCP")
     }
     fn isc(&mut self, instr: PartialInstruction) -> String {
-        //Nintendulator calls this op ISB, so I'll use the same in the logs
-        //at least for now
+        // Nintendulator calls this op ISB, so I'll use the same in the logs
+        // at least for now
         instr.finish("ISB")
     }
     fn slo(&mut self, instr: PartialInstruction) -> String {
@@ -347,7 +345,7 @@ impl<'a> Disassembler<'a> {
             unofficial: self.unofficial,
         }
     }
-    
+
     fn unofficial(&mut self) {
         self.unofficial = true;
     }

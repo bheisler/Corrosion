@@ -79,43 +79,65 @@ enum MasterSlave {
     Slave,
 }
 
-struct PPUCtrl{bits: u8}
+struct PPUCtrl {
+    bits: u8,
+}
 impl PPUCtrl {
     fn empty() -> PPUCtrl {
-        PPUCtrl{ bits: 0 }
+        PPUCtrl { bits: 0 }
     }
-    
-    fn new( bits: u8 ) -> PPUCtrl {
-        PPUCtrl{ bits: bits }
+
+    fn new(bits: u8) -> PPUCtrl {
+        PPUCtrl { bits: bits }
     }
-    
+
     fn nametable_addr(&self) -> u16 {
         (self.bits & 0b0000_0011) as u16 & 0x0400 + 0x2000
     }
-    
+
     fn vram_addr_step(&self) -> u16 {
-        if self.bits & 0b0000_0100 != 0 { 32 } else { 1 } 
+        if self.bits & 0b0000_0100 != 0 {
+            32
+        } else {
+            1
+        }
     }
-    
+
     fn sprite_table(&self) -> u16 {
-        if self.bits & 0b0000_1000 != 0 { 0x1000 } else { 0x0000 }
+        if self.bits & 0b0000_1000 != 0 {
+            0x1000
+        } else {
+            0x0000
+        }
     }
-    
+
     fn background_table(&self) -> u16 {
-        if self.bits & 0b0001_0000 != 0 { 0x1000 } else { 0x0000 }
+        if self.bits & 0b0001_0000 != 0 {
+            0x1000
+        } else {
+            0x0000
+        }
     }
-    
+
     fn sprite_size(&self) -> SpriteSize {
-        if self.bits & 0b0010_0000 != 0 { SpriteSize::Tall } else { SpriteSize::Normal }
+        if self.bits & 0b0010_0000 != 0 {
+            SpriteSize::Tall
+        } else {
+            SpriteSize::Normal
+        }
     }
-    
-	fn master_slave(&self) -> MasterSlave {
-	    if self.bits & 0b0100_0000 != 0 { MasterSlave::Master } else { MasterSlave::Slave }
-	}
-	
-	fn generate_vblank_nmi(&self) -> bool {
-	    self.bits & 0b1000_0000 != 0
-	}
+
+    fn master_slave(&self) -> MasterSlave {
+        if self.bits & 0b0100_0000 != 0 {
+            MasterSlave::Master
+        } else {
+            MasterSlave::Slave
+        }
+    }
+
+    fn generate_vblank_nmi(&self) -> bool {
+        self.bits & 0b1000_0000 != 0
+    }
 }
 
 bitflags! {
@@ -174,7 +196,7 @@ impl PPU {
             ppu_mem: ppu_mem,
         }
     }
-    
+
     fn incr_ppuaddr(&mut self) {
         let incr_size = self.ppuctrl.vram_addr_step();
         self.ppuaddr = self.ppuaddr.wrapping_add(incr_size);
@@ -183,8 +205,12 @@ impl PPU {
 
 fn write_addr_byte(latch: &mut AddrByte, target: &mut u16, val: u8) {
     match *latch {
-        AddrByte::First =>  { *target = (*target & 0x00FF) | ((val as u16) << 8); }
-        AddrByte::Second => { *target = (*target & 0xFF00) | ((val as u16) << 0); }
+        AddrByte::First => {
+            *target = (*target & 0x00FF) | ((val as u16) << 8);
+        }
+        AddrByte::Second => {
+            *target = (*target & 0xFF00) | ((val as u16) << 0);
+        }
     }
     *latch = AddrByte::Second;
 }
@@ -218,7 +244,7 @@ impl MemSegment for PPU {
     fn write(&mut self, idx: u16, val: u8) {
         self.dyn_latch = val;
         match idx % 8 {
-            0x0000 => self.ppuctrl = PPUCtrl::new( val ),
+            0x0000 => self.ppuctrl = PPUCtrl::new(val),
             0x0001 => self.ppumask = PPUMask::from_bits_truncate(val),
             0x0002 => (),
             0x0003 => self.oamaddr = val,
