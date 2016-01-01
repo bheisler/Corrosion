@@ -267,9 +267,39 @@ use memory::MemSegment;
 #[cfg(feature="cputrace")]
 use disasm::Disassembler;
 
+/// The number of cycles that each machine operation takes. Indexed by opcode
+/// number.
+/// Copied from FCEU & SprocketNES.
+#[rustfmt_skip]
+static CYCLE_TABLE: [u8; 256] = [
+    /*0x00*/ 7,6,2,8,3,3,5,5,3,2,2,2,4,4,6,6,
+    /*0x10*/ 2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7,
+    /*0x20*/ 6,6,2,8,3,3,5,5,4,2,2,2,4,4,6,6,
+    /*0x30*/ 2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7,
+    /*0x40*/ 6,6,2,8,3,3,5,5,3,2,2,2,3,4,6,6,
+    /*0x50*/ 2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7,
+    /*0x60*/ 6,6,2,8,3,3,5,5,4,2,2,2,5,4,6,6,
+    /*0x70*/ 2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7,
+    /*0x80*/ 2,6,2,6,3,3,3,3,2,2,2,2,4,4,4,4,
+    /*0x90*/ 2,6,2,6,4,4,4,4,2,5,2,5,5,5,5,5,
+    /*0xA0*/ 2,6,2,6,3,3,3,3,2,2,2,2,4,4,4,4,
+    /*0xB0*/ 2,5,2,5,4,4,4,4,2,4,2,4,4,4,4,4,
+    /*0xC0*/ 2,6,2,8,3,3,5,5,2,2,2,2,4,4,6,6,
+    /*0xD0*/ 2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7,
+    /*0xE0*/ 2,6,3,8,3,3,5,5,2,2,2,2,4,4,6,6,
+    /*0xF0*/ 2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7,
+];
+
+
 trait AddressingMode : Copy {
     fn read(self, cpu: &mut CPU) -> u8;
     fn write(self, cpu: &mut CPU, val: u8);
+    fn tick_cycle(self, cpu: &mut CPU);
+
+    // The double-instructions all have their oops cycle built in to the count
+    // but they contain an instruction that ticks separately, so this is the
+    // easiest way to counter that.
+    fn untick_cycle(self, cpu: &mut CPU);
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -278,10 +308,11 @@ impl AddressingMode for ImmediateAddressingMode {
     fn read(self, cpu: &mut CPU) -> u8 {
         cpu.load_incr_pc()
     }
-    #[allow(unused_variables)]
-    fn write(self, cpu: &mut CPU, val: u8) {
-        panic!("Tried to write {:0X} to an immediate address.", val)
+    fn write(self, _: &mut CPU, val: u8) {
+        panic!("Tried to write {:02X} to an immediate address.", val)
     }
+    fn tick_cycle(self, _: &mut CPU) {}
+    fn untick_cycle(self, _: &mut CPU) {}
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -293,10 +324,13 @@ impl AddressingMode for AccumulatorAddressingMode {
     fn write(self, cpu: &mut CPU, val: u8) {
         cpu.regs.a = val
     }
+    fn tick_cycle(self, _: &mut CPU) {}
+    fn untick_cycle(self, _: &mut CPU) {}
 }
 
 #[derive(Debug, Copy, Clone)]
 struct MemoryAddressingMode {
+    ptr_base: u16,
     ptr: u16,
 }
 impl AddressingMode for MemoryAddressingMode {
@@ -305,6 +339,12 @@ impl AddressingMode for MemoryAddressingMode {
     }
     fn write(self, cpu: &mut CPU, val: u8) {
         cpu.write(self.ptr, val)
+    }
+    fn tick_cycle(self, cpu: &mut CPU) {
+        cpu.inc_page_cycle(self.ptr_base, self.ptr)
+    }
+    fn untick_cycle(self, cpu: &mut CPU) {
+        cpu.dec_page_cycle(self.ptr_base, self.ptr)
     }
 }
 
@@ -338,8 +378,8 @@ pub struct Registers {
 
 pub struct CPU {
     pub regs: Registers,
-
     pub mem: CpuMemory,
+    pub cycle: u32,
 }
 
 impl MemSegment for CPU {
@@ -368,7 +408,7 @@ impl CPU {
             self.regs.y,
             self.regs.p.bits(),
             self.regs.sp,
-            0, //TODO: Add cycle counting
+            (self.cycle * 3) % 341, //TODO: Should be PPU cycle num
             0, //TODO: Add scanline counting
         );
     }
@@ -395,34 +435,66 @@ impl CPU {
         ImmediateAddressingMode
     }
     fn absolute(&mut self) -> MemoryAddressingMode {
-        MemoryAddressingMode { ptr: self.load_w_incr_pc() }
+        let ptr = self.load_w_incr_pc();
+        MemoryAddressingMode {
+            ptr_base: ptr,
+            ptr: ptr,
+        }
     }
     fn absolute_x(&mut self) -> MemoryAddressingMode {
-        MemoryAddressingMode { ptr: self.load_w_incr_pc().wrapping_add(self.regs.x as u16) }
+        let ptr_base = self.load_w_incr_pc();
+        let ptr = ptr_base.wrapping_add(self.regs.x as u16);
+        MemoryAddressingMode {
+            ptr_base: ptr_base,
+            ptr: ptr,
+        }
     }
     fn absolute_y(&mut self) -> MemoryAddressingMode {
-        MemoryAddressingMode { ptr: self.load_w_incr_pc().wrapping_add(self.regs.y as u16) }
+        let ptr_base = self.load_w_incr_pc();
+        let ptr = ptr_base.wrapping_add(self.regs.y as u16);
+        MemoryAddressingMode {
+            ptr_base: ptr_base,
+            ptr: ptr,
+        }
     }
     fn zero_page(&mut self) -> MemoryAddressingMode {
-        MemoryAddressingMode { ptr: self.load_incr_pc() as u16 }
+        let ptr = self.load_incr_pc() as u16;
+        MemoryAddressingMode {
+            ptr_base: ptr,
+            ptr: ptr,
+        }
     }
     fn zero_page_x(&mut self) -> MemoryAddressingMode {
-        MemoryAddressingMode { ptr: self.load_incr_pc().wrapping_add(self.regs.x) as u16 }
+        let ptr = self.load_incr_pc().wrapping_add(self.regs.x) as u16;
+        MemoryAddressingMode {
+            ptr_base: ptr,
+            ptr: ptr,
+        }
     }
     fn zero_page_y(&mut self) -> MemoryAddressingMode {
-        MemoryAddressingMode { ptr: self.load_incr_pc().wrapping_add(self.regs.y) as u16 }
+        let ptr = self.load_incr_pc().wrapping_add(self.regs.y) as u16;
+        MemoryAddressingMode {
+            ptr_base: ptr,
+            ptr: ptr,
+        }
     }
     fn indirect_x(&mut self) -> MemoryAddressingMode {
         let arg = self.load_incr_pc();
         let zp_idx = arg.wrapping_add(self.regs.x);
         let ptr = self.mem.read_w_zero_page(zp_idx);
-        MemoryAddressingMode { ptr: ptr }
+        MemoryAddressingMode {
+            ptr_base: ptr,
+            ptr: ptr,
+        }
     }
     fn indirect_y(&mut self) -> MemoryAddressingMode {
         let arg = self.load_incr_pc();
         let ptr_base = self.mem.read_w_zero_page(arg);
         let ptr = ptr_base.wrapping_add(self.regs.y as u16);
-        MemoryAddressingMode { ptr: ptr }
+        MemoryAddressingMode {
+            ptr_base: ptr_base,
+            ptr: ptr,
+        }
     }
     fn accumulator(&mut self) -> AccumulatorAddressingMode {
         AccumulatorAddressingMode
@@ -445,14 +517,17 @@ impl CPU {
 
     // Loads
     fn ldx<M: AddressingMode>(&mut self, mode: M) {
+        mode.tick_cycle(self);
         let arg = mode.read(self);
         self.regs.x = self.set_sign_zero(arg);
     }
     fn lda<M: AddressingMode>(&mut self, mode: M) {
+        mode.tick_cycle(self);
         let arg = mode.read(self);
         self.regs.a = self.set_sign_zero(arg);
     }
     fn ldy<M: AddressingMode>(&mut self, mode: M) {
+        mode.tick_cycle(self);
         let arg = mode.read(self);
         self.regs.y = self.set_sign_zero(arg);
     }
@@ -466,26 +541,32 @@ impl CPU {
         self.set_overflow((arg & 0x40) != 0);
     }
     fn and<M: AddressingMode>(&mut self, mode: M) {
+        mode.tick_cycle(self);
         let ac = self.regs.a & mode.read(self);
         self.regs.a = self.set_sign_zero(ac);
     }
     fn ora<M: AddressingMode>(&mut self, mode: M) {
+        mode.tick_cycle(self);
         let ac = self.regs.a | mode.read(self);
         self.regs.a = self.set_sign_zero(ac);
     }
     fn eor<M: AddressingMode>(&mut self, mode: M) {
+        mode.tick_cycle(self);
         let ac = self.regs.a ^ mode.read(self);
         self.regs.a = self.set_sign_zero(ac);
     }
     fn adc<M: AddressingMode>(&mut self, mode: M) {
+        mode.tick_cycle(self);
         let arg = mode.read(self);
         self.do_adc(arg);
     }
     fn sbc<M: AddressingMode>(&mut self, mode: M) {
+        mode.tick_cycle(self);
         let arg = mode.read(self);
         self.do_adc(!arg);
     }
     fn cmp<M: AddressingMode>(&mut self, mode: M) {
+        mode.tick_cycle(self);
         let arg = mode.read(self);
         let ac = self.regs.a;
         self.set_carry(!(ac < arg));
@@ -697,9 +778,11 @@ impl CPU {
 
     // Unofficial opcodes
     fn u_nop<M: AddressingMode>(&mut self, mode: M) {
+        mode.tick_cycle(self);
         mode.read(self);
     }
     fn lax<M: AddressingMode>(&mut self, mode: M) {
+        mode.tick_cycle(self);
         let arg = mode.read(self);
         self.regs.a = self.set_sign_zero(arg);
         self.regs.x = self.regs.a;
@@ -711,31 +794,37 @@ impl CPU {
     fn dcp<M: AddressingMode>(&mut self, mode: M) {
         self.dec(mode);
         self.cmp(mode);
+        mode.untick_cycle(self);
     }
     fn isc<M: AddressingMode>(&mut self, mode: M) {
         self.inc(mode);
         self.sbc(mode);
+        mode.untick_cycle(self);
     }
     fn slo<M: AddressingMode>(&mut self, mode: M) {
         self.asl(mode);
         self.ora(mode);
+        mode.untick_cycle(self);
     }
     fn rla<M: AddressingMode>(&mut self, mode: M) {
         self.rol(mode);
         self.and(mode);
+        mode.untick_cycle(self);
     }
     fn sre<M: AddressingMode>(&mut self, mode: M) {
         self.lsr(mode);
         self.eor(mode);
+        mode.untick_cycle(self);
     }
     fn rra<M: AddressingMode>(&mut self, mode: M) {
         self.ror(mode);
         self.adc(mode);
+        mode.untick_cycle(self);
     }
 
     pub fn new(mem: CpuMemory) -> CPU {
         CPU {
-            regs: Registers{
+            regs: Registers {
                 a: 0,
                 x: 0,
                 y: 0,
@@ -743,7 +832,7 @@ impl CPU {
                 sp: 0xFD,
                 pc: 0,
             },
-
+            cycle: 0,
             mem: mem,
         }
     }
@@ -827,6 +916,10 @@ impl CPU {
     fn branch(&mut self, cond: bool) {
         let arg = self.load_incr_pc();
         if cond {
+            let target = self.relative_addr(arg);
+            let pc = self.regs.pc;
+            self.incr_cycle(1);
+            self.inc_page_cycle(pc, target);
             self.regs.pc = self.relative_addr(arg);
         }
     }
@@ -848,6 +941,23 @@ impl CPU {
         self.mem.read_w(self.regs.sp as u16 + 0x00FF)
     }
 
+    fn incr_cycle(&mut self, cycles: u32) {
+        self.cycle = self.cycle.wrapping_add(cycles);
+    }
+    fn decr_cycle(&mut self, cycles: u32) {
+        self.cycle = self.cycle.wrapping_sub(cycles);
+    }
+    fn inc_page_cycle(&mut self, addr1: u16, addr2: u16) {
+        if addr1 & 0xFF00 != addr2 & 0xFF00 {
+            self.incr_cycle(1);
+        }
+    }
+    fn dec_page_cycle(&mut self, addr1: u16, addr2: u16) {
+        if addr1 & 0xFF00 != addr2 & 0xFF00 {
+            self.decr_cycle(1);
+        }
+    }
+
     fn unofficial(&self) {}
 
     pub fn step(&mut self) {
@@ -855,5 +965,6 @@ impl CPU {
         self.stack_dump();
         let opcode: u8 = self.load_incr_pc();
         decode_opcode!(opcode, self);
+        self.incr_cycle(CYCLE_TABLE[opcode as usize] as u32);
     }
 }
