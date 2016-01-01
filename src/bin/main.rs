@@ -2,7 +2,7 @@ extern crate nes_emulator;
 
 use std::env;
 use std::path::Path;
-use nes_emulator::rom::Rom;
+use nes_emulator::cart::Rom;
 use nes_emulator::start_emulator;
 
 fn main() {

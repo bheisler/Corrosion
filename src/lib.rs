@@ -4,7 +4,7 @@ extern crate bitflags;
 #[macro_use]
 extern crate quick_error;
 
-pub mod rom;
+pub mod cart;
 pub mod memory;
 pub mod mappers;
 pub mod ppu;
@@ -15,7 +15,7 @@ pub mod cpu;
 #[cfg(feature="cputrace")]
 pub mod disasm;
 
-use rom::Rom;
+use cart::Rom;
 use mappers::Mapper;
 use cpu::CPU;
 use memory::CpuMemory;

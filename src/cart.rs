@@ -3,6 +3,8 @@ use std::fs::File;
 use std::path::Path;
 use std::io;
 
+use mappers::Mapper;
+
 const MAGIC_NUMBERS: [u8; 4] = [0x4Eu8, 0x45u8, 0x53u8, 0x1Au8];
 pub const PRG_ROM_PAGE_SIZE: usize = 16384;
 pub const CHR_ROM_PAGE_SIZE: usize = 8192;
@@ -14,6 +16,47 @@ pub enum ScreenMode {
     Horizontal,
     Vertical,
     FourScreen,
+}
+
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub enum System {
+    NES,
+    Vs,
+    PC_10,
+}
+
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub enum TvSystem {
+    NTSC,
+    PAL,
+    Both,
+    //Dendy //Not supported by rom format yet.
+}
+
+pub struct Cart {
+    mapper: Box<Mapper>,
+    mode: ScreenMode,
+    system: System,
+    tv: TvSystem,
+    
+    //I'm thinking we don't support trainers until we need to.
+    //TODO: Add support for the battery-backed memory
+    //TODO: Add support for NES 2.0 files
+}
+
+impl Cart {
+    pub fn prg_read(&self, idx: u16) -> u8 {
+        self.mapper.prg_read(idx)
+    }
+    pub fn prg_write(&mut self, idx: u16, val: u8) {
+        self.mapper.prg_write(idx, val)
+    }
+    pub fn chr_read(&self, idx: u16) -> u8 {
+        self.mapper.chr_read(idx)
+    }
+    pub fn chr_write(&mut self, idx: u16, val: u8) {
+        self.mapper.chr_write(idx, val)
+    }
 }
 
 quick_error! {
