@@ -288,10 +288,10 @@ impl AddressingMode for ImmediateAddressingMode {
 struct AccumulatorAddressingMode;
 impl AddressingMode for AccumulatorAddressingMode {
     fn read(self, cpu: &mut CPU) -> u8 {
-        cpu.a
+        cpu.regs.a
     }
     fn write(self, cpu: &mut CPU, val: u8) {
-        cpu.a = val
+        cpu.regs.a = val
     }
 }
 
@@ -327,13 +327,17 @@ impl Status {
     }
 }
 
-pub struct CPU {
+pub struct Registers {
     pub a: u8,
     pub x: u8,
     pub y: u8,
     pub p: Status,
     pub sp: u8,
     pub pc: u16,
+}
+
+pub struct CPU {
+    pub regs: Registers,
 
     pub mem: CpuMemory,
 }
@@ -353,17 +357,17 @@ impl CPU {
         let opcode = Disassembler::new(self).decode();
         println!(
             "{:04X} {:9} {}{:30}  A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:3} SL:{:3}",
-            self.pc,
+            self.regs.pc,
             opcode.bytes.iter()
                 .map(|byte| format!("{:02X}", byte))
                 .fold("".to_string(), |left, right| left + " " + &right ),
             if opcode.unofficial { "*" } else { " " },
             opcode.str,
-            self.a,
-            self.x,
-            self.y,
-            self.p.bits(),
-            self.sp,
+            self.regs.a,
+            self.regs.x,
+            self.regs.y,
+            self.regs.p.bits(),
+            self.regs.sp,
             0, //TODO: Add cycle counting
             0, //TODO: Add scanline counting
         );
@@ -376,7 +380,7 @@ impl CPU {
     fn stack_dump(&mut self) {
         println!{
             "Stack: {:>60}",
-            (self.sp..0xFF)
+            (self.regs.sp..0xFF)
                 .map(|idx| self.mem.read(0x0100 + idx as u16))
                 .map(|byte| format!("{:02X}", byte))
                 .fold("".to_string(), |left, right| left + " " + &right )
@@ -394,30 +398,30 @@ impl CPU {
         MemoryAddressingMode { ptr: self.load_w_incr_pc() }
     }
     fn absolute_x(&mut self) -> MemoryAddressingMode {
-        MemoryAddressingMode { ptr: self.load_w_incr_pc().wrapping_add(self.x as u16) }
+        MemoryAddressingMode { ptr: self.load_w_incr_pc().wrapping_add(self.regs.x as u16) }
     }
     fn absolute_y(&mut self) -> MemoryAddressingMode {
-        MemoryAddressingMode { ptr: self.load_w_incr_pc().wrapping_add(self.y as u16) }
+        MemoryAddressingMode { ptr: self.load_w_incr_pc().wrapping_add(self.regs.y as u16) }
     }
     fn zero_page(&mut self) -> MemoryAddressingMode {
         MemoryAddressingMode { ptr: self.load_incr_pc() as u16 }
     }
     fn zero_page_x(&mut self) -> MemoryAddressingMode {
-        MemoryAddressingMode { ptr: self.load_incr_pc().wrapping_add(self.x) as u16 }
+        MemoryAddressingMode { ptr: self.load_incr_pc().wrapping_add(self.regs.x) as u16 }
     }
     fn zero_page_y(&mut self) -> MemoryAddressingMode {
-        MemoryAddressingMode { ptr: self.load_incr_pc().wrapping_add(self.y) as u16 }
+        MemoryAddressingMode { ptr: self.load_incr_pc().wrapping_add(self.regs.y) as u16 }
     }
     fn indirect_x(&mut self) -> MemoryAddressingMode {
         let arg = self.load_incr_pc();
-        let zp_idx = arg.wrapping_add(self.x);
+        let zp_idx = arg.wrapping_add(self.regs.x);
         let ptr = self.mem.read_w_zero_page(zp_idx);
         MemoryAddressingMode { ptr: ptr }
     }
     fn indirect_y(&mut self) -> MemoryAddressingMode {
         let arg = self.load_incr_pc();
         let ptr_base = self.mem.read_w_zero_page(arg);
-        let ptr = ptr_base.wrapping_add(self.y as u16);
+        let ptr = ptr_base.wrapping_add(self.regs.y as u16);
         MemoryAddressingMode { ptr: ptr }
     }
     fn accumulator(&mut self) -> AccumulatorAddressingMode {
@@ -427,51 +431,51 @@ impl CPU {
     // Instructions
     // Stores
     fn stx<M: AddressingMode>(&mut self, mode: M) {
-        let val = self.x;
+        let val = self.regs.x;
         mode.write(self, val);
     }
     fn sty<M: AddressingMode>(&mut self, mode: M) {
-        let val = self.y;
+        let val = self.regs.y;
         mode.write(self, val);
     }
     fn sta<M: AddressingMode>(&mut self, mode: M) {
-        let val = self.a;
+        let val = self.regs.a;
         mode.write(self, val);
     }
 
     // Loads
     fn ldx<M: AddressingMode>(&mut self, mode: M) {
         let arg = mode.read(self);
-        self.x = self.set_sign_zero(arg);
+        self.regs.x = self.set_sign_zero(arg);
     }
     fn lda<M: AddressingMode>(&mut self, mode: M) {
         let arg = mode.read(self);
-        self.a = self.set_sign_zero(arg);
+        self.regs.a = self.set_sign_zero(arg);
     }
     fn ldy<M: AddressingMode>(&mut self, mode: M) {
         let arg = mode.read(self);
-        self.y = self.set_sign_zero(arg);
+        self.regs.y = self.set_sign_zero(arg);
     }
 
     // Logic/Math operations
     fn bit<M: AddressingMode>(&mut self, mode: M) {
         let arg = mode.read(self);
         self.set_sign(arg);
-        let ac = self.a;
+        let ac = self.regs.a;
         self.set_zero(arg & ac);
         self.set_overflow((arg & 0x40) != 0);
     }
     fn and<M: AddressingMode>(&mut self, mode: M) {
-        let ac = self.a & mode.read(self);
-        self.a = self.set_sign_zero(ac);
+        let ac = self.regs.a & mode.read(self);
+        self.regs.a = self.set_sign_zero(ac);
     }
     fn ora<M: AddressingMode>(&mut self, mode: M) {
-        let ac = self.a | mode.read(self);
-        self.a = self.set_sign_zero(ac);
+        let ac = self.regs.a | mode.read(self);
+        self.regs.a = self.set_sign_zero(ac);
     }
     fn eor<M: AddressingMode>(&mut self, mode: M) {
-        let ac = self.a ^ mode.read(self);
-        self.a = self.set_sign_zero(ac);
+        let ac = self.regs.a ^ mode.read(self);
+        self.regs.a = self.set_sign_zero(ac);
     }
     fn adc<M: AddressingMode>(&mut self, mode: M) {
         let arg = mode.read(self);
@@ -483,21 +487,21 @@ impl CPU {
     }
     fn cmp<M: AddressingMode>(&mut self, mode: M) {
         let arg = mode.read(self);
-        let ac = self.a;
+        let ac = self.regs.a;
         self.set_carry(!(ac < arg));
         let res = ac.wrapping_sub(arg);
         self.set_sign_zero(res);
     }
     fn cpx<M: AddressingMode>(&mut self, mode: M) {
         let arg = mode.read(self);
-        let x = self.x;
+        let x = self.regs.x;
         self.set_carry(!(x < arg));
         let res = x.wrapping_sub(arg);
         self.set_sign_zero(res);
     }
     fn cpy<M: AddressingMode>(&mut self, mode: M) {
         let arg = mode.read(self);
-        let y = self.y;
+        let y = self.regs.y;
         self.set_carry(!(y < arg));
         let res = y.wrapping_sub(arg);
         self.set_sign_zero(res);
@@ -508,12 +512,12 @@ impl CPU {
         mode.write(self, res);
     }
     fn inx(&mut self) {
-        let res = self.x.wrapping_add(1);
-        self.x = self.set_sign_zero(res);
+        let res = self.regs.x.wrapping_add(1);
+        self.regs.x = self.set_sign_zero(res);
     }
     fn iny(&mut self) {
-        let res = self.y.wrapping_add(1);
-        self.y = self.set_sign_zero(res);
+        let res = self.regs.y.wrapping_add(1);
+        self.regs.y = self.set_sign_zero(res);
     }
     fn dec<M: AddressingMode>(&mut self, mode: M) {
         let arg = mode.read(self);
@@ -521,12 +525,12 @@ impl CPU {
         mode.write(self, res);
     }
     fn dex(&mut self) {
-        let res = self.x.wrapping_sub(1);
-        self.x = self.set_sign_zero(res);
+        let res = self.regs.x.wrapping_sub(1);
+        self.regs.x = self.set_sign_zero(res);
     }
     fn dey(&mut self) {
-        let res = self.y.wrapping_sub(1);
-        self.y = self.set_sign_zero(res);
+        let res = self.regs.y.wrapping_sub(1);
+        self.regs.y = self.set_sign_zero(res);
     }
     fn lsr<M: AddressingMode>(&mut self, mode: M) {
         let arg = mode.read(self);
@@ -544,7 +548,7 @@ impl CPU {
         let arg = mode.read(self);
         let new_carry = arg & 0x01 != 0;
         let mut res = arg >> 1;
-        if self.p.contains(C) {
+        if self.regs.p.contains(C) {
             res |= 0x80;
         }
         let res = self.set_sign_zero(res);
@@ -555,7 +559,7 @@ impl CPU {
         let arg = mode.read(self);
         let new_carry = arg & 0x80 != 0;
         let mut res = arg << 1;
-        if self.p.contains(C) {
+        if self.regs.p.contains(C) {
             res |= 0x01;
         }
         let res = self.set_sign_zero(res);
@@ -565,130 +569,130 @@ impl CPU {
 
     // Jumps
     fn jmp(&mut self) {
-        self.pc = self.load_w_incr_pc();
+        self.regs.pc = self.load_w_incr_pc();
     }
     fn jmpi(&mut self) {
         let arg = self.load_w_incr_pc();
-        self.pc = self.mem.read_w_same_page(arg);
+        self.regs.pc = self.mem.read_w_same_page(arg);
     }
     fn jsr(&mut self) {
         let target = self.load_w_incr_pc();
-        let return_addr = self.pc - 1;
-        self.pc = target;
+        let return_addr = self.regs.pc - 1;
+        self.regs.pc = target;
         self.stack_push_w(return_addr);
     }
     fn rts(&mut self) {
-        self.pc = self.stack_pop_w().wrapping_add(1);
+        self.regs.pc = self.stack_pop_w().wrapping_add(1);
     }
     fn rti(&mut self) {
         let status = self.stack_pop();
-        self.p = Status::from_bits_truncate(status);
-        self.p.insert(U);
-        self.pc = self.stack_pop_w();
+        self.regs.p = Status::from_bits_truncate(status);
+        self.regs.p.insert(U);
+        self.regs.pc = self.stack_pop_w();
     }
     fn brk(&mut self) {
         let target = self.mem.read_w(0xFFFE);
-        let return_addr = self.pc - 1;
-        self.pc = target;
+        let return_addr = self.regs.pc - 1;
+        self.regs.pc = target;
         self.stack_push_w(return_addr);
     }
 
     // Branches
     fn bcs(&mut self) {
-        let cond = self.p.contains(C);
+        let cond = self.regs.p.contains(C);
         self.branch(cond);
     }
     fn bcc(&mut self) {
-        let cond = !self.p.contains(C);
+        let cond = !self.regs.p.contains(C);
         self.branch(cond);
     }
     fn beq(&mut self) {
-        let cond = self.p.contains(Z);
+        let cond = self.regs.p.contains(Z);
         self.branch(cond);
     }
     fn bne(&mut self) {
-        let cond = !self.p.contains(Z);
+        let cond = !self.regs.p.contains(Z);
         self.branch(cond);
     }
     fn bvs(&mut self) {
-        let cond = self.p.contains(V);
+        let cond = self.regs.p.contains(V);
         self.branch(cond);
     }
     fn bvc(&mut self) {
-        let cond = !self.p.contains(V);
+        let cond = !self.regs.p.contains(V);
         self.branch(cond);
     }
     fn bmi(&mut self) {
-        let cond = self.p.contains(S);
+        let cond = self.regs.p.contains(S);
         self.branch(cond);
     }
     fn bpl(&mut self) {
-        let cond = !self.p.contains(S);
+        let cond = !self.regs.p.contains(S);
         self.branch(cond);
     }
 
     // Stack
     fn plp(&mut self) {
         let p = self.stack_pop();
-        self.p = Status::from_bits_truncate(p);
-        self.p.remove(B);
-        self.p.insert(U);
+        self.regs.p = Status::from_bits_truncate(p);
+        self.regs.p.remove(B);
+        self.regs.p.insert(U);
     }
     fn php(&mut self) {
-        let p = self.p;
+        let p = self.regs.p;
         self.stack_push(p.bits() | 0b0011_0000);
     }
     fn pla(&mut self) {
         let val = self.stack_pop();
-        self.a = self.set_sign_zero(val);
+        self.regs.a = self.set_sign_zero(val);
     }
     fn pha(&mut self) {
-        let a = self.a;
+        let a = self.regs.a;
         self.stack_push(a);
     }
 
     // Misc
     fn nop(&mut self) {}
     fn sec(&mut self) {
-        self.p.insert(C);
+        self.regs.p.insert(C);
     }
     fn clc(&mut self) {
-        self.p.remove(C);
+        self.regs.p.remove(C);
     }
     fn sei(&mut self) {
-        self.p.insert(I);
+        self.regs.p.insert(I);
     }
     fn sed(&mut self) {
-        self.p.insert(D);
+        self.regs.p.insert(D);
     }
     fn cld(&mut self) {
-        self.p.remove(D);
+        self.regs.p.remove(D);
     }
     fn clv(&mut self) {
-        self.p.remove(V);
+        self.regs.p.remove(V);
     }
     fn tax(&mut self) {
-        let res = self.a;
-        self.x = self.set_sign_zero(res);
+        let res = self.regs.a;
+        self.regs.x = self.set_sign_zero(res);
     }
     fn tay(&mut self) {
-        let res = self.a;
-        self.y = self.set_sign_zero(res);
+        let res = self.regs.a;
+        self.regs.y = self.set_sign_zero(res);
     }
     fn tsx(&mut self) {
-        let res = self.sp;
-        self.x = self.set_sign_zero(res);
+        let res = self.regs.sp;
+        self.regs.x = self.set_sign_zero(res);
     }
     fn txa(&mut self) {
-        let res = self.x;
-        self.a = self.set_sign_zero(res);
+        let res = self.regs.x;
+        self.regs.a = self.set_sign_zero(res);
     }
     fn txs(&mut self) {
-        self.sp = self.x;
+        self.regs.sp = self.regs.x;
     }
     fn tya(&mut self) {
-        let res = self.y;
-        self.a = self.set_sign_zero(res);
+        let res = self.regs.y;
+        self.regs.a = self.set_sign_zero(res);
     }
 
     // Unofficial opcodes
@@ -697,11 +701,11 @@ impl CPU {
     }
     fn lax<M: AddressingMode>(&mut self, mode: M) {
         let arg = mode.read(self);
-        self.a = self.set_sign_zero(arg);
-        self.x = self.a;
+        self.regs.a = self.set_sign_zero(arg);
+        self.regs.x = self.regs.a;
     }
     fn sax<M: AddressingMode>(&mut self, mode: M) {
-        let res = self.a & self.x;
+        let res = self.regs.a & self.regs.x;
         mode.write(self, res);
     }
     fn dcp<M: AddressingMode>(&mut self, mode: M) {
@@ -731,47 +735,49 @@ impl CPU {
 
     pub fn new(mem: CpuMemory) -> CPU {
         CPU {
-            a: 0,
-            x: 0,
-            y: 0,
-            p: Status::init(),
-            sp: 0xFD,
-            pc: 0,
+            regs: Registers{
+                a: 0,
+                x: 0,
+                y: 0,
+                p: Status::init(),
+                sp: 0xFD,
+                pc: 0,
+            },
 
             mem: mem,
         }
     }
 
     pub fn init(&mut self) {
-        // self.pc = self.mem.read_w(0xFFFC);
-        self.pc = 0xC000;
+        // self.regs.pc = self.mem.read_w(0xFFFC);
+        self.regs.pc = 0xC000;
     }
 
     fn load_incr_pc(&mut self) -> u8 {
-        let res = self.mem.read(self.pc);
-        self.pc = self.pc.wrapping_add(1);
+        let res = self.mem.read(self.regs.pc);
+        self.regs.pc = self.regs.pc.wrapping_add(1);
         res
     }
 
     fn load_w_incr_pc(&mut self) -> u16 {
-        let res = self.mem.read_w(self.pc);
-        self.pc = self.pc.wrapping_add(2);
+        let res = self.mem.read_w(self.regs.pc);
+        self.regs.pc = self.regs.pc.wrapping_add(2);
         res
     }
 
     fn set_sign(&mut self, arg: u8) {
         if arg & 0b1000_0000 == 0 {
-            self.p.remove(S);
+            self.regs.p.remove(S);
         } else {
-            self.p.insert(S);
+            self.regs.p.insert(S);
         }
     }
 
     fn set_zero(&mut self, arg: u8) {
         if arg == 0 {
-            self.p.insert(Z);
+            self.regs.p.insert(Z);
         } else {
-            self.p.remove(Z);
+            self.regs.p.remove(Z);
         }
     }
 
@@ -783,63 +789,63 @@ impl CPU {
 
     fn set_overflow(&mut self, arg: bool) {
         if arg {
-            self.p.insert(V);
+            self.regs.p.insert(V);
         } else {
-            self.p.remove(V);
+            self.regs.p.remove(V);
         }
     }
 
     fn set_carry(&mut self, arg: bool) {
         if arg {
-            self.p.insert(C);
+            self.regs.p.insert(C);
         } else {
-            self.p.remove(C);
+            self.regs.p.remove(C);
         }
     }
 
     fn relative_addr(&self, disp: u8) -> u16 {
         // Double-cast to force sign-extension
         let disp = (disp as i8) as i16;
-        let pc = self.pc as i16;
+        let pc = self.regs.pc as i16;
         pc.wrapping_add(disp) as u16
     }
 
     fn do_adc(&mut self, arg: u8) {
-        let mut result = self.a as u16 + arg as u16;
-        if self.p.contains(C) {
+        let mut result = self.regs.a as u16 + arg as u16;
+        if self.regs.p.contains(C) {
             result += 1;
         }
 
         self.set_carry(result > 0xFF);
 
         let result = result as u8;
-        let a = self.a;
+        let a = self.regs.a;
         self.set_overflow((a ^ arg) & 0x80 == 0 && (a ^ result) & 0x80 == 0x80);
-        self.a = self.set_sign_zero(result);
+        self.regs.a = self.set_sign_zero(result);
     }
 
     fn branch(&mut self, cond: bool) {
         let arg = self.load_incr_pc();
         if cond {
-            self.pc = self.relative_addr(arg);
+            self.regs.pc = self.relative_addr(arg);
         }
     }
 
     fn stack_push(&mut self, val: u8) {
-        self.sp = self.sp.wrapping_sub(1);
-        self.mem.write(self.sp as u16 + 0x0101, val);
+        self.regs.sp = self.regs.sp.wrapping_sub(1);
+        self.mem.write(self.regs.sp as u16 + 0x0101, val);
     }
     fn stack_push_w(&mut self, val: u16) {
-        self.sp = self.sp.wrapping_sub(2);
-        self.mem.write_w(self.sp as u16 + 0x0101, val);
+        self.regs.sp = self.regs.sp.wrapping_sub(2);
+        self.mem.write_w(self.regs.sp as u16 + 0x0101, val);
     }
     fn stack_pop(&mut self) -> u8 {
-        self.sp = self.sp.wrapping_add(1);
-        self.mem.read(self.sp as u16 + 0x0100)
+        self.regs.sp = self.regs.sp.wrapping_add(1);
+        self.mem.read(self.regs.sp as u16 + 0x0100)
     }
     fn stack_pop_w(&mut self) -> u16 {
-        self.sp = self.sp.wrapping_add(2);
-        self.mem.read_w(self.sp as u16 + 0x00FF)
+        self.regs.sp = self.regs.sp.wrapping_add(2);
+        self.mem.read_w(self.regs.sp as u16 + 0x00FF)
     }
 
     fn unofficial(&self) {}
