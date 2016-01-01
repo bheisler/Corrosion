@@ -218,6 +218,9 @@ impl<'a> Disassembler<'a> {
     fn rti(&mut self) -> String {
         "RTI".to_string()
     }
+    fn brk(&mut self) -> String {
+        "BRK".to_string()
+    }
 
     // Branches
     fn bcs(&mut self) -> String {

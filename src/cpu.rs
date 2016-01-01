@@ -153,6 +153,7 @@ macro_rules! decode_opcode {
         0x20 => $this.jsr(),
         0x60 => $this.rts(),
         0x40 => $this.rti(),
+        0x00 => $this.brk(),
 
         //Branches
         0xB0 => $this.bcs(),
@@ -584,6 +585,12 @@ impl CPU {
         self.p = Status::from_bits_truncate(status);
         self.p.insert(U);
         self.pc = self.stack_pop_w();
+    }
+    fn brk(&mut self) {
+        let target = self.mem.read_w(0xFFFE);
+        let return_addr = self.pc - 1;
+        self.pc = target;
+        self.stack_push_w(return_addr);
     }
 
     // Branches
