@@ -23,19 +23,20 @@ pub enum System {
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
-pub enum TvSystem {
+pub enum TvFormat {
     NTSC,
     PAL,
-    Both, // Dendy //Not supported by rom format yet.
 }
+// TODO: Add Both and Dendy as necessary
 
+// I'm thinking we don't support trainers until we need to.
+// TODO: Add support for the battery-backed memory
+// TODO: Add support for NES 2.0 files
 pub struct Cart {
     mapper: Box<Mapper>,
     pub mode: ScreenMode,
     pub system: System,
-    pub tv: TvSystem, /* I'm thinking we don't support trainers until we need to.
-                       * TODO: Add support for the battery-backed memory
-                       * TODO: Add support for NES 2.0 files */
+    pub tv: TvFormat,
 }
 
 quick_error! {
@@ -75,7 +76,7 @@ impl Cart {
             mapper: mapper,
             mode: ScreenMode::Horizontal,
             system: System::NES,
-            tv: TvSystem::NTSC,
+            tv: TvFormat::NTSC,
         }
     }
 

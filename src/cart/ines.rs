@@ -119,11 +119,11 @@ impl Rom {
         }
     }
 
-    pub fn tv_system(&self) -> TvSystem {
+    pub fn tv_system(&self) -> TvFormat {
         if get_bit(self.flags9, 0) {
-            TvSystem::PAL
+            TvFormat::PAL
         } else {
-            TvSystem::NTSC
+            TvFormat::NTSC
         }
     }
 
@@ -336,10 +336,10 @@ mod tests {
     #[test]
     fn test_tv_system() {
         let mut builder = RomBuilder::new();
-        assert_eq!(builder.build_rom().tv_system(), TvSystem::NTSC);
+        assert_eq!(builder.build_rom().tv_system(), TvFormat::NTSC);
 
         builder.set_pal();
-        assert_eq!(builder.build_rom().tv_system(), TvSystem::PAL);
+        assert_eq!(builder.build_rom().tv_system(), TvFormat::PAL);
     }
 
     #[test]
@@ -351,7 +351,6 @@ mod tests {
         assert_eq!(builder.build_rom().mapper(), 0x0Au8);
 
         builder.set_mapper(0xF0u8);
-        println!("0x{:02X}, 0x{:02X}", builder.header[6], builder.header[7]);
         assert_eq!(builder.build_rom().mapper(), 0xF0u8);
     }
 
