@@ -4,7 +4,7 @@ macro_rules! invalid_address {
     ($e:expr) => (panic!("Invalid NES Memory Address: {:X}", $e));
 }
 
-use mappers::Mapper;
+use cart::Cart;
 use ppu::PPU;
 use apu::APU;
 use io::IO;
@@ -53,11 +53,11 @@ pub struct CpuMemory {
     ppu: PPU,
     apu: APU,
     io: IO,
-    cart: Rc<RefCell<Box<Mapper>>>,
+    cart: Rc<RefCell<Cart>>,
 }
 
 impl CpuMemory {
-    pub fn new(ppu: PPU, apu: APU, io: IO, cart: Rc<RefCell<Box<Mapper>>>) -> CpuMemory {
+    pub fn new(ppu: PPU, apu: APU, io: IO, cart: Rc<RefCell<Cart>>) -> CpuMemory {
         CpuMemory {
             ram: RAM::new(),
             ppu: ppu,
@@ -118,9 +118,10 @@ mod tests {
                                           vec!(0u8; 0x4000),
                                           vec!(0u8; 0x4000),
                                           vec!(0u8; 0x1000));
-        let nrom = Rc::new(RefCell::new(nrom));
-        let ppu = ::ppu::PPU::new(::ppu::PPUMemory::new(nrom.clone()));
-        CpuMemory::new(ppu, ::apu::APU::new(), ::io::IO::new(), nrom)
+        let cart = ::cart::Cart::new(nrom);
+        let cart = Rc::new(RefCell::new(cart));
+        let ppu = ::ppu::PPU::new(cart.clone());
+        CpuMemory::new(ppu, ::apu::APU::new(), ::io::IO::new(), cart)
     }
 
     #[test]

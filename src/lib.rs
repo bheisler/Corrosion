@@ -15,25 +15,22 @@ pub mod cpu;
 #[cfg(feature="cputrace")]
 pub mod disasm;
 
-use cart::Rom;
-use mappers::Mapper;
+use cart::Cart;
 use cpu::CPU;
 use memory::CpuMemory;
 use io::IO;
 use apu::APU;
-use ppu::{PPU, PPUMemory};
+use ppu::PPU;
 
 use std::rc::Rc;
 use std::cell::RefCell;
 
-pub fn start_emulator(rom: Rom) {
-    let mapper = Mapper::new(rom.mapper() as u16, rom.prg_rom, rom.chr_rom, rom.prg_ram);
-    let mapper: Rc<RefCell<Box<Mapper>>> = Rc::new(RefCell::new(mapper));
-    let ppu_mem = PPUMemory::new(mapper.clone());
-    let ppu = PPU::new(ppu_mem);
+pub fn start_emulator(cart: Cart) {
+    let cart: Rc<RefCell<Cart>> = Rc::new(RefCell::new(cart));
+    let ppu = PPU::new(cart.clone());
     let apu = APU::new();
     let io = IO::new();
-    let mem = CpuMemory::new(ppu, apu, io, mapper);
+    let mem = CpuMemory::new(ppu, apu, io, cart);
     let mut cpu = CPU::new(mem);
     cpu.init();
 

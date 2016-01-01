@@ -1,16 +1,19 @@
+#![allow(dead_code)]
+// TODO: Remove this
+
 use super::memory::MemSegment;
-use mappers::Mapper;
+use cart::Cart;
 use std::rc::Rc;
 use std::cell::RefCell;
 
-pub struct PPUMemory {
-    cart: Rc<RefCell<Box<Mapper>>>,
+struct PPUMemory {
+    cart: Rc<RefCell<Cart>>,
     vram: [u8; 0x0800],
     palette: [u8; 0x20],
 }
 
 impl PPUMemory {
-    pub fn new(cart: Rc<RefCell<Box<Mapper>>>) -> PPUMemory {
+    fn new(cart: Rc<RefCell<Cart>>) -> PPUMemory {
         PPUMemory {
             cart: cart,
             vram: [0u8; 0x0800],
@@ -182,7 +185,7 @@ pub struct PPU {
 }
 
 impl PPU {
-    pub fn new(ppu_mem: PPUMemory) -> PPU {
+    pub fn new(cart: Rc<RefCell<Cart>>) -> PPU {
         PPU {
             ppuctrl: PPUCtrl::empty(),
             ppumask: PPUMask::empty(),
@@ -193,7 +196,7 @@ impl PPU {
             dyn_latch: 0,
             address_latch: AddrByte::First,
             oam: [0u8; 256],
-            ppu_mem: ppu_mem,
+            ppu_mem: PPUMemory::new(cart),
         }
     }
 
@@ -270,6 +273,7 @@ mod tests {
     use mappers::Mapper;
     use std::rc::Rc;
     use std::cell::RefCell;
+    use cart::Cart;
     use ppu::{AddrByte, PPUCtrl};
 
     fn create_test_ppu() -> PPU {
@@ -277,9 +281,9 @@ mod tests {
     }
 
     fn create_test_ppu_with_rom(chr_rom: Vec<u8>) -> PPU {
-        let cart = Mapper::new(0, vec![0u8; 0x1000], chr_rom, vec![0u8; 0x1000]);
-        let ppu_mem = PPUMemory::new(Rc::new(RefCell::new(cart)));
-        PPU::new(ppu_mem)
+        let mapper = Mapper::new(0, vec![0u8; 0x1000], chr_rom, vec![0u8; 0x1000]);
+        let cart = Cart::new(mapper);
+        PPU::new(Rc::new(RefCell::new(cart)))
     }
 
     fn assert_register_single_writable(idx: u16, getter: &Fn(&PPU) -> u8) {

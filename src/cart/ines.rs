@@ -1,81 +1,10 @@
-use std::io::prelude::*;
-use std::fs::File;
-use std::path::Path;
-use std::io;
-
-use mappers::Mapper;
+use cart::*;
 
 const MAGIC_NUMBERS: [u8; 4] = [0x4Eu8, 0x45u8, 0x53u8, 0x1Au8];
 pub const PRG_ROM_PAGE_SIZE: usize = 16384;
 pub const CHR_ROM_PAGE_SIZE: usize = 8192;
 pub const PRG_RAM_PAGE_SIZE: usize = 8192;
 pub const TRAINER_LENGTH: usize = 512;
-
-#[derive(PartialEq, Debug, Clone, Copy)]
-pub enum ScreenMode {
-    Horizontal,
-    Vertical,
-    FourScreen,
-}
-
-#[derive(PartialEq, Debug, Clone, Copy)]
-pub enum System {
-    NES,
-    Vs,
-    PC_10,
-}
-
-#[derive(PartialEq, Debug, Clone, Copy)]
-pub enum TvSystem {
-    NTSC,
-    PAL,
-    Both,
-    //Dendy //Not supported by rom format yet.
-}
-
-pub struct Cart {
-    mapper: Box<Mapper>,
-    mode: ScreenMode,
-    system: System,
-    tv: TvSystem,
-    
-    //I'm thinking we don't support trainers until we need to.
-    //TODO: Add support for the battery-backed memory
-    //TODO: Add support for NES 2.0 files
-}
-
-impl Cart {
-    pub fn prg_read(&self, idx: u16) -> u8 {
-        self.mapper.prg_read(idx)
-    }
-    pub fn prg_write(&mut self, idx: u16, val: u8) {
-        self.mapper.prg_write(idx, val)
-    }
-    pub fn chr_read(&self, idx: u16) -> u8 {
-        self.mapper.chr_read(idx)
-    }
-    pub fn chr_write(&mut self, idx: u16, val: u8) {
-        self.mapper.chr_write(idx, val)
-    }
-}
-
-quick_error! {
-    #[derive(Debug)]
-    pub enum RomReadError {
-        Io(err: io::Error) {
-            display("IO Error: {}", err)
-            description(err.description())
-            cause(err)
-            from()
-        }
-        Parse(err: RomError) {
-            display("ROM Error: {}", err)
-            description(err.description())
-            cause(err)
-            from()
-        }
-    }
-}
 
 quick_error! {
     #[derive(Debug, PartialEq)]
@@ -95,6 +24,7 @@ quick_error! {
 pub struct Rom {
     flags6: u8,
     flags7: u8,
+    flags9: u8,
     pub prg_rom: Vec<u8>,
     pub chr_rom: Vec<u8>,
     pub prg_ram: Vec<u8>,
@@ -122,13 +52,6 @@ fn read_bytes(iter: &mut Iterator<Item = u8>, bytes: usize) -> Result<Vec<u8>, R
 }
 
 impl Rom {
-    pub fn read(path: &Path) -> Result<Rom, RomReadError> {
-        let mut file = try!(File::open(path));
-        let mut buf = vec![];
-        try!(file.read_to_end(&mut buf));
-        Ok(try!(Rom::parse(&buf)))
-    }
-
     ///Parse the given bytes as an iNES 1.0 header.
     ///NES 2.0 is not supported yet.
     pub fn parse(data: &Vec<u8>) -> Result<Rom, RomError> {
@@ -150,7 +73,9 @@ impl Rom {
             x => x,
         };
 
-        if try!(read_bytes(&mut iter, 7)) != vec![0u8; 7] {
+        let flags9 = try!(read_byte(&mut iter));
+
+        if try!(read_bytes(&mut iter, 6)) != vec![0u8; 6] {
             return Err(RomError::DamagedHeader);
         }
 
@@ -165,6 +90,7 @@ impl Rom {
             chr_rom: try!(read_bytes(&mut iter, CHR_ROM_PAGE_SIZE * chr_rom_pages as usize)),
             flags6: flags6,
             flags7: flags7,
+            flags9: flags9,
             prg_ram: vec!( 0u8; PRG_RAM_PAGE_SIZE * prg_ram_pages as usize ),
             trainer: trainer,
         })
@@ -183,12 +109,22 @@ impl Rom {
         get_bit(self.flags6, 1)
     }
 
-    pub fn pc10(&self) -> bool {
-        get_bit(self.flags7, 0)
+    pub fn system(&self) -> System {
+        if get_bit(self.flags7, 0) {
+            System::Vs
+        } else if get_bit(self.flags7, 1) {
+            System::PC10
+        } else {
+            System::NES
+        }
     }
 
-    pub fn vs(&self) -> bool {
-        get_bit(self.flags7, 1)
+    pub fn tv_system(&self) -> TvSystem {
+        if get_bit(self.flags9, 0) {
+            TvSystem::PAL
+        } else {
+            TvSystem::NTSC
+        }
     }
 
     pub fn mapper(&self) -> u8 {
@@ -200,6 +136,7 @@ impl Rom {
 mod tests {
     extern crate rand;
     use super::*;
+    use cart::*;
     use self::rand::{Rng, thread_rng};
 
     struct RomBuilder {
@@ -260,11 +197,11 @@ mod tests {
         }
 
         fn set_pc10(&mut self) {
-            set_bit(&mut self.header[7], 0)
+            set_bit(&mut self.header[7], 1)
         }
 
         fn set_vs(&mut self) {
-            set_bit(&mut self.header[7], 1)
+            set_bit(&mut self.header[7], 0)
         }
 
         fn set_mapper(&mut self, mapper: u8) {
@@ -278,6 +215,10 @@ mod tests {
 
         fn set_nes2(&mut self) {
             self.header[7] = (self.header[7] & 0b00001100) | 0b0000_1000;
+        }
+
+        fn set_pal(&mut self) {
+            set_bit(&mut self.header[9], 0)
         }
 
         fn build(&self) -> Vec<u8> {
@@ -379,21 +320,26 @@ mod tests {
     }
 
     #[test]
-    fn test_pc10() {
-        let mut builder = RomBuilder::new();
-        assert_eq!(builder.build_rom().pc10(), false);
+    fn test_system() {
+        let builder = RomBuilder::new();
+        assert_eq!(builder.build_rom().system(), System::NES);
 
+        let mut builder = RomBuilder::new();
+        builder.set_vs();
+        assert_eq!(builder.build_rom().system(), System::Vs);
+
+        let mut builder = RomBuilder::new();
         builder.set_pc10();
-        assert_eq!(builder.build_rom().pc10(), true);
+        assert_eq!(builder.build_rom().system(), System::PC10);
     }
 
     #[test]
-    fn test_vs() {
+    fn test_tv_system() {
         let mut builder = RomBuilder::new();
-        assert_eq!(builder.build_rom().vs(), false);
+        assert_eq!(builder.build_rom().tv_system(), TvSystem::NTSC);
 
-        builder.set_vs();
-        assert_eq!(builder.build_rom().vs(), true);
+        builder.set_pal();
+        assert_eq!(builder.build_rom().tv_system(), TvSystem::PAL);
     }
 
     #[test]
