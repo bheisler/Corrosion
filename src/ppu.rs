@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-// TODO: Remove this
+// TODO: Remove this when the PPU is implemented properly.
 
 use super::memory::MemSegment;
 use cart::Cart;
