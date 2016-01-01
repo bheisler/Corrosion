@@ -27,8 +27,7 @@ pub struct Rom {
     flags9: u8,
     pub prg_rom: Vec<u8>,
     pub chr_rom: Vec<u8>,
-    pub prg_ram: Vec<u8>,
-    pub trainer: Vec<u8>,
+    pub prg_ram_size: usize,
 }
 
 fn get_bit(byte: u8, bit_num: u8) -> bool {
@@ -79,10 +78,9 @@ impl Rom {
             return Err(RomError::DamagedHeader);
         }
 
-        let has_trainer = get_bit(flags6, 2);
-        let trainer = match has_trainer {
-            false => vec![],
-            true => try!(read_bytes(&mut iter, TRAINER_LENGTH)),
+        if get_bit(flags6, 2) {
+            // Discard trainer for now, can add support later if needed
+            let _ = try!(read_bytes(&mut iter, TRAINER_LENGTH));
         };
 
         Ok(Rom {
@@ -91,8 +89,7 @@ impl Rom {
             flags6: flags6,
             flags7: flags7,
             flags9: flags9,
-            prg_ram: vec!( 0u8; PRG_RAM_PAGE_SIZE * prg_ram_pages as usize ),
-            trainer: trainer,
+            prg_ram_size: PRG_RAM_PAGE_SIZE * prg_ram_pages as usize,
         })
     }
 
@@ -310,16 +307,6 @@ mod tests {
     }
 
     #[test]
-    fn test_trainer() {
-        let mut builder = RomBuilder::new();
-        assert_eq!(&builder.build_rom().trainer, &vec![]);
-
-        builder.set_trainer();
-        assert_eq!(builder.build_rom().trainer.len(), builder.trainer.len());
-        assert_eq!(&builder.build_rom().trainer, &builder.trainer);
-    }
-
-    #[test]
     fn test_system() {
         let builder = RomBuilder::new();
         assert_eq!(builder.build_rom().system(), System::NES);
@@ -358,12 +345,12 @@ mod tests {
     fn test_prg_ram_pages() {
         let mut builder = RomBuilder::new();
         builder.set_prg_ram_pages(1);
-        assert_eq!(builder.build_rom().prg_ram.len(), PRG_RAM_PAGE_SIZE);
+        assert_eq!(builder.build_rom().prg_ram_size, PRG_RAM_PAGE_SIZE);
 
         builder.set_prg_ram_pages(0);
-        assert_eq!(builder.build_rom().prg_ram.len(), PRG_RAM_PAGE_SIZE);
+        assert_eq!(builder.build_rom().prg_ram_size, PRG_RAM_PAGE_SIZE);
 
         builder.set_prg_ram_pages(15);
-        assert_eq!(builder.build_rom().prg_ram.len(), 15 * PRG_RAM_PAGE_SIZE);
+        assert_eq!(builder.build_rom().prg_ram_size, 15 * PRG_RAM_PAGE_SIZE);
     }
 }

@@ -270,7 +270,7 @@ impl MemSegment for PPU {
 mod tests {
     use super::*;
     use memory::MemSegment;
-    use mappers::Mapper;
+    use mappers::{Mapper, MapperParams};
     use std::rc::Rc;
     use std::cell::RefCell;
     use cart::Cart;
@@ -281,7 +281,7 @@ mod tests {
     }
 
     fn create_test_ppu_with_rom(chr_rom: Vec<u8>) -> PPU {
-        let mapper = Mapper::new(0, vec![0u8; 0x1000], chr_rom, vec![0u8; 0x1000]);
+        let mapper = Mapper::new(0, MapperParams::simple(vec![0u8; 0x1000], chr_rom));
         let cart = Cart::new(mapper);
         PPU::new(Rc::new(RefCell::new(cart)))
     }

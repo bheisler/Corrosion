@@ -6,7 +6,7 @@ use std::path::Path;
 use std::io;
 
 use cart::ines::{Rom, RomError};
-use mappers::Mapper;
+use mappers::{Mapper, MapperParams};
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum ScreenMode {
@@ -90,9 +90,16 @@ impl Cart {
         let screen_mode = rom.screen_mode();
         let system = rom.system();
         let tv = rom.tv_system();
-        let (prg_rom, chr_rom, prg_ram) = (rom.prg_rom, rom.chr_rom, rom.prg_ram);
+        let (prg_rom, chr_rom, prg_ram_size) = (rom.prg_rom, rom.chr_rom, rom.prg_ram_size);
 
-        let mapper = Mapper::new(mapper as u16, prg_rom, chr_rom, prg_ram);
+        let params = MapperParams {
+            prg_rom: prg_rom,
+            chr_rom: chr_rom,
+
+            prg_ram_size: prg_ram_size,
+        };
+
+        let mapper = Mapper::new(mapper as u16, params);
         Ok(Cart {
             mapper: mapper,
             mode: screen_mode,

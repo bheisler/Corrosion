@@ -9,12 +9,29 @@ pub trait Mapper {
     fn chr_write(&mut self, idx: u16, val: u8);
 }
 
-// TODO: Pass in rom blocks and page count for RAM and such
+pub struct MapperParams {
+    pub prg_rom: Vec<u8>,
+    pub chr_rom: Vec<u8>,
+
+    pub prg_ram_size: usize,
+}
+
+impl MapperParams {
+    #[cfg(test)]
+    pub fn simple(prg_rom: Vec<u8>, chr_rom: Vec<u8>) -> MapperParams {
+        MapperParams {
+            prg_rom: prg_rom,
+            chr_rom: chr_rom,
+
+            prg_ram_size: 0x2000,
+        }
+    }
+}
 
 impl Mapper {
-    pub fn new(id: u16, prg_rom: Vec<u8>, chr_rom: Vec<u8>, prg_ram: Vec<u8>) -> Box<Mapper> {
+    pub fn new(id: u16, params: MapperParams) -> Box<Mapper> {
         match id {
-            0 => Box::new(nrom::NROM::new(prg_rom, chr_rom, prg_ram)),
+            0 => Box::new(nrom::NROM::new(params)),
             _ => panic!("Unsupported Mapper"),
         }
     }

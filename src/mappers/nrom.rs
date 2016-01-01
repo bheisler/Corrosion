@@ -7,11 +7,11 @@ pub struct NROM {
 }
 
 impl NROM {
-    pub fn new(prg_rom: Vec<u8>, chr_rom: Vec<u8>, prg_ram: Vec<u8>) -> NROM {
+    pub fn new(params: MapperParams) -> NROM {
         NROM {
-            prg_rom: prg_rom,
-            chr_rom: chr_rom,
-            prg_ram: prg_ram,
+            prg_rom: params.prg_rom,
+            chr_rom: params.chr_rom,
+            prg_ram: vec![0u8; params.prg_ram_size],
         }
     }
 }
@@ -49,20 +49,22 @@ impl Mapper for NROM {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mappers::Mapper;
+    use mappers::{Mapper, MapperParams};
 
     #[test]
     fn test_can_create_mapper_0() {
-        NROM::new(vec![], vec![], vec![]);
+        NROM::new(MapperParams::simple(vec![], vec![]));
     }
 
     fn create_test_mapper() -> NROM {
-        NROM::new(vec!(0u8; 0x4000), vec!(0u8; 0x4000), vec!(0u8; 0x1000))
+        NROM::new(MapperParams::simple(vec!(0u8; 0x4000), vec!(0u8; 0x4000)))
     }
 
     #[test]
     fn test_prg_ram_read_write() {
-        let mut nrom = create_test_mapper();
+        let mut params = MapperParams::simple(vec!(0u8; 0x4000), vec!(0u8; 0x4000));
+        params.prg_ram_size = 0x1000;
+        let mut nrom = NROM::new(params);
         println!("{}", nrom.prg_ram.len());
 
         nrom.prg_write(0x6111, 15);
@@ -77,7 +79,7 @@ mod tests {
         let prg_rom: Vec<_> = (0..0x4000)
                                   .map(|val| (val % 0xFF) as u8)
                                   .collect();
-        let mapper = NROM::new(prg_rom, vec!(0u8; 0x4000), vec!(0u8; 0x1000));
+        let mapper = NROM::new(MapperParams::simple(prg_rom, vec!(0u8; 0x4000)));
 
         assert_eq!(mapper.prg_read(0x8111), mapper.prg_read(0xC111));
     }
@@ -86,7 +88,7 @@ mod tests {
     fn test_prg_rom_mirroring() {
         let mut prg_rom: Vec<_> = vec!(0u8; 0x4000);
         prg_rom[0x2612] = 0x15;
-        let mapper = NROM::new(prg_rom, vec!(0u8; 0x1000), vec!(0u8; 0x1000));
+        let mapper = NROM::new(MapperParams::simple(prg_rom, vec!(0u8; 0x1000)));
         assert_eq!(mapper.prg_read(0xA612), 0x15);
     }
 
@@ -103,7 +105,7 @@ mod tests {
         let chr_rom: Vec<_> = (0..0x2000)
                                   .map(|val| (val % 0xFF) as u8)
                                   .collect();
-        let mapper = NROM::new(vec!(0u8; 0x4000), chr_rom, vec!(0u8; 0x1000));
+        let mapper = NROM::new(MapperParams::simple(vec!(0u8; 0x4000), chr_rom));
 
         assert_eq!(mapper.prg_read(0x8111), mapper.prg_read(0xC111));
     }

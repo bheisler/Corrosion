@@ -112,12 +112,11 @@ mod tests {
     use super::*;
     use std::rc::Rc;
     use std::cell::RefCell;
+    use mappers::{Mapper, MapperParams};
 
     fn create_test_memory() -> CpuMemory {
-        let nrom = ::mappers::Mapper::new(0,
-                                          vec!(0u8; 0x4000),
-                                          vec!(0u8; 0x4000),
-                                          vec!(0u8; 0x1000));
+        let nrom = Mapper::new(0,
+                               MapperParams::simple(vec!(0u8; 0x4000), vec!(0u8; 0x4000)));
         let cart = ::cart::Cart::new(nrom);
         let cart = Rc::new(RefCell::new(cart));
         let ppu = ::ppu::PPU::new(cart.clone());
