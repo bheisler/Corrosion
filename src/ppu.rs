@@ -11,13 +11,23 @@ const SCREEN_WIDTH: usize = 256;
 const SCREEN_HEIGHT: usize = 240;
 pub const SCREEN_BUFFER_SIZE: usize = SCREEN_WIDTH * SCREEN_HEIGHT;
 
-pub struct Color(u8);
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct Color {
+    bits: u8,
+}
+impl Color {
+    fn from_bits_truncate(val: u8) -> Color {
+        Color {
+            bits: val & 0b0011_1111,
+        }
+    }
+}
 
 ///Represents the PPU's memory map.
 struct PPUMemory {
     cart: Rc<RefCell<Cart>>,
     vram: [u8; 0x0800],
-    palette: [u8; 0x20],
+    palette: [Color; 0x20],
 }
 
 impl PPUMemory {
@@ -25,7 +35,7 @@ impl PPUMemory {
         PPUMemory {
             cart: cart,
             vram: [0u8; 0x0800],
-            palette: [0u8; 0x20],
+            palette: [Color::from_bits_truncate(0); 0x20],
         }
     }
 }
@@ -45,7 +55,7 @@ impl MemSegment for PPUMemory {
                     0x18 => self.palette[0x08],
                     0x1C => self.palette[0x0C],
                     x => self.palette[x],
-                }
+                }.bits
             }
             x => invalid_address!(x),
         }
@@ -59,6 +69,7 @@ impl MemSegment for PPUMemory {
             }
             0x2000...0x3EFF => self.vram[(idx % 0x800) as usize] = val,
             0x3F00...0x3FFF => {
+                let val = Color::from_bits_truncate(val);
                 match (idx - 0x3F00) as usize {
                     0x10 => self.palette[0x00] = val,
                     0x14 => self.palette[0x04] = val,
@@ -188,13 +199,75 @@ struct PPUReg {
     address_latch: AddrByte,
 }
 
+bitflags! {
+    flags OAMAttr : u8 {
+        const FLIP_VERT = 0b1000_0000,
+        const FLIP_HORZ = 0b0100_0000,
+        const BEHIND    = 0b0010_0000,
+        const PALETTE1  = 0b0000_0010,
+        const PALETTE2  = 0b0000_0001,
+    }
+}
+
+impl OAMAttr {
+    fn palette(&self) -> u8 {
+        self.bits() & 0x0000_0011
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+struct OAMEntry {
+    y: u8,
+    tile: u8,
+    attr: OAMAttr,
+    x: u8,
+}
+
+impl OAMEntry {
+    fn zero() -> OAMEntry {
+        OAMEntry::new( 0, 0, 0, 0 )
+    }
+    
+    fn new( y: u8, tile: u8, attr: u8, x: u8 ) -> OAMEntry {
+        OAMEntry {
+            y: y,
+            tile: tile,
+            attr: OAMAttr::from_bits_truncate( attr ),
+            x: x,
+        }
+    }
+}
+
+impl MemSegment for OAMEntry {
+    fn read(&mut self, idx: u16) -> u8 {
+        match idx % 4 {
+            0 => self.y,
+            1 => self.tile,
+            2 => self.attr.bits(),
+            3 => self.x,
+            _ => panic!("Math is broken!")
+        }
+    }
+    
+    fn write(&mut self, idx: u16, val: u8) {
+        println!("{:04X}", idx % 4);
+        match idx % 4 {
+            0 => self.y = val,
+            1 => self.tile = val,
+            2 => self.attr = OAMAttr::from_bits_truncate( val ),
+            3 => self.x = val,
+            _ => panic!("Math is broken!")
+        }
+    }
+}
+
 pub struct PPU {
     reg: PPUReg,
-    oam: [u8; 256],
+    oam: [OAMEntry; 64],
     ppu_mem: PPUMemory,
 
     screen: Box<Screen>,
-    screen_buffer: [u8; SCREEN_BUFFER_SIZE],
+    screen_buffer: [Color; SCREEN_BUFFER_SIZE],
 }
 
 impl PPU {
@@ -210,9 +283,9 @@ impl PPU {
                 dyn_latch: 0,
                 address_latch: AddrByte::First,
             },
-            oam: [0u8; 256],
+            oam: [OAMEntry::zero(); 64],
             ppu_mem: PPUMemory::new(cart),
-            screen_buffer: [0u8; SCREEN_BUFFER_SIZE],
+            screen_buffer: [Color::from_bits_truncate(0); SCREEN_BUFFER_SIZE],
             screen: screen,
         }
     }
@@ -246,7 +319,7 @@ impl MemSegment for PPU {
             }
             0x0003 => self.reg.dyn_latch,
             0x0004 => {
-                let res = self.oam[self.reg.oamaddr as usize];
+                let res = self.oam[self.reg.oamaddr as usize / 4].read(self.reg.oamaddr as u16);
                 self.reg.oamaddr = self.reg.oamaddr.wrapping_add(1);
                 res
             }
@@ -269,7 +342,7 @@ impl MemSegment for PPU {
             0x0002 => (),
             0x0003 => self.reg.oamaddr = val,
             0x0004 => {
-                self.oam[self.reg.oamaddr as usize] = val;
+                self.oam[self.reg.oamaddr as usize / 4].write(self.reg.oamaddr as u16, val);
                 self.reg.oamaddr = self.reg.oamaddr.wrapping_add(1);
             }
             0x0005 => write_addr_byte(&mut self.reg.address_latch, &mut self.reg.ppuscroll, val),
@@ -291,7 +364,7 @@ mod tests {
     use std::rc::Rc;
     use std::cell::RefCell;
     use cart::Cart;
-    use ppu::{AddrByte, PPUCtrl};
+    use ppu::{AddrByte, PPUCtrl, OAMEntry};
     use screen::DummyScreen;
 
     fn create_test_ppu() -> PPU {
@@ -428,13 +501,13 @@ mod tests {
     #[test]
     fn reading_oamdata_uses_oamaddr_as_index_into_oam() {
         let mut ppu = create_test_ppu();
-        for x in 0..255 {
-            ppu.oam[x] = (255 - x) as u8;
+        for x in 0u8..63u8 {
+            ppu.oam[x as usize] = OAMEntry::new(x, x, x, x);
         }
         ppu.reg.oamaddr = 0;
-        assert_eq!(ppu.read(0x2004), 255);
+        assert_eq!(ppu.read(0x2004), 0);
         ppu.reg.oamaddr = 10;
-        assert_eq!(ppu.read(0x2004), 245);
+        assert_eq!(ppu.read(0x2004), 2);
     }
 
     #[test]
@@ -453,10 +526,10 @@ mod tests {
         let mut ppu = create_test_ppu();
         ppu.reg.oamaddr = 0;
         ppu.write(0x2004, 12);
-        assert_eq!(ppu.oam[0], 12);
+        assert_eq!(ppu.oam[0].y, 12);
         ppu.reg.oamaddr = 10;
-        ppu.write(0x2004, 15);
-        assert_eq!(ppu.oam[10], 15);
+        ppu.write(0x2004, 3);
+        assert_eq!(ppu.oam[2].attr.bits(), 3);
     }
 
     #[test]
@@ -533,12 +606,12 @@ mod tests {
         ppu.reg.ppuaddr = 0x3F00;
         ppu.write(0x2007, 12);
         ppu.reg.ppuaddr = 0x3F00;
-        assert_eq!(ppu.ppu_mem.palette[0], 12);
+        assert_eq!(ppu.ppu_mem.palette[0], Color::from_bits_truncate(12));
 
         ppu.reg.ppuaddr = 0x3F01;
         ppu.write(0x2007, 212);
         ppu.reg.ppuaddr = 0x3F01;
-        assert_eq!(ppu.read(0x2007), 212);
+        assert_eq!(ppu.read(0x2007), 212 & 0x3F);
     }
 
     #[test]
