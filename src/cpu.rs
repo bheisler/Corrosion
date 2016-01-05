@@ -838,8 +838,7 @@ impl CPU {
     }
 
     pub fn init(&mut self) {
-        // self.regs.pc = self.mem.read_w(0xFFFC);
-        self.regs.pc = 0xC000;
+        self.regs.pc = self.mem.read_w(0xFFFC);
     }
 
     fn load_incr_pc(&mut self) -> u8 {

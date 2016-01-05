@@ -5,6 +5,13 @@ use super::memory::MemSegment;
 use cart::Cart;
 use std::rc::Rc;
 use std::cell::RefCell;
+use screen::Screen;
+
+const SCREEN_WIDTH: usize = 256;
+const SCREEN_HEIGHT: usize = 240;
+pub const SCREEN_BUFFER_SIZE: usize = SCREEN_WIDTH * SCREEN_HEIGHT;
+
+pub struct Color(u8);
 
 ///Represents the PPU's memory map.
 struct PPUMemory {
@@ -173,7 +180,6 @@ struct PPUReg {
     ppuscroll: u16,
     ppuaddr: u16,
 
-
     ///A fake dynamic latch representing the capacitance of the wires in the
     ///PPU that we have to emulate.
     dyn_latch: u8,
@@ -183,13 +189,16 @@ struct PPUReg {
 }
 
 pub struct PPU {
-	reg: PPUReg,
+    reg: PPUReg,
     oam: [u8; 256],
     ppu_mem: PPUMemory,
+
+    screen: Box<Screen>,
+    screen_buffer: [u8; SCREEN_BUFFER_SIZE],
 }
 
 impl PPU {
-    pub fn new(cart: Rc<RefCell<Cart>>) -> PPU {
+    pub fn new(cart: Rc<RefCell<Cart>>, screen: Box<Screen>) -> PPU {
         PPU {
             reg: PPUReg {
                 ppuctrl: PPUCtrl::empty(),
@@ -203,9 +212,11 @@ impl PPU {
             },
             oam: [0u8; 256],
             ppu_mem: PPUMemory::new(cart),
+            screen_buffer: [0u8; SCREEN_BUFFER_SIZE],
+            screen: screen,
         }
     }
-    
+
     fn incr_ppuaddr(&mut self) {
         let incr_size = self.reg.ppuctrl.vram_addr_step();
         self.reg.ppuaddr = self.reg.ppuaddr.wrapping_add(incr_size);
@@ -281,6 +292,7 @@ mod tests {
     use std::cell::RefCell;
     use cart::Cart;
     use ppu::{AddrByte, PPUCtrl};
+    use screen::DummyScreen;
 
     fn create_test_ppu() -> PPU {
         create_test_ppu_with_rom(vec![0u8; 0x1000])
@@ -289,7 +301,7 @@ mod tests {
     fn create_test_ppu_with_rom(chr_rom: Vec<u8>) -> PPU {
         let mapper = Mapper::new(0, MapperParams::simple(vec![0u8; 0x1000], chr_rom));
         let cart = Cart::new(mapper);
-        PPU::new(Rc::new(RefCell::new(cart)))
+        PPU::new(Rc::new(RefCell::new(cart)), Box::new(DummyScreen::new()))
     }
 
     fn assert_register_single_writable(idx: u16, getter: &Fn(&PPU) -> u8) {

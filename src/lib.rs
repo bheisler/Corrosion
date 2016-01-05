@@ -11,6 +11,7 @@ pub mod ppu;
 pub mod apu;
 pub mod io;
 pub mod cpu;
+pub mod screen;
 
 #[cfg(feature="cputrace")]
 pub mod disasm;
@@ -21,13 +22,14 @@ use memory::CpuMemory;
 use io::IO;
 use apu::APU;
 use ppu::PPU;
+use screen::DummyScreen;
 
 use std::rc::Rc;
 use std::cell::RefCell;
 
 pub fn start_emulator(cart: Cart) {
     let cart: Rc<RefCell<Cart>> = Rc::new(RefCell::new(cart));
-    let ppu = PPU::new(cart.clone());
+    let ppu = PPU::new(cart.clone(), Box::new(DummyScreen::new()));
     let apu = APU::new();
     let io = IO::new();
     let mem = CpuMemory::new(ppu, apu, io, cart);

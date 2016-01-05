@@ -113,13 +113,14 @@ mod tests {
     use std::rc::Rc;
     use std::cell::RefCell;
     use mappers::{Mapper, MapperParams};
+    use screen::DummyScreen;
 
     fn create_test_memory() -> CpuMemory {
         let nrom = Mapper::new(0,
                                MapperParams::simple(vec!(0u8; 0x4000), vec!(0u8; 0x4000)));
         let cart = ::cart::Cart::new(nrom);
         let cart = Rc::new(RefCell::new(cart));
-        let ppu = ::ppu::PPU::new(cart.clone());
+        let ppu = ::ppu::PPU::new(cart.clone(), Box::new(DummyScreen::new()));
         CpuMemory::new(ppu, ::apu::APU::new(), ::io::IO::new(), cart)
     }
 
