@@ -5,3 +5,4 @@
 **/*.bk
 output
 nestest*
+SDL2.dll

@@ -7,8 +7,8 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use screen::Screen;
 
-const SCREEN_WIDTH: usize = 256;
-const SCREEN_HEIGHT: usize = 240;
+pub const SCREEN_WIDTH: usize = 256;
+pub const SCREEN_HEIGHT: usize = 240;
 pub const SCREEN_BUFFER_SIZE: usize = SCREEN_WIDTH * SCREEN_HEIGHT;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -17,9 +17,7 @@ pub struct Color {
 }
 impl Color {
     fn from_bits_truncate(val: u8) -> Color {
-        Color {
-            bits: val & 0b0011_1111,
-        }
+        Color { bits: val & 0b0011_1111 }
     }
 }
 
@@ -55,7 +53,8 @@ impl MemSegment for PPUMemory {
                     0x18 => self.palette[0x08],
                     0x1C => self.palette[0x0C],
                     x => self.palette[x],
-                }.bits
+                }
+                .bits
             }
             x => invalid_address!(x),
         }
@@ -225,14 +224,14 @@ struct OAMEntry {
 
 impl OAMEntry {
     fn zero() -> OAMEntry {
-        OAMEntry::new( 0, 0, 0, 0 )
+        OAMEntry::new(0, 0, 0, 0)
     }
-    
-    fn new( y: u8, tile: u8, attr: u8, x: u8 ) -> OAMEntry {
+
+    fn new(y: u8, tile: u8, attr: u8, x: u8) -> OAMEntry {
         OAMEntry {
             y: y,
             tile: tile,
-            attr: OAMAttr::from_bits_truncate( attr ),
+            attr: OAMAttr::from_bits_truncate(attr),
             x: x,
         }
     }
@@ -245,18 +244,18 @@ impl MemSegment for OAMEntry {
             1 => self.tile,
             2 => self.attr.bits(),
             3 => self.x,
-            _ => panic!("Math is broken!")
+            _ => panic!("Math is broken!"),
         }
     }
-    
+
     fn write(&mut self, idx: u16, val: u8) {
         println!("{:04X}", idx % 4);
         match idx % 4 {
             0 => self.y = val,
             1 => self.tile = val,
-            2 => self.attr = OAMAttr::from_bits_truncate( val ),
+            2 => self.attr = OAMAttr::from_bits_truncate(val),
             3 => self.x = val,
-            _ => panic!("Math is broken!")
+            _ => panic!("Math is broken!"),
         }
     }
 }
@@ -364,7 +363,7 @@ mod tests {
     use std::rc::Rc;
     use std::cell::RefCell;
     use cart::Cart;
-    use ppu::{AddrByte, PPUCtrl, OAMEntry};
+    use ppu::{AddrByte, OAMEntry, PPUCtrl};
     use screen::DummyScreen;
 
     fn create_test_ppu() -> PPU {

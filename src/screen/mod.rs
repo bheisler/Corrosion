@@ -1,5 +1,7 @@
 use ppu::{Color, SCREEN_BUFFER_SIZE};
 
+pub mod sdl;
+
 pub trait Screen {
     fn draw(&mut self, buf: &[Color; SCREEN_BUFFER_SIZE]);
 }
