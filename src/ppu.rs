@@ -12,12 +12,15 @@ pub const SCREEN_HEIGHT: usize = 240;
 pub const SCREEN_BUFFER_SIZE: usize = SCREEN_WIDTH * SCREEN_HEIGHT;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub struct Color {
-    bits: u8,
-}
+#[repr(C)]
+pub struct Color(u8);
 impl Color {
     fn from_bits_truncate(val: u8) -> Color {
-        Color { bits: val & 0b0011_1111 }
+        Color(val & 0b0011_1111)
+    }
+    
+    pub fn bits(&self) -> u8 {
+        self.0
     }
 }
 
@@ -54,7 +57,7 @@ impl MemSegment for PPUMemory {
                     0x1C => self.palette[0x0C],
                     x => self.palette[x],
                 }
-                .bits
+                .bits()
             }
             x => invalid_address!(x),
         }
@@ -284,7 +287,7 @@ impl PPU {
             },
             oam: [OAMEntry::zero(); 64],
             ppu_mem: PPUMemory::new(cart),
-            screen_buffer: [Color::from_bits_truncate(0); SCREEN_BUFFER_SIZE],
+            screen_buffer: [Color::from_bits_truncate(0x2C); SCREEN_BUFFER_SIZE],
             screen: screen,
         }
     }
@@ -292,6 +295,12 @@ impl PPU {
     fn incr_ppuaddr(&mut self) {
         let incr_size = self.reg.ppuctrl.vram_addr_step();
         self.reg.ppuaddr = self.reg.ppuaddr.wrapping_add(incr_size);
+    }
+    
+    //Just for experimenting at this point
+    pub fn force_vblank(&mut self) {
+        let buf = &self.screen_buffer;
+        self.screen.draw(buf);
     }
 }
 

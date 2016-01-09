@@ -51,6 +51,8 @@ pub fn start_emulator(cart: Cart) {
     let mem = CpuMemory::new(ppu, apu, io, cart);
     let mut cpu = CPU::new(mem);
     cpu.init();
+    
+    cpu.mem.ppu.force_vblank();
 
     loop {
         if pump_events(&mut event_pump) {

@@ -26,29 +26,10 @@ impl<'a> SDLScreen<'a> {
                                     .build()
                                     .unwrap();
 
-        let mut renderer = window.renderer().present_vsync().build().unwrap();
+        let renderer = window.renderer().present_vsync().build().unwrap();
 
-        let mut texture = renderer.create_texture_streaming(PixelFormatEnum::RGB24,
-                                                            (SCREEN_WIDTH, SCREEN_HEIGHT))
-                                  .unwrap();
-        texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
-                   for y in 0..::ppu::SCREEN_HEIGHT {
-                       for x in 0..::ppu::SCREEN_WIDTH {
-                           let offset = y * pitch + x * 3;
-                           buffer[offset + 0] = x as u8;
-                           buffer[offset + 1] = y as u8;
-                           buffer[offset + 2] = 0;
-                       }
-                   }
-               })
-               .unwrap();
-
-        renderer.clear();
-        renderer.copy(&texture,
-                      None,
-                      Some(Rect::new_unwrap(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)));
-        renderer.present();
-
+        let texture = renderer.create_texture_streaming(PixelFormatEnum::RGB24,
+                                                            (SCREEN_WIDTH, SCREEN_HEIGHT)).unwrap();
         SDLScreen {
             video: video_subsystem,
             renderer: renderer,
@@ -57,8 +38,34 @@ impl<'a> SDLScreen<'a> {
     }
 }
 
+//Using a hard-coded palette for now. Will add .pal file support later,
+//maybe proper NTSC video decoding eventually.
+#[cfg_attr(rustfmt, rustfmt_skip)]
+static PALETTE: [u8; 192] = [
+    84, 84, 84,       0, 30, 116,       8, 16, 144,       48, 0, 136,       68, 0, 100,       92, 0, 48,        84, 4, 0,         60, 24, 0,        32, 42, 0,        8, 58, 0,         0, 64, 0,         0, 60, 0,         0, 50, 60,        0, 0, 0,          0, 0, 0,    0, 0, 0,
+    152, 150, 152,    8, 76, 196,       48, 50, 236,      92, 30, 228,      136, 20, 176,     160, 20, 100,     152, 34, 32,      120, 60, 0,       84, 90, 0,        40, 114, 0,       8, 124, 0,        0, 118, 40,       0, 102, 120,      0, 0, 0,          0, 0, 0,    0, 0, 0,
+    236, 238, 236,    76, 154, 236,     120, 124, 236,    176, 98, 236,     228, 84, 236,     236, 88, 180,     236, 106, 100,    212, 136, 32,     160, 170, 0,      116, 196, 0,      76, 208, 32,      56, 204, 108,     56, 180, 204,     60, 60, 60,       0, 0, 0,    0, 0, 0,
+    236, 238, 236,    168, 204, 236,    188, 188, 236,    212, 178, 236,    236, 174, 236,    236, 174, 212,    236, 180, 176,    228, 196, 144,    204, 210, 120,    180, 222, 120,    168, 226, 144,    152, 226, 180,    160, 214, 228,    160, 162, 160,    0, 0, 0,    0, 0, 0,
+];
+
 impl<'a> Screen for SDLScreen<'a> {
     fn draw(&mut self, buf: &[Color; SCREEN_BUFFER_SIZE]) {
-        // TODO
+        self.texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
+            for y in 0..::ppu::SCREEN_HEIGHT {
+                for x in 0..::ppu::SCREEN_WIDTH {
+                    let color = buf[y * x];
+                    let pal_idx = color.bits() as usize * 3;
+                    let offset = y * pitch + x * 3;
+                    buffer[offset + 0] = PALETTE[pal_idx + 0];
+                    buffer[offset + 1] = PALETTE[pal_idx + 1];
+                    buffer[offset + 2] = PALETTE[pal_idx + 2];
+                }
+            }
+        }).unwrap();
+        
+        self.renderer.copy(&self.texture,
+              None,
+              Some(Rect::new_unwrap(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)));
+        self.renderer.present();
     }
 }
