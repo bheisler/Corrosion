@@ -56,6 +56,7 @@ pub fn start_emulator(cart: Cart) {
         if pump_events(&mut event_pump) || cpu.halted() {
             break;
         }
-        cpu.step();
+        let cycles = cpu.step();
+        cpu.mem.ppu.run( cycles );
     }
 }

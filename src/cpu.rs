@@ -381,7 +381,7 @@ pub struct Registers {
 pub struct CPU {
     pub regs: Registers,
     pub mem: CpuMemory,
-    cycle: u32,
+    cycle: u64,
     halted: bool,
 }
 
@@ -399,7 +399,7 @@ impl CPU {
     fn trace(&mut self) {
         let opcode = Disassembler::new(self).decode();
         println!(
-            "{:04X} {:9} {}{:30}  A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:3} SL:{:3}",
+            "{:04X} {:9} {}{:30}  A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:3} SL:{}",
             self.regs.pc,
             opcode.bytes.iter()
                 .map(|byte| format!("{:02X}", byte))
@@ -948,10 +948,10 @@ impl CPU {
         self.mem.read_w(self.regs.sp as u16 + 0x00FF)
     }
 
-    fn incr_cycle(&mut self, cycles: u32) {
+    fn incr_cycle(&mut self, cycles: u64) {
         self.cycle = self.cycle.wrapping_add(cycles);
     }
-    fn decr_cycle(&mut self, cycles: u32) {
+    fn decr_cycle(&mut self, cycles: u64) {
         self.cycle = self.cycle.wrapping_sub(cycles);
     }
     fn inc_page_cycle(&mut self, addr1: u16, addr2: u16) {
@@ -967,15 +967,17 @@ impl CPU {
 
     fn unofficial(&self) {}
 
-    pub fn step(&mut self) {
+    pub fn step(&mut self) -> u64 {
         if self.halted {
-            return;
+            return 0;
         }
+        let old_cyc = self.cycle;
         self.trace();
         self.stack_dump();
         let opcode: u8 = self.load_incr_pc();
         decode_opcode!(opcode, self);
-        self.incr_cycle(CYCLE_TABLE[opcode as usize] as u32);
+        self.incr_cycle(CYCLE_TABLE[opcode as usize] as u64);
+        self.cycle - old_cyc
     }
     
     pub fn halted(&self) -> bool {

@@ -304,10 +304,23 @@ impl PPU {
         self.reg.ppuaddr = self.reg.ppuaddr.wrapping_add(incr_size);
     }
     
-    //Just for experimenting at this point
-    pub fn force_vblank(&mut self) {
-        let buf = &self.screen_buffer;
-        self.screen.draw(buf);
+    pub fn run(&mut self, cpu_cycles: u64) {
+        for _ in 0..cpu_cycles {
+            for _ in 0..3 {
+                self.run_cycle();
+            }
+        }
+    }
+    
+    fn run_cycle(&mut self) {
+        self.cyc += 1;
+        if self.cyc == 341 {
+            self.cyc = 0;
+            self.sl += 1;
+            if self.sl == 261 {
+                self.sl = -1
+            }
+        }
     }
     
     #[cfg(feature="cputrace")]
