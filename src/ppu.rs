@@ -270,6 +270,10 @@ pub struct PPU {
 
     screen: Box<Screen>,
     screen_buffer: [Color; SCREEN_BUFFER_SIZE],
+    
+    cyc: u16,
+    sl: i16,
+    //TODO: Add odd/even frame handling
 }
 
 impl PPU {
@@ -287,8 +291,11 @@ impl PPU {
             },
             oam: [OAMEntry::zero(); 64],
             ppu_mem: PPUMemory::new(cart),
-            screen_buffer: [Color::from_bits_truncate(0x2C); SCREEN_BUFFER_SIZE],
+            screen_buffer: [Color::from_bits_truncate(0x00); SCREEN_BUFFER_SIZE],
             screen: screen,
+            
+            cyc: 0,
+            sl: 241,
         }
     }
 
@@ -301,6 +308,16 @@ impl PPU {
     pub fn force_vblank(&mut self) {
         let buf = &self.screen_buffer;
         self.screen.draw(buf);
+    }
+    
+    #[cfg(feature="cputrace")]
+    pub fn cycle(&self) -> u16 {
+        self.cyc
+    }
+    
+    #[cfg(feature="cputrace")]
+    pub fn scanline(&self) -> i16 {
+        self.sl
     }
 }
 

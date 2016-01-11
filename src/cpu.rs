@@ -256,6 +256,8 @@ macro_rules! decode_opcode {
         0x7F => { $this.unofficial(); let mode = $this.absolute_x();  $this.rra(mode) }
         0x7B => { $this.unofficial(); let mode = $this.absolute_y();  $this.rra(mode) }
 
+        0x02 | 0x12 | 0x22 | 0x32 | 0x42 | 0x52 | 0x62 | 0x72 | 0x82 | 0x92 | 0xB2 | 0xD2 | 0xF2 => $this.kil(),
+
         //Else
         x => panic!( "Unknown or unsupported opcode: {:02X}", x ),
     } }
@@ -379,7 +381,8 @@ pub struct Registers {
 pub struct CPU {
     pub regs: Registers,
     pub mem: CpuMemory,
-    pub cycle: u32,
+    cycle: u32,
+    halted: bool,
 }
 
 impl MemSegment for CPU {
@@ -408,8 +411,8 @@ impl CPU {
             self.regs.y,
             self.regs.p.bits(),
             self.regs.sp,
-            (self.cycle * 3) % 341, //TODO: Should be PPU cycle num
-            0, //TODO: Add scanline counting
+            self.mem.ppu.cycle(),
+            self.mem.ppu.scanline(),
         );
     }
 
@@ -821,6 +824,9 @@ impl CPU {
         self.adc(mode);
         mode.untick_cycle(self);
     }
+    fn kil(&mut self) {
+        self.halted = true;
+    }
 
     pub fn new(mem: CpuMemory) -> CPU {
         CPU {
@@ -834,11 +840,13 @@ impl CPU {
             },
             cycle: 0,
             mem: mem,
+            halted: false,
         }
     }
 
     pub fn init(&mut self) {
-        self.regs.pc = self.mem.read_w(0xFFFC);
+        self.regs.pc = 0xC000;
+        //self.regs.pc = self.mem.read_w(0xFFFC);
     }
 
     fn load_incr_pc(&mut self) -> u8 {
@@ -960,10 +968,17 @@ impl CPU {
     fn unofficial(&self) {}
 
     pub fn step(&mut self) {
+        if self.halted {
+            return;
+        }
         self.trace();
         self.stack_dump();
         let opcode: u8 = self.load_incr_pc();
         decode_opcode!(opcode, self);
         self.incr_cycle(CYCLE_TABLE[opcode as usize] as u32);
+    }
+    
+    pub fn halted(&self) -> bool {
+        self.halted
     }
 }

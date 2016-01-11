@@ -338,6 +338,9 @@ impl<'a> Disassembler<'a> {
     fn rra(&mut self, instr: PartialInstruction) -> String {
         instr.finish("RRA")
     }
+    fn kil(&mut self) -> String {
+        "KIL".to_string()
+    }
 
     pub fn decode(mut self) -> Instruction {
         let opcode = self.read_incr_pc();
