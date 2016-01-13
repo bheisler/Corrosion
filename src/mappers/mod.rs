@@ -1,4 +1,5 @@
 mod nrom;
+mod cnrom;
 
 use super::memory::MemSegment;
 
@@ -32,7 +33,8 @@ impl Mapper {
     pub fn new(id: u16, params: MapperParams) -> Box<Mapper> {
         match id {
             0 => Box::new(nrom::NROM::new(params)),
-            _ => panic!("Unsupported Mapper"),
+            3 => Box::new(cnrom::CNROM::new(params)),
+            m => panic!("Unsupported Mapper: {}", m),
         }
     }
 }

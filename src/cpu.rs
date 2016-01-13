@@ -381,7 +381,7 @@ pub struct Registers {
 pub struct CPU {
     pub regs: Registers,
     pub mem: CpuMemory,
-    cycle: u64,
+    pub cycle: u64,
     halted: bool,
 }
 
@@ -845,8 +845,7 @@ impl CPU {
     }
 
     pub fn init(&mut self) {
-        self.regs.pc = 0xC000;
-        //self.regs.pc = self.mem.read_w(0xFFFC);
+        self.regs.pc = self.mem.read_w(0xFFFC);
     }
 
     fn load_incr_pc(&mut self) -> u8 {
@@ -967,17 +966,15 @@ impl CPU {
 
     fn unofficial(&self) {}
 
-    pub fn step(&mut self) -> u64 {
+    pub fn step(&mut self) {
         if self.halted {
-            return 0;
+            return;
         }
-        let old_cyc = self.cycle;
         self.trace();
         self.stack_dump();
         let opcode: u8 = self.load_incr_pc();
         decode_opcode!(opcode, self);
         self.incr_cycle(CYCLE_TABLE[opcode as usize] as u64);
-        self.cycle - old_cyc
     }
     
     pub fn halted(&self) -> bool {
