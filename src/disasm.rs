@@ -40,7 +40,7 @@ impl<'a> Disassembler<'a> {
     }
     fn absolute(&mut self) -> PartialInstruction {
         let arg = self.read_w_incr_pc();
-        PartialInstruction { pattern: format!("$$$ ${:04X} = {:02X}", arg, self.cpu.mem.read(arg)) }
+        PartialInstruction { pattern: format!("$$$ ${:04X} = {:02X}", arg, self.read_safe(arg)) }
     }
     fn absolute_x(&mut self) -> PartialInstruction {
         let arg = self.read_w_incr_pc();
@@ -49,7 +49,7 @@ impl<'a> Disassembler<'a> {
             pattern: format!("$$$ ${:04X},X @ {:04X} = {:02X}",
                              arg,
                              target,
-                             self.cpu.mem.read(target)),
+                             self.read_safe(target)),
         }
     }
     fn absolute_y(&mut self) -> PartialInstruction {
@@ -59,13 +59,13 @@ impl<'a> Disassembler<'a> {
             pattern: format!("$$$ ${:04X},Y @ {:04X} = {:02X}",
                              arg,
                              target,
-                             self.cpu.mem.read(target)),
+                             self.read_safe(target)),
         }
     }
     fn zero_page(&mut self) -> PartialInstruction {
         let arg = self.read_incr_pc();
         PartialInstruction {
-            pattern: format!("$$$ ${:02X} = {:02X}", arg, self.cpu.mem.read(arg as u16)),
+            pattern: format!("$$$ ${:02X} = {:02X}", arg, self.read_safe(arg as u16)),
         }
     }
     fn zero_page_x(&mut self) -> PartialInstruction {
@@ -75,7 +75,7 @@ impl<'a> Disassembler<'a> {
             pattern: format!("$$$ ${:02X},X @ {:02X} = {:02X}",
                              arg,
                              target,
-                             self.cpu.mem.read(target as u16)),
+                             self.read_safe(target as u16)),
         }
     }
     fn zero_page_y(&mut self) -> PartialInstruction {
@@ -85,14 +85,14 @@ impl<'a> Disassembler<'a> {
             pattern: format!("$$$ ${:02X},Y @ {:02X} = {:02X}",
                              arg,
                              target,
-                             self.cpu.mem.read(target as u16)),
+                             self.read_safe(target as u16)),
         }
     }
     fn indirect_x(&mut self) -> PartialInstruction {
         let arg = self.read_incr_pc();
         let zp_idx = arg.wrapping_add(self.cpu.regs.x);
-        let ptr = self.cpu.mem.read_w_zero_page(zp_idx);
-        let target = self.cpu.mem.read(ptr);
+        let ptr = self.read_safe_w_zero_page(zp_idx);
+        let target = self.read_safe(ptr);
         PartialInstruction {
             pattern: format!("$$$ (${:02X},X) @ {:02X} = {:04X} = {:02X}",
                              arg,
@@ -103,9 +103,9 @@ impl<'a> Disassembler<'a> {
     }
     fn indirect_y(&mut self) -> PartialInstruction {
         let arg = self.read_incr_pc();
-        let base_ptr = self.cpu.mem.read_w_zero_page(arg);
+        let base_ptr = self.read_safe_w_zero_page(arg);
         let ptr = base_ptr.wrapping_add(self.cpu.regs.y as u16);
-        let target = self.cpu.mem.read(ptr);
+        let target = self.read_safe(ptr);
         PartialInstruction {
             pattern: format!("$$$ (${:02X}),Y = {:04X} @ {:04X} = {:02X}",
                              arg,
@@ -206,7 +206,7 @@ impl<'a> Disassembler<'a> {
     }
     fn jmpi(&mut self) -> String {
         let arg = self.read_w_incr_pc();
-        format!("JMP (${:04X}) = {:04X}", arg, self.cpu.mem.read_w(arg))
+        format!("JMP (${:04X}) = {:04X}", arg, self.read_safe_w(arg))
     }
     fn jsr(&mut self) -> String {
         let arg = self.read_w_incr_pc();
@@ -363,7 +363,8 @@ impl<'a> Disassembler<'a> {
     }
 
     fn read_incr_pc(&mut self) -> u8 {
-        let val: u8 = self.cpu.mem.read(self.pc);
+        let pc = self.pc;
+        let val: u8 = self.read_safe(pc);
         self.bytes.push(val);
         self.pc = self.pc.wrapping_add(1);
         val
@@ -371,5 +372,24 @@ impl<'a> Disassembler<'a> {
 
     fn read_w_incr_pc(&mut self) -> u16 {
         ((self.read_incr_pc() as u16) << 0) | ((self.read_incr_pc() as u16) << 8)
+    }
+    
+    fn read_safe(&mut self, idx: u16) -> u8 {
+        match idx {
+            0x2000...0x3FFF => 0xFF,
+            0x4000...0x401F => 0xFF,
+            _ => self.cpu.mem.read(idx)
+        }
+    }
+    fn read_safe_w(&mut self, idx: u16) -> u16 {
+        let low = self.read_safe(idx) as u16;
+        let high = self.read_safe(idx + 1) as u16;
+        (high << 8) | low
+    }
+    
+    fn read_safe_w_zero_page(&mut self, zp_idx: u8) -> u16 {
+        let low = self.read_safe(zp_idx as u16) as u16;
+        let high = self.read_safe(zp_idx.wrapping_add(1) as u16) as u16;
+        (high << 8) | low
     }
 }
