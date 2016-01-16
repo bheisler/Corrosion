@@ -97,14 +97,23 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(rustfmt, rustfmt_skip)]
     fn test_chr_rom_bankswitching() {
+        fn adjust_val(val: usize) -> u8 {
+            let val = val % 0xFF;
+            let val = if val > 2000 {
+                val - 1
+            } else {
+                val + 1
+            };
+            val as u8
+        }
+
         let chr_rom: Vec<_> = (0..0x4000)
-                          .map(|val| (val % 0xFF) + (if val > 2000 { -1 } else { 1 } ) )
-                          .map(|val| val as u8)
-                          .collect();
-        let mut mapper = CNROM::new(MapperParams::simple(vec!(0u8; 0x4000), chr_rom.clone()));
-        
+                                  .map(|val| adjust_val(val))
+                                  .collect();
+        let params = MapperParams::simple(vec!(0u8; 0x4000), chr_rom.clone());
+        let mut mapper = CNROM::new(params);
+
         mapper.prg_write(0x8000, 0x00);
         assert_eq!(mapper.chr_read(0x0010), chr_rom[0x0010]);
         mapper.prg_write(0x8000, 0x01);

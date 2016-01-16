@@ -27,11 +27,7 @@ pub enum TvFormat {
     NTSC,
     PAL,
 }
-// TODO: Add Both and Dendy as necessary
 
-// I'm thinking we don't support trainers until we need to.
-// TODO: Add support for the battery-backed memory
-// TODO: Add support for NES 2.0 files
 pub struct Cart {
     mapper: Box<Mapper>,
     pub mode: ScreenMode,

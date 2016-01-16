@@ -1,6 +1,3 @@
-#![allow(dead_code)]
-// TODO: Remove this when the PPU is implemented properly.
-
 use super::memory::MemSegment;
 use cart::Cart;
 use std::rc::Rc;
@@ -12,7 +9,7 @@ pub const SCREEN_HEIGHT: usize = 240;
 pub const SCREEN_BUFFER_SIZE: usize = SCREEN_WIDTH * SCREEN_HEIGHT;
 
 const NAMETABLE_WIDTH: usize = 32;
-const NAMETABLE_HEIGHT: usize = 30;
+
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(C)]
@@ -97,18 +94,6 @@ enum AddrByte {
     Low,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
-enum SpriteSize {
-    Normal,
-    Tall,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-enum MasterSlave {
-    Master,
-    Slave,
-}
-
 struct PPUCtrl {
     bits: u8,
 }
@@ -133,35 +118,11 @@ impl PPUCtrl {
         }
     }
 
-    fn sprite_table(&self) -> u16 {
-        if self.bits & 0b0000_1000 != 0 {
-            0x1000
-        } else {
-            0x0000
-        }
-    }
-
     fn background_table(&self) -> u16 {
         if self.bits & 0b0001_0000 != 0 {
             0x1000
         } else {
             0x0000
-        }
-    }
-
-    fn sprite_size(&self) -> SpriteSize {
-        if self.bits & 0b0010_0000 != 0 {
-            SpriteSize::Tall
-        } else {
-            SpriteSize::Normal
-        }
-    }
-
-    fn master_slave(&self) -> MasterSlave {
-        if self.bits & 0b0100_0000 != 0 {
-            MasterSlave::Master
-        } else {
-            MasterSlave::Slave
         }
     }
 
@@ -180,12 +141,6 @@ bitflags! {
         const EM_R =    0b0010_0000, //Emphasize Red
         const EM_G =    0b0100_0000, //Emphasize Green
         const EM_B =    0b1000_0000, //Emphasize Blue
-    }
-}
-
-impl PPUMask {
-    fn rendering_enabled(&self) -> bool {
-        self.intersects(S_BCK | S_SPR)
     }
 }
 
@@ -230,12 +185,6 @@ bitflags! {
         const BEHIND    = 0b0010_0000,
         const PALETTE1  = 0b0000_0010,
         const PALETTE2  = 0b0000_0001,
-    }
-}
-
-impl OAMAttr {
-    fn palette(&self) -> u8 {
-        self.bits() & 0x0000_0011
     }
 }
 
@@ -412,7 +361,6 @@ impl PPU {
     }
 
     fn get_nametable_addr(&self, px_x: u16, px_y: u16) -> u16 {
-        // TODO: This is only correct for the first nametable
         let x = px_x / 8;
         let y = px_y / 8;
         let result = self.reg.ppuctrl.nametable_addr() + y * NAMETABLE_WIDTH as u16 + x;
