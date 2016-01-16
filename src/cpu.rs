@@ -679,6 +679,9 @@ impl CPU {
         let return_addr = self.regs.pc - 1;
         self.regs.pc = target;
         self.stack_push_w(return_addr);
+        let mut status = self.regs.p;
+        status.insert( B );
+        self.stack_push( status.bits() );
     }
 
     // Branches
