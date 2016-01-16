@@ -53,7 +53,7 @@ impl<'a> Screen for SDLScreen<'a> {
         self.texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
             for y in 0..::ppu::SCREEN_HEIGHT {
                 for x in 0..::ppu::SCREEN_WIDTH {
-                    let color = buf[y * x];
+                    let color = buf[y * ::ppu::SCREEN_WIDTH + x];
                     let pal_idx = color.bits() as usize * 3;
                     let offset = y * pitch + x * 3;
                     buffer[offset + 0] = PALETTE[pal_idx + 0];
