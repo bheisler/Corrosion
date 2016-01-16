@@ -1,6 +1,6 @@
 use super::*;
 
-const CHR_BANK_SIZE : usize = 0x2000;
+const CHR_BANK_SIZE: usize = 0x2000;
 
 pub struct CNROM {
     prg_rom: Vec<u8>,
@@ -34,7 +34,7 @@ impl Mapper for CNROM {
     }
 
     fn chr_read(&self, idx: u16) -> u8 {
-        let idx : usize = idx as usize;
+        let idx: usize = idx as usize;
         let bank = self.chr_bank as usize * CHR_BANK_SIZE;
         let idx = bank + idx;
         self.chr_rom[idx as usize % self.chr_rom.len()]
@@ -95,8 +95,9 @@ mod tests {
 
         assert_eq!(mapper.prg_read(0x8111), mapper.prg_read(0xC111));
     }
-    
+
     #[test]
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     fn test_chr_rom_bankswitching() {
         let chr_rom: Vec<_> = (0..0x4000)
                           .map(|val| (val % 0xFF) + (if val > 2000 { -1 } else { 1 } ) )

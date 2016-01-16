@@ -373,12 +373,12 @@ impl<'a> Disassembler<'a> {
     fn read_w_incr_pc(&mut self) -> u16 {
         ((self.read_incr_pc() as u16) << 0) | ((self.read_incr_pc() as u16) << 8)
     }
-    
+
     fn read_safe(&mut self, idx: u16) -> u8 {
         match idx {
             0x2000...0x3FFF => 0xFF,
             0x4000...0x401F => 0xFF,
-            _ => self.cpu.mem.read(idx)
+            _ => self.cpu.mem.read(idx),
         }
     }
     fn read_safe_w(&mut self, idx: u16) -> u16 {
@@ -386,7 +386,7 @@ impl<'a> Disassembler<'a> {
         let high = self.read_safe(idx + 1) as u16;
         (high << 8) | low
     }
-    
+
     fn read_safe_w_zero_page(&mut self, zp_idx: u8) -> u16 {
         let low = self.read_safe(zp_idx as u16) as u16;
         let high = self.read_safe(zp_idx.wrapping_add(1) as u16) as u16;

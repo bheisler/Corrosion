@@ -680,8 +680,8 @@ impl CPU {
         self.regs.pc = target;
         self.stack_push_w(return_addr);
         let mut status = self.regs.p;
-        status.insert( B );
-        self.stack_push( status.bits() );
+        status.insert(B);
+        self.stack_push(status.bits());
     }
 
     // Branches
@@ -850,7 +850,7 @@ impl CPU {
     pub fn init(&mut self) {
         self.regs.pc = self.mem.read_w(0xFFFC);
     }
-    
+
     pub fn nmi(&mut self) {
         let target = self.mem.read_w(0xFFFA);
         let return_addr = self.regs.pc;
@@ -988,7 +988,7 @@ impl CPU {
         decode_opcode!(opcode, self);
         self.incr_cycle(CYCLE_TABLE[opcode as usize] as u64);
     }
-    
+
     pub fn halted(&self) -> bool {
         self.halted
     }

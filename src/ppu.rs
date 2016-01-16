@@ -11,8 +11,8 @@ pub const SCREEN_WIDTH: usize = 256;
 pub const SCREEN_HEIGHT: usize = 240;
 pub const SCREEN_BUFFER_SIZE: usize = SCREEN_WIDTH * SCREEN_HEIGHT;
 
-const NAMETABLE_WIDTH : usize = 32;
-const NAMETABLE_HEIGHT : usize = 30;
+const NAMETABLE_WIDTH: usize = 32;
+const NAMETABLE_HEIGHT: usize = 30;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(C)]
@@ -21,7 +21,7 @@ impl Color {
     fn from_bits_truncate(val: u8) -> Color {
         Color(val & 0b0011_1111)
     }
-    
+
     pub fn bits(&self) -> u8 {
         self.0
     }
@@ -75,7 +75,7 @@ impl MemSegment for PPUMemory {
             0x2000...0x3EFF => {
                 let idx = ((idx - 0x2000) % 0x800) as usize;
                 self.vram[idx] = val;
-            },
+            }
             0x3F00...0x3FFF => {
                 let val = Color::from_bits_truncate(val);
                 match (idx - 0x3F00) as usize {
@@ -185,7 +185,7 @@ bitflags! {
 
 impl PPUMask {
     fn rendering_enabled(&self) -> bool {
-        self.intersects( S_BCK | S_SPR )
+        self.intersects(S_BCK | S_SPR)
     }
 }
 
@@ -217,7 +217,7 @@ impl PPUReg {
     fn scroll_x(&self) -> u8 {
         ((self.ppuscroll & 0xFF00) > 8) as u8
     }
-    
+
     fn scroll_y(&self) -> u8 {
         ((self.ppuscroll & 0x00FF) > 0) as u8
     }
@@ -291,7 +291,7 @@ pub struct PPU {
 
     screen: Box<Screen>,
     screen_buffer: [Color; SCREEN_BUFFER_SIZE],
-    
+
     global_cyc: u64,
     cyc: u16,
     sl: i16,
@@ -321,7 +321,7 @@ impl PPU {
             ppu_mem: PPUMemory::new(cart),
             screen_buffer: [Color::from_bits_truncate(0x00); SCREEN_BUFFER_SIZE],
             screen: screen,
-            
+
             global_cyc: 0,
             cyc: 0,
             sl: 241,
@@ -333,16 +333,21 @@ impl PPU {
         let incr_size = self.reg.ppuctrl.vram_addr_step();
         self.reg.ppuaddr = self.reg.ppuaddr.wrapping_add(incr_size);
     }
-    
+
     pub fn run_to(&mut self, cpu_cycle: u64) -> StepResult {
         let mut hit_nmi = false;
         while self.global_cyc < (cpu_cycle * 3) {
             self.tick_cycle();
             hit_nmi |= self.run_cycle();
-        };
-        if hit_nmi { StepResult::NMI } else { StepResult::Continue }
+        }
+
+        if hit_nmi {
+            StepResult::NMI
+        } else {
+            StepResult::Continue
+        }
     }
-    
+
     fn tick_cycle(&mut self) {
         self.global_cyc += 1;
         self.cyc += 1;
@@ -355,71 +360,71 @@ impl PPU {
             }
         }
     }
-    
+
     fn run_cycle(&mut self) -> bool {
         match (self.cyc, self.sl) {
-            (c, -1) => self.prerender_scanline( c ),
-            (c, sl @ 0...239) => self.visible_scanline( c, sl ),
+            (c, -1) => self.prerender_scanline(c),
+            (c, sl @ 0...239) => self.visible_scanline(c, sl),
             (_, 240) => (), //Post-render idle scanline
             (1, 241) => return self.start_vblank(),
             (_, 241...260) => (), //VBlank lines
-            _ => ()
+            _ => (),
         }
         false
     }
-    
+
     fn prerender_scanline(&mut self, _: u16) {
-        //Nothing here yet 
+        // Nothing here yet
     }
-    
+
     fn visible_scanline(&mut self, pixel: u16, scanline: i16) {
-        //Nothing here yet
+        // Nothing here yet
         if pixel >= 256 {
             return;
         }
         let x = pixel as usize;
         let y = scanline as usize;
-        self.screen_buffer[y * SCREEN_WIDTH + x] = self.get_pixel( x as u16, y as u16 );
+        self.screen_buffer[y * SCREEN_WIDTH + x] = self.get_pixel(x as u16, y as u16);
     }
-    
+
     fn get_pixel(&mut self, x: u16, y: u16) -> Color {
-        self.get_background_pixel( x, y )
+        self.get_background_pixel(x, y)
     }
-    
+
     fn get_background_pixel(&mut self, screen_x: u16, screen_y: u16) -> Color {
         let x = screen_x + self.reg.scroll_x() as u16;
         let y = screen_y + self.reg.scroll_y() as u16;
-        
+
         let color_id = self.get_color_id(x, y);
         let palette_id = self.get_palette_id(x, y);
-        
+
         self.read_palette(palette_id, color_id)
     }
-    
+
     fn get_color_id(&mut self, x: u16, y: u16) -> u8 {
-        let nametable_addr = self.get_nametable_addr( x, y );
+        let nametable_addr = self.get_nametable_addr(x, y);
         let tile_idx = self.ppu_mem.read(nametable_addr);
-        
+
         let tile_table = self.reg.ppuctrl.background_table();
-        let pattern = self.read_tile_pattern( tile_idx, y & 0x07, tile_table );
-        
+        let pattern = self.read_tile_pattern(tile_idx, y & 0x07, tile_table);
+
         self.get_color_in_pattern(pattern, x as u32 & 0x07)
     }
-    
+
     fn get_nametable_addr(&self, px_x: u16, px_y: u16) -> u16 {
-        //TODO: This is only correct for the first nametable
+        // TODO: This is only correct for the first nametable
         let x = px_x / 8;
         let y = px_y / 8;
         let result = self.reg.ppuctrl.nametable_addr() + y * NAMETABLE_WIDTH as u16 + x;
         result
     }
-    
-    fn read_tile_pattern(&mut self, tile_id: u8, fine_y_scroll: u16, tile_table: u16 ) -> (u8, u8) {
-        let lo_addr = self.get_tile_addr( tile_id, 0, fine_y_scroll, tile_table );
-        let hi_addr = self.get_tile_addr( tile_id, 8, fine_y_scroll, tile_table );
-        ( self.ppu_mem.read(lo_addr), self.ppu_mem.read(hi_addr) )
+
+    fn read_tile_pattern(&mut self, tile_id: u8, fine_y_scroll: u16, tile_table: u16) -> (u8, u8) {
+        let lo_addr = self.get_tile_addr(tile_id, 0, fine_y_scroll, tile_table);
+        let hi_addr = self.get_tile_addr(tile_id, 8, fine_y_scroll, tile_table);
+        (self.ppu_mem.read(lo_addr), self.ppu_mem.read(hi_addr))
     }
-    
+
     fn get_tile_addr(&self, tile_id: u8, plane: u8, fine_y_scroll: u16, tile_table: u16) -> u16 {
         let mut tile_addr = 0u16;
         tile_addr |= fine_y_scroll;
@@ -428,7 +433,7 @@ impl PPU {
         tile_addr |= tile_table; //Table must be 0x0000 or 0x1000
         tile_addr
     }
-    
+
     fn get_color_in_pattern(&self, pattern: (u8, u8), fine_x: u32) -> u8 {
         let (lo, hi) = pattern;
         let shift = 0x07 - fine_x;
@@ -436,50 +441,53 @@ impl PPU {
         let color_id_hi = (hi.wrapping_shr(shift) & 0x01) << 1;
         color_id_lo | color_id_hi
     }
-    
+
     fn get_palette_id(&mut self, x: u16, y: u16) -> u8 {
         let attribute_addr = self.get_attribute_addr(x, y);
         let attribute_byte = self.ppu_mem.read(attribute_addr);
         self.get_palette_from_attribute(attribute_byte, x, y)
     }
-    
+
     fn get_attribute_addr(&self, x: u16, y: u16) -> u16 {
         let x = x / 32;
         let y = y / 32;
         let attr_table = self.reg.ppuctrl.nametable_addr() + 0x03C0;
         attr_table + (y * 8) + x
     }
-    
+
     fn get_palette_from_attribute(&self, attr: u8, x: u16, y: u16) -> u8 {
         let mut at = attr;
-        if y & 0x10 != 0 { at >>= 4 }
-        if x & 0x10 != 0 { at >>= 2 }
+        if y & 0x10 != 0 {
+            at >>= 4
+        }
+        if x & 0x10 != 0 {
+            at >>= 2
+        }
         at & 0x03
     }
-    
-    fn read_palette(&mut self, palette_id: u8, color_id : u8 ) -> Color {
+
+    fn read_palette(&mut self, palette_id: u8, color_id: u8) -> Color {
         let offset = (palette_id << 2) | color_id;
         let bits = self.ppu_mem.read(0x3F00 + offset as u16);
         Color::from_bits_truncate(bits)
     }
-    
+
     fn start_vblank(&mut self) -> bool {
         let buf = &self.screen_buffer;
         self.screen.draw(buf);
         if self.frame > 0 {
-            self.reg.ppustat.insert( VBLANK );
+            self.reg.ppustat.insert(VBLANK);
             self.reg.ppuctrl.generate_vblank_nmi()
-        }
-        else {
+        } else {
             false
         }
     }
-    
+
     #[cfg(feature="cputrace")]
     pub fn cycle(&self) -> u16 {
         self.cyc
     }
-    
+
     #[cfg(feature="cputrace")]
     pub fn scanline(&self) -> i16 {
         self.sl
@@ -507,7 +515,7 @@ impl MemSegment for PPU {
             0x0002 => {
                 self.reg.address_latch = AddrByte::High;
                 let res = self.reg.ppustat.bits | (self.reg.dyn_latch & 0b0001_1111);
-                self.reg.ppustat.remove( VBLANK );
+                self.reg.ppustat.remove(VBLANK);
                 res
             }
             0x0003 => self.reg.dyn_latch,

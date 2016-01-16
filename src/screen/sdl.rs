@@ -28,7 +28,8 @@ impl<'a> SDLScreen<'a> {
         let renderer = window.renderer().present_vsync().build().unwrap();
 
         let texture = renderer.create_texture_streaming(PixelFormatEnum::RGB24,
-                                                            (SCREEN_WIDTH, SCREEN_HEIGHT)).unwrap();
+                                                        (SCREEN_WIDTH, SCREEN_HEIGHT))
+                              .unwrap();
         SDLScreen {
             video: video_subsystem,
             renderer: renderer,
@@ -37,8 +38,8 @@ impl<'a> SDLScreen<'a> {
     }
 }
 
-//Using a hard-coded palette for now. Will add .pal file support later,
-//maybe proper NTSC video decoding eventually.
+// Using a hard-coded palette for now. Will add .pal file support later,
+// maybe proper NTSC video decoding eventually.
 #[cfg_attr(rustfmt, rustfmt_skip)]
 static PALETTE: [u8; 192] = [
     84, 84, 84,       0, 30, 116,       8, 16, 144,       48, 0, 136,       68, 0, 100,       92, 0, 48,        84, 4, 0,         60, 24, 0,        32, 42, 0,        8, 58, 0,         0, 64, 0,         0, 60, 0,         0, 50, 60,        0, 0, 0,          0, 0, 0,    0, 0, 0,
@@ -49,22 +50,24 @@ static PALETTE: [u8; 192] = [
 
 impl<'a> Screen for SDLScreen<'a> {
     fn draw(&mut self, buf: &[Color; SCREEN_BUFFER_SIZE]) {
-        self.texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
-            for y in 0..::ppu::SCREEN_HEIGHT {
-                for x in 0..::ppu::SCREEN_WIDTH {
-                    let color = buf[y * ::ppu::SCREEN_WIDTH + x];
-                    let pal_idx = color.bits() as usize * 3;
-                    let offset = y * pitch + x * 3;
-                    buffer[offset + 0] = PALETTE[pal_idx + 0];
-                    buffer[offset + 1] = PALETTE[pal_idx + 1];
-                    buffer[offset + 2] = PALETTE[pal_idx + 2];
+        self.texture
+            .with_lock(None, |buffer: &mut [u8], pitch: usize| {
+                for y in 0..::ppu::SCREEN_HEIGHT {
+                    for x in 0..::ppu::SCREEN_WIDTH {
+                        let color = buf[y * ::ppu::SCREEN_WIDTH + x];
+                        let pal_idx = color.bits() as usize * 3;
+                        let offset = y * pitch + x * 3;
+                        buffer[offset + 0] = PALETTE[pal_idx + 0];
+                        buffer[offset + 1] = PALETTE[pal_idx + 1];
+                        buffer[offset + 2] = PALETTE[pal_idx + 2];
+                    }
                 }
-            }
-        }).unwrap();
-        
+            })
+            .unwrap();
+
         self.renderer.copy(&self.texture,
-              None,
-              Some(Rect::new_unwrap(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)));
+                           None,
+                           Some(Rect::new_unwrap(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)));
         self.renderer.present();
     }
 }

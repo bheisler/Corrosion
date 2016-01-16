@@ -51,12 +51,12 @@ pub fn start_emulator(cart: Cart) {
     let mem = CpuMemory::new(ppu, apu, io, cart);
     let mut cpu = CPU::new(mem);
     cpu.init();
-    
+
     loop {
         if pump_events(&mut event_pump) || cpu.halted() {
             break;
         }
-        let nmi = cpu.mem.ppu.run_to( cpu.cycle );
+        let nmi = cpu.mem.ppu.run_to(cpu.cycle);
         if nmi == ::ppu::StepResult::NMI {
             cpu.nmi();
         }
