@@ -1,22 +1,20 @@
 use super::*;
 
-pub struct NROM {
-    prg_rom: Vec<u8>,
-    chr_rom: Vec<u8>,
-    prg_ram: Vec<u8>,
+struct Mapper000 {
+    prg_rom: Box<[u8]>,
+    chr_rom: Box<[u8]>,
+    prg_ram: Box<[u8]>,
 }
 
-impl NROM {
-    pub fn new(params: MapperParams) -> NROM {
-        NROM {
-            prg_rom: params.prg_rom,
-            chr_rom: params.chr_rom,
-            prg_ram: vec![0u8; params.prg_ram_size],
-        }
-    }
+pub fn new(params: MapperParams) -> Box<Mapper> {
+    Box::new(Mapper000 {
+        prg_rom: params.prg_rom.into_boxed_slice(),
+        chr_rom: params.chr_rom.into_boxed_slice(),
+        prg_ram: vec![0u8; params.prg_ram_size].into_boxed_slice(),
+    })
 }
 
-impl Mapper for NROM {
+impl Mapper for Mapper000 {
     fn prg_read(&self, idx: u16) -> u8 {
         match idx {
             0x6000...0x7FFF => self.prg_ram[((idx - 0x6000) as usize % self.prg_ram.len())],
@@ -53,20 +51,18 @@ mod tests {
 
     #[test]
     fn test_can_create_mapper_0() {
-        NROM::new(MapperParams::simple(vec![], vec![]));
+        new(MapperParams::simple(vec![], vec![]));
     }
 
-    fn create_test_mapper() -> NROM {
-        NROM::new(MapperParams::simple(vec!(0u8; 0x4000), vec!(0u8; 0x4000)))
+    fn create_test_mapper() -> Box<Mapper> {
+        new(MapperParams::simple(vec!(0u8; 0x4000), vec!(0u8; 0x4000)))
     }
 
     #[test]
     fn test_prg_ram_read_write() {
         let mut params = MapperParams::simple(vec!(0u8; 0x4000), vec!(0u8; 0x4000));
         params.prg_ram_size = 0x1000;
-        let mut nrom = NROM::new(params);
-        println!("{}", nrom.prg_ram.len());
-
+        let mut nrom = new(params);
         nrom.prg_write(0x6111, 15);
         assert_eq!(nrom.prg_read(0x6111), 15);
 
@@ -79,7 +75,7 @@ mod tests {
         let prg_rom: Vec<_> = (0..0x4000)
                                   .map(|val| (val % 0xFF) as u8)
                                   .collect();
-        let mapper = NROM::new(MapperParams::simple(prg_rom, vec!(0u8; 0x4000)));
+        let mapper = new(MapperParams::simple(prg_rom, vec!(0u8; 0x4000)));
 
         assert_eq!(mapper.prg_read(0x8111), mapper.prg_read(0xC111));
     }
@@ -88,7 +84,7 @@ mod tests {
     fn test_prg_rom_mirroring() {
         let mut prg_rom: Vec<_> = vec!(0u8; 0x4000);
         prg_rom[0x2612] = 0x15;
-        let mapper = NROM::new(MapperParams::simple(prg_rom, vec!(0u8; 0x1000)));
+        let mapper = new(MapperParams::simple(prg_rom, vec!(0u8; 0x1000)));
         assert_eq!(mapper.prg_read(0xA612), 0x15);
     }
 
@@ -105,7 +101,7 @@ mod tests {
         let chr_rom: Vec<_> = (0..0x2000)
                                   .map(|val| (val % 0xFF) as u8)
                                   .collect();
-        let mapper = NROM::new(MapperParams::simple(vec!(0u8; 0x4000), chr_rom));
+        let mapper = new(MapperParams::simple(vec!(0u8; 0x4000), chr_rom));
 
         assert_eq!(mapper.prg_read(0x8111), mapper.prg_read(0xC111));
     }
