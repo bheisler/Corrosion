@@ -23,7 +23,7 @@ use memory::CpuMemory;
 use io::IO;
 use apu::APU;
 use ppu::PPU;
-use sdl2::{EventPump, Sdl, VideoSubsystem};
+use sdl2::EventPump;
 use sdl2::event::Event;
 
 use std::rc::Rc;

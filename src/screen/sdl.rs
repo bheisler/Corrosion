@@ -1,12 +1,11 @@
 use ppu::{Color, SCREEN_BUFFER_SIZE};
 use screen::Screen;
 use sdl2::{Sdl, VideoSubsystem};
-use sdl2::keyboard::Keycode;
-use sdl2::video::Window;
 use sdl2::render::{Renderer, Texture};
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
 
+#[allow(dead_code)]
 pub struct SDLScreen<'a> {
     video: VideoSubsystem,
     renderer: Renderer<'a>,

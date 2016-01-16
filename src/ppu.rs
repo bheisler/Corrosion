@@ -368,7 +368,7 @@ impl PPU {
         false
     }
     
-    fn prerender_scanline(&mut self, pixel: u16) {
+    fn prerender_scanline(&mut self, _: u16) {
         //Nothing here yet 
     }
     
@@ -466,7 +466,7 @@ impl PPU {
     fn start_vblank(&mut self) -> bool {
         let buf = &self.screen_buffer;
         self.screen.draw(buf);
-        if ( self.frame > 0 ) {
+        if self.frame > 0 {
             self.reg.ppustat.insert( VBLANK );
             self.reg.ppuctrl.generate_vblank_nmi()
         }
@@ -582,13 +582,10 @@ mod tests {
         let mut ppu = create_test_ppu();
         ppu.write(idx, 0xDE);
         assert_eq!(getter(&ppu), 0xDE00);
+        assert_eq!(AddrByte::Low, ppu.reg.address_latch);
         ppu.write(idx, 0xAD);
         assert_eq!(getter(&ppu), 0xDEAD);
-        ppu.write(idx, 0xED);
-        assert_eq!(getter(&ppu), 0xDEED);
-        ppu.reg.address_latch = AddrByte::High;
-        ppu.write(idx, 0xAD);
-        assert_eq!(getter(&ppu), 0xADED);
+        assert_eq!(AddrByte::High, ppu.reg.address_latch);
     }
 
     fn assert_register_ignores_writes(idx: u16, getter: &Fn(&PPU) -> u8) {

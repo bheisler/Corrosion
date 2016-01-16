@@ -184,11 +184,6 @@ mod tests {
             set_bit(&mut self.header[6], 1)
         }
 
-        fn set_trainer(&mut self) {
-            set_bit(&mut self.header[6], 2);
-            self.trainer = generate_bytes(TRAINER_LENGTH);
-        }
-
         fn set_fourscreen(&mut self) {
             set_bit(&mut self.header[6], 3)
         }
