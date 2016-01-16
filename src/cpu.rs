@@ -850,6 +850,15 @@ impl CPU {
     pub fn init(&mut self) {
         self.regs.pc = self.mem.read_w(0xFFFC);
     }
+    
+    pub fn nmi(&mut self) {
+        let target = self.mem.read_w(0xFFFA);
+        let return_addr = self.regs.pc;
+        self.regs.pc = target;
+        self.stack_push_w(return_addr);
+        let status = self.regs.p;
+        self.stack_push(status.bits());
+    }
 
     fn load_incr_pc(&mut self) -> u8 {
         let res = self.mem.read(self.regs.pc);

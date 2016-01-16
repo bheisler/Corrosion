@@ -11,6 +11,9 @@ pub const SCREEN_WIDTH: usize = 256;
 pub const SCREEN_HEIGHT: usize = 240;
 pub const SCREEN_BUFFER_SIZE: usize = SCREEN_WIDTH * SCREEN_HEIGHT;
 
+const NAMETABLE_WIDTH : usize = 32;
+const NAMETABLE_HEIGHT : usize = 30;
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(C)]
 pub struct Color(u8);
@@ -50,7 +53,7 @@ impl MemSegment for PPUMemory {
             }
             0x2000...0x3EFF => self.vram[(idx % 0x800) as usize],
             0x3F00...0x3FFF => {
-                match (idx - 0x3F00) as usize {
+                match (idx & 0x001F) as usize {
                     0x10 => self.palette[0x00],
                     0x14 => self.palette[0x04],
                     0x18 => self.palette[0x08],
@@ -116,7 +119,7 @@ impl PPUCtrl {
     }
 
     fn nametable_addr(&self) -> u16 {
-        (self.bits & 0b0000_0011) as u16 & 0x0400 + 0x2000
+        (self.bits & 0b0000_0011) as u16 * 0x0400 | 0x2000
     }
 
     fn vram_addr_step(&self) -> u16 {
@@ -177,6 +180,12 @@ bitflags! {
     }
 }
 
+impl PPUMask {
+    fn rendering_enabled(&self) -> bool {
+        self.intersects( S_BCK | S_SPR )
+    }
+}
+
 bitflags! {
     flags PPUStat : u8 {
         const VBLANK =          0b1000_0000, //Currently in the vertical blank interval
@@ -199,6 +208,16 @@ struct PPUReg {
 
     ///The address registers are two bytes but we can only write one at a time.
     address_latch: AddrByte,
+}
+
+impl PPUReg {
+    fn scroll_x(&self) -> u8 {
+        ((self.ppuscroll & 0xFF00) > 8) as u8
+    }
+    
+    fn scroll_y(&self) -> u8 {
+        ((self.ppuscroll & 0x00FF) > 0) as u8
+    }
 }
 
 bitflags! {
@@ -252,7 +271,6 @@ impl MemSegment for OAMEntry {
     }
 
     fn write(&mut self, idx: u16, val: u8) {
-        println!("{:04X}", idx % 4);
         match idx % 4 {
             0 => self.y = val,
             1 => self.tile = val,
@@ -271,9 +289,16 @@ pub struct PPU {
     screen: Box<Screen>,
     screen_buffer: [Color; SCREEN_BUFFER_SIZE],
     
+    global_cyc: u64,
     cyc: u16,
     sl: i16,
-    //TODO: Add odd/even frame handling
+    frame: u32,
+}
+
+#[derive(Copy, Debug, PartialEq, Clone)]
+pub enum StepResult {
+    NMI,
+    Continue,
 }
 
 impl PPU {
@@ -294,8 +319,10 @@ impl PPU {
             screen_buffer: [Color::from_bits_truncate(0x00); SCREEN_BUFFER_SIZE],
             screen: screen,
             
+            global_cyc: 0,
             cyc: 0,
             sl: 241,
+            frame: 0,
         }
     }
 
@@ -304,22 +331,84 @@ impl PPU {
         self.reg.ppuaddr = self.reg.ppuaddr.wrapping_add(incr_size);
     }
     
-    pub fn run(&mut self, cpu_cycles: u64) {
-        for _ in 0..cpu_cycles {
-            for _ in 0..3 {
-                self.run_cycle();
-            }
-        }
+    pub fn run_to(&mut self, cpu_cycle: u64) -> StepResult {
+        let mut hit_nmi = false;
+        while self.global_cyc < (cpu_cycle * 3) {
+            self.tick_cycle();
+            hit_nmi |= self.run_cycle();
+        };
+        if hit_nmi { StepResult::NMI } else { StepResult::Continue }
     }
     
-    fn run_cycle(&mut self) {
+    fn tick_cycle(&mut self) {
+        self.global_cyc += 1;
         self.cyc += 1;
         if self.cyc == 341 {
             self.cyc = 0;
             self.sl += 1;
             if self.sl == 261 {
-                self.sl = -1
+                self.sl = -1;
+                self.frame += 1;
             }
+        }
+    }
+    
+    fn run_cycle(&mut self) -> bool {
+        match (self.cyc, self.sl) {
+            (c, -1) => self.prerender_scanline( c ),
+            (c, sl @ 0...239) => self.visible_scanline( c, sl ),
+            (_, 240) => (), //Post-render idle scanline
+            (1, 241) => return self.start_vblank(),
+            (_, 241...260) => (), //VBlank lines
+            _ => ()
+        }
+        false
+    }
+    
+    fn prerender_scanline(&mut self, pixel: u16) {
+        //Nothing here yet 
+    }
+    
+    fn visible_scanline(&mut self, pixel: u16, scanline: i16) {
+        //Nothing here yet
+        if pixel >= 256 {
+            return;
+        }
+        let x = pixel as usize;
+        let y = scanline as usize;
+        self.screen_buffer[y * SCREEN_WIDTH + x] = self.get_pixel( x as u16, y as u16 );
+    }
+    
+    fn get_pixel(&mut self, x: u16, y: u16) -> Color {
+        self.get_background_pixel( x, y )
+    }
+    
+    fn get_background_pixel(&mut self, screen_x: u16, screen_y: u16) -> Color {
+        let x = screen_x + self.reg.scroll_x() as u16;
+        let y = screen_y + self.reg.scroll_y() as u16;
+        let nametable_addr = self.get_nametable_addr( x, y );
+        let tile_idx = self.ppu_mem.read(nametable_addr);
+        
+        Color::from_bits_truncate(tile_idx)
+    }
+    
+    fn get_nametable_addr(&self, px_x: u16, px_y: u16) -> u16 {
+        //TODO: This is only correct for the first nametable
+        let x = px_x / 8;
+        let y = px_y / 8;
+        let result = self.reg.ppuctrl.nametable_addr() + y * NAMETABLE_WIDTH as u16 + x;
+        result
+    }
+    
+    fn start_vblank(&mut self) -> bool {
+        let buf = &self.screen_buffer;
+        self.screen.draw(buf);
+        if ( self.frame > 0 ) {
+            self.reg.ppustat.insert( VBLANK );
+            self.reg.ppuctrl.generate_vblank_nmi()
+        }
+        else {
+            false
         }
     }
     
@@ -353,7 +442,9 @@ impl MemSegment for PPU {
             0x0001 => self.reg.dyn_latch,
             0x0002 => {
                 self.reg.address_latch = AddrByte::First;
-                self.reg.ppustat.bits | (self.reg.dyn_latch & 0b0001_1111)
+                let res = self.reg.ppustat.bits | (self.reg.dyn_latch & 0b0001_1111);
+                self.reg.ppustat.remove( VBLANK );
+                res
             }
             0x0003 => self.reg.dyn_latch,
             0x0004 => {
