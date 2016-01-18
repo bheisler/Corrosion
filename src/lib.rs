@@ -56,7 +56,8 @@ pub fn start_emulator(cart: Cart) {
         if pump_events(&mut event_pump) || cpu.halted() {
             break;
         }
-        let nmi = cpu.mem.ppu.run_to(cpu.cycle);
+        let cycle = cpu.cycle();
+        let nmi = cpu.mem.ppu.run_to(cycle);
         if nmi == ::ppu::StepResult::NMI {
             cpu.nmi();
         }

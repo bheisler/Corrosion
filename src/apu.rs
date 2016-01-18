@@ -1,6 +1,6 @@
 use super::memory::MemSegment;
 
-pub struct Pulse {
+struct Pulse {
     flags: u8,
     sweep: u8,
     timer: u8,
@@ -8,7 +8,7 @@ pub struct Pulse {
 }
 
 impl Pulse {
-    pub fn new() -> Pulse {
+    fn new() -> Pulse {
         Pulse {
             flags: 0,
             sweep: 0,
@@ -18,14 +18,14 @@ impl Pulse {
     }
 }
 
-pub struct Triangle {
+struct Triangle {
     counter: u8,
     timer: u8,
     length: u8,
 }
 
 impl Triangle {
-    pub fn new() -> Triangle {
+    fn new() -> Triangle {
         Triangle {
             counter: 0,
             timer: 0,
@@ -34,14 +34,14 @@ impl Triangle {
     }
 }
 
-pub struct Noise {
+struct Noise {
     volume: u8,
     mode: u8,
     length: u8,
 }
 
 impl Noise {
-    pub fn new() -> Noise {
+    fn new() -> Noise {
         Noise {
             volume: 0,
             mode: 0,
@@ -50,7 +50,7 @@ impl Noise {
     }
 }
 
-pub struct DMC {
+struct DMC {
     freq: u8,
     direct: u8,
     addr: u8,
@@ -58,7 +58,7 @@ pub struct DMC {
 }
 
 impl DMC {
-    pub fn new() -> DMC {
+    fn new() -> DMC {
         DMC {
             freq: 0,
             direct: 0,

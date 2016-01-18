@@ -369,19 +369,19 @@ impl Status {
     }
 }
 
-pub struct Registers {
-    pub a: u8,
-    pub x: u8,
-    pub y: u8,
-    pub p: Status,
-    pub sp: u8,
-    pub pc: u16,
+struct Registers {
+    a: u8,
+    x: u8,
+    y: u8,
+    p: Status,
+    sp: u8,
+    pc: u16,
 }
 
 pub struct CPU {
-    pub regs: Registers,
+    regs: Registers,
     pub mem: CpuMemory,
-    pub cycle: u64,
+    cycle: u64,
     halted: bool,
 }
 
@@ -991,5 +991,9 @@ impl CPU {
 
     pub fn halted(&self) -> bool {
         self.halted
+    }
+    
+    pub fn cycle(&self) -> u64 {
+        self.cycle
     }
 }
