@@ -50,14 +50,14 @@ impl MemSegment for RAM {
 
 pub struct CpuMemory {
     ram: RAM,
-    pub ppu: PPU,
+    ppu: Rc<RefCell<PPU>>,
     apu: APU,
     io: IO,
     cart: Rc<RefCell<Cart>>,
 }
 
 impl CpuMemory {
-    pub fn new(ppu: PPU, apu: APU, io: IO, cart: Rc<RefCell<Cart>>) -> CpuMemory {
+    pub fn new(ppu: Rc<RefCell<PPU>>, apu: APU, io: IO, cart: Rc<RefCell<Cart>>) -> CpuMemory {
         CpuMemory {
             ram: RAM::new(),
             ppu: ppu,
@@ -85,7 +85,7 @@ impl MemSegment for CpuMemory {
     fn read(&mut self, idx: u16) -> u8 {
         match idx {
             0x0000...0x1FFF => self.ram.read(idx),
-            0x2000...0x3FFF => self.ppu.read(idx),
+            0x2000...0x3FFF => self.ppu.borrow_mut().read(idx),
             0x4000...0x4015 => self.apu.read(idx),
             0x4016...0x4017 => self.io.read(idx),
             0x4018...0x4019 => self.apu.read(idx),
@@ -97,7 +97,7 @@ impl MemSegment for CpuMemory {
     fn write(&mut self, idx: u16, val: u8) {
         match idx {
             0x0000...0x1FFF => self.ram.write(idx, val),
-            0x2000...0x3FFF => self.ppu.write(idx, val),
+            0x2000...0x3FFF => self.ppu.borrow_mut().write(idx, val),
             0x4000...0x4015 => self.apu.write(idx, val),
             0x4016 => self.io.write(idx, val),
             0x4017...0x4019 => self.apu.write(idx, val),
@@ -121,6 +121,7 @@ mod tests {
         let cart = ::cart::Cart::new(nrom);
         let cart = Rc::new(RefCell::new(cart));
         let ppu = ::ppu::PPU::new(cart.clone(), Box::new(DummyScreen::new()));
+        let ppu = Rc::new(RefCell::new(ppu));
         CpuMemory::new(ppu, ::apu::APU::new(), ::io::IO::new(), cart)
     }
 
@@ -163,7 +164,7 @@ mod tests {
 
         // We're relying on the PPU dynamic latch effect to get the right answers
         mem.write(0x2000, 0x45);
-        assert_eq!(mem.ppu.read(0x2000), 0x45);
+        assert_eq!(mem.ppu.borrow_mut().read(0x2000), 0x45);
 
         mem.write(0x2000, 0x48);
         assert_eq!(mem.read(0x2000), 0x48);

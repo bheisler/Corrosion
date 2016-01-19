@@ -46,9 +46,10 @@ pub fn start_emulator(cart: Cart) {
 
     let cart: Rc<RefCell<Cart>> = Rc::new(RefCell::new(cart));
     let ppu = PPU::new(cart.clone(), Box::new(screen));
+    let ppu = Rc::new(RefCell::new(ppu));
     let apu = APU::new();
     let io = IO::new();
-    let mem = CpuMemory::new(ppu, apu, io, cart);
+    let mem = CpuMemory::new(ppu.clone(), apu, io, cart);
     let mut cpu = CPU::new(mem);
     cpu.init();
 
@@ -57,7 +58,7 @@ pub fn start_emulator(cart: Cart) {
             break;
         }
         let cycle = cpu.cycle();
-        let nmi = cpu.mem.ppu.run_to(cycle);
+        let nmi = ppu.borrow_mut().run_to(cycle);
         if nmi == ::ppu::StepResult::NMI {
             cpu.nmi();
         }
