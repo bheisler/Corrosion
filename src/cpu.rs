@@ -411,8 +411,8 @@ impl CPU {
             self.regs.y,
             self.regs.p.bits(),
             self.regs.sp,
-            self.mem.ppu.cycle(),
-            self.mem.ppu.scanline(),
+            self.mem.ppu.borrow().cycle(),
+            self.mem.ppu.borrow().scanline(),
         );
     }
 
@@ -995,5 +995,20 @@ impl CPU {
     
     pub fn cycle(&self) -> u64 {
         self.cycle
+    }
+    
+    #[cfg(feature="cputrace")]
+    pub fn get_x(&self) -> u8 {
+        self.regs.x
+    }
+    
+    #[cfg(feature="cputrace")]
+    pub fn get_y(&self) -> u8 {
+        self.regs.y
+    }
+    
+    #[cfg(feature="cputrace")]
+    pub fn get_pc(&self) -> u16 {
+        self.regs.pc
     }
 }

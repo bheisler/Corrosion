@@ -50,7 +50,7 @@ impl MemSegment for RAM {
 
 pub struct CpuMemory {
     ram: RAM,
-    ppu: Rc<RefCell<PPU>>,
+    pub ppu: Rc<RefCell<PPU>>,
     apu: APU,
     io: IO,
     cart: Rc<RefCell<Cart>>,
