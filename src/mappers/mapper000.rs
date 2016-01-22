@@ -3,13 +3,21 @@ use super::*;
 struct Mapper000 {
     prg_rom: Box<[u8]>,
     chr_rom: Box<[u8]>,
+    chr_ram: Box<[u8]>,
     prg_ram: Box<[u8]>,
 }
 
 pub fn new(params: MapperParams) -> Box<Mapper> {
+    let chr_ram = if params.chr_rom.len() == 0 {
+        vec![0u8; 0x2000].into_boxed_slice()
+    }
+    else {
+        vec![0u8; 0].into_boxed_slice()
+    };
     Box::new(Mapper000 {
         prg_rom: params.prg_rom.into_boxed_slice(),
         chr_rom: params.chr_rom.into_boxed_slice(),
+        chr_ram: chr_ram,
         prg_ram: vec![0u8; params.prg_ram_size].into_boxed_slice(),
     })
 }
@@ -35,12 +43,20 @@ impl Mapper for Mapper000 {
     }
 
     fn chr_read(&self, idx: u16) -> u8 {
-        self.chr_rom[idx as usize % self.chr_rom.len()]
+        if self.chr_rom.len() == 0 {
+            self.chr_ram[idx as usize % self.chr_ram.len()]
+        }
+        else {
+            self.chr_rom[idx as usize % self.chr_rom.len()]
+        }
     }
 
     #[allow(unused_variables)]
     fn chr_write(&mut self, idx: u16, val: u8) {
-        // Do Nothing
+        if self.chr_rom.len() == 0 {
+            let len = self.chr_ram.len();
+            self.chr_ram[idx as usize % len] = val;
+        } 
     }
 }
 
