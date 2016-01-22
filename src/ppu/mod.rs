@@ -166,7 +166,7 @@ impl MemSegment for PPU {
             0x0007 => {
                 let addr = self.reg.ppuaddr;
                 match addr {
-                    0x0000...0x3F00 => {
+                    0x0000...0x3EFF => {
                         let old_buffer = self.ppudata_read_buffer;
                         self.ppudata_read_buffer = self.ppu_mem.read(addr);
                         self.reg.incr_ppuaddr();

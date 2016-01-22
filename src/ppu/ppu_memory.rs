@@ -61,7 +61,7 @@ impl MemSegment for PPUMemory {
             }
             0x3F00...0x3FFF => {
                 let val = Color::from_bits_truncate(val);
-                match (idx - 0x3F00) as usize {
+                match (idx & 0x001F) as usize {
                     0x10 => self.palette[0x00] = val,
                     0x14 => self.palette[0x04] = val,
                     0x18 => self.palette[0x08] = val,
