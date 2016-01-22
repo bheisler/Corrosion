@@ -148,6 +148,11 @@ impl PPU {
     pub fn scanline(&self) -> i16 {
         self.sl
     }
+    
+    #[cfg(feature="cputrace")]
+    pub fn vram_addr(&self) -> u16 {
+        self.reg.ppuaddr
+    }
 }
 
 impl MemSegment for PPU {

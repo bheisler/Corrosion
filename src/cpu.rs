@@ -399,7 +399,7 @@ impl CPU {
     fn trace(&mut self) {
         let opcode = Disassembler::new(self).decode();
         println!(
-            "{:04X} {:9} {}{:30}  A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:3} SL:{}",
+            "{:04X} {:9} {}{:30}  A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:3} SL:{:3} VRAM:{:04X}",
             self.regs.pc,
             opcode.bytes.iter()
                 .map(|byte| format!("{:02X}", byte))
@@ -413,6 +413,7 @@ impl CPU {
             self.regs.sp,
             self.mem.ppu.borrow().cycle(),
             self.mem.ppu.borrow().scanline(),
+            self.mem.ppu.borrow().vram_addr(),
         );
     }
 
