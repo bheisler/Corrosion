@@ -21,6 +21,12 @@ impl PPUMemory {
     }
 }
 
+impl PPUMemory {
+    pub fn read_bypass_palette(&mut self, idx: u16) -> u8 {
+        self.vram[(idx % 0x800) as usize]
+    }
+}
+
 impl MemSegment for PPUMemory {
     fn read(&mut self, idx: u16) -> u8 {
         match idx {
@@ -28,7 +34,7 @@ impl MemSegment for PPUMemory {
                 let cart = self.cart.borrow_mut();
                 cart.chr_read(idx)
             }
-            0x2000...0x3EFF => self.vram[(idx % 0x800) as usize],
+            0x2000...0x3EFF => self.read_bypass_palette(idx),
             0x3F00...0x3FFF => {
                 match (idx & 0x001F) as usize {
                     0x10 => self.palette[0x00],

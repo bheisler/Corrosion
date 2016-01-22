@@ -35,6 +35,7 @@ impl Color {
 
 pub struct PPU {
     reg: PPUReg,
+    ppudata_read_buffer: u8,
     oam: [OAMEntry; 64],
     ppu_mem: PPUMemory,
 
@@ -57,6 +58,7 @@ impl PPU {
     pub fn new(cart: Rc<RefCell<Cart>>, screen: Box<Screen>) -> PPU {
         PPU {
             reg: Default::default(),
+            ppudata_read_buffer: 0,
             oam: [OAMEntry::zero(); 64],
             ppu_mem: PPUMemory::new(cart),
             screen_buffer: [Color::from_bits_truncate(0x00); SCREEN_BUFFER_SIZE],
@@ -157,9 +159,22 @@ impl MemSegment for PPU {
                 res
             }
             0x0007 => {
-                let res = self.ppu_mem.read(self.reg.ppuaddr);
-                self.reg.incr_ppuaddr();
-                res
+                let addr = self.reg.ppuaddr;
+                match addr {
+                    0x0000...0x3F00 => {
+                        let old_buffer = self.ppudata_read_buffer;
+                        self.ppudata_read_buffer = self.ppu_mem.read(addr);
+                        self.reg.incr_ppuaddr();
+                        old_buffer
+                    },
+                    0x3F00...0x3FFF => {
+                        let read_result = self.ppu_mem.read(addr);
+                        self.reg.incr_ppuaddr();
+                        self.ppudata_read_buffer = self.ppu_mem.read_bypass_palette(addr);
+                        read_result
+                    },
+                    x => invalid_address!(x),
+                }
             }
             _ => self.reg.read( idx )
         }
