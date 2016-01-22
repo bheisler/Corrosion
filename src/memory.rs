@@ -10,6 +10,7 @@ use apu::APU;
 use io::IO;
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::ops::Range;
 
 pub trait MemSegment {
     fn read(&mut self, idx: u16) -> u8;
@@ -25,6 +26,23 @@ pub trait MemSegment {
         let high = ((val & 0xFF00) >> 8) as u8;
         self.write(idx, low);
         self.write(idx + 1, high);
+    }
+    
+    fn print(&mut self, range: Range<u16>) {
+        let lower = range.start / 16;
+        let upper = range.end / 16 + 1;
+        
+        for y in lower..upper {
+            print!("{:04X}: ", y * 16);
+            for x in 0..16 {
+                let addr = (y * 16) + x;
+                print!("{:02X} ", self.read( addr ) );
+                if x % 4 == 3 {
+                    print!(" ");
+                }
+            }
+            println!("");
+        }
     }
 }
 
