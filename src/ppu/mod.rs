@@ -158,11 +158,7 @@ impl PPU {
 impl MemSegment for PPU {
     fn read(&mut self, idx: u16) -> u8 {
         match idx % 8 {
-            0x0004 => {
-                let res = self.oam[self.reg.oamaddr as usize / 4].read(self.reg.oamaddr as u16);
-                self.reg.incr_oamaddr();
-                res
-            }
+            0x0004 => self.oam[self.reg.oamaddr as usize / 4].read(self.reg.oamaddr as u16),
             0x0007 => {
                 let addr = self.reg.ppuaddr;
                 match addr {
