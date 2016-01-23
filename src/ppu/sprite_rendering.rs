@@ -179,7 +179,7 @@ impl PPU {
     }
     
     fn is_active(&self, details: SpriteDetails, x: u16) -> bool {
-        x.wrapping_sub(details.x as u16) <= 8
+        x.wrapping_sub(details.x as u16) < 8
     }
     
     fn do_get_pixel(&mut self, details: SpriteDetails, x: u16) -> (SpritePriority, PaletteIndex) {
