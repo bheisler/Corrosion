@@ -11,47 +11,72 @@ bitflags! {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct OAMEntry {
+struct OAMEntry {
     y: u8,
     tile: u8,
     attr: OAMAttr,
     x: u8,
 }
 
-impl OAMEntry {
-    pub fn zero() -> OAMEntry {
-        OAMEntry::new(0, 0, 0, 0)
-    }
-
-    pub fn new(y: u8, tile: u8, attr: u8, x: u8) -> OAMEntry {
+impl Default for OAMEntry {
+    fn default() -> OAMEntry {
         OAMEntry {
-            y: y,
-            tile: tile,
-            attr: OAMAttr::from_bits_truncate(attr),
-            x: x,
+            y: 0,
+            tile: 0,
+            attr: OAMAttr::from_bits_truncate(0),
+            x: 0,
         }
     }
 }
 
 impl MemSegment for OAMEntry {
     fn read(&mut self, idx: u16) -> u8 {
-        match idx % 4 {
+        match idx {
             0 => self.y,
             1 => self.tile,
             2 => self.attr.bits(),
             3 => self.x,
-            _ => panic!("Math is broken!"),
+            x => invalid_address!(x),
         }
     }
 
     fn write(&mut self, idx: u16, val: u8) {
-        match idx % 4 {
+        match idx {
             0 => self.y = val,
             1 => self.tile = val,
             2 => self.attr = OAMAttr::from_bits_truncate(val),
             3 => self.x = val,
-            _ => panic!("Math is broken!"),
+            x => invalid_address!(x),
         }
+    }
+}
+
+pub struct SpriteRenderingData {
+    primary_oam: [OAMEntry; 64],
+}
+
+impl Default for SpriteRenderingData {
+    fn default() -> SpriteRenderingData {
+        SpriteRenderingData {
+            primary_oam: [Default::default(); 64]
+        }
+    }
+}
+
+///Reads the primary OAM table. 
+impl MemSegment for SpriteRenderingData {
+    fn read(&mut self, idx: u16) -> u8 {
+        if idx > 256 {
+            invalid_address!(idx);
+        }
+        self.primary_oam[idx as usize / 4].read( idx % 4 )
+    }
+
+    fn write(&mut self, idx: u16, val: u8) {
+        if idx > 256 {
+            invalid_address!(idx);
+        }
+        self.primary_oam[idx as usize / 4].write( idx % 4, val )
     }
 }
 

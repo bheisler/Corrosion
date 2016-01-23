@@ -36,11 +36,12 @@ impl Color {
 pub struct PPU {
     reg: PPUReg,
     ppudata_read_buffer: u8,
-    oam: [OAMEntry; 64],
     ppu_mem: PPUMemory,
 
     screen: Box<Screen>,
     screen_buffer: [Color; SCREEN_BUFFER_SIZE],
+
+    sprite_data: SpriteRenderingData,
 
     global_cyc: u64,
     cyc: u16,
@@ -59,10 +60,11 @@ impl PPU {
         PPU {
             reg: Default::default(),
             ppudata_read_buffer: 0,
-            oam: [OAMEntry::zero(); 64],
             ppu_mem: PPUMemory::new(cart),
             screen_buffer: [Color::from_bits_truncate(0x00); SCREEN_BUFFER_SIZE],
             screen: screen,
+            
+            sprite_data: Default::default(),
 
             global_cyc: 0,
             cyc: 0,
@@ -158,7 +160,7 @@ impl PPU {
 impl MemSegment for PPU {
     fn read(&mut self, idx: u16) -> u8 {
         match idx % 8 {
-            0x0004 => self.oam[self.reg.oamaddr as usize / 4].read(self.reg.oamaddr as u16),
+            0x0004 => self.sprite_data.read(self.reg.oamaddr as u16),
             0x0007 => {
                 let addr = self.reg.ppuaddr;
                 match addr {
@@ -184,7 +186,7 @@ impl MemSegment for PPU {
     fn write(&mut self, idx: u16, val: u8) {
         match idx % 8 {
             0x0004 => {
-                self.oam[self.reg.oamaddr as usize / 4].write(self.reg.oamaddr as u16, val);
+                self.sprite_data.write(self.reg.oamaddr as u16, val);
                 self.reg.incr_oamaddr();
             }
             0x0007 => {
@@ -218,12 +220,9 @@ mod tests {
     }
     
     #[test]
-    fn reading_oamdata_increments_oamaddr() {
+    fn reading_oamdata_doesnt_increment_oamaddr() {
         let mut ppu = create_test_ppu();
         ppu.reg.oamaddr = 0;
-        ppu.read(0x2004);
-        assert_eq!(ppu.reg.oamaddr, 1);
-        ppu.reg.oamaddr = 255;
         ppu.read(0x2004);
         assert_eq!(ppu.reg.oamaddr, 0);
     }
@@ -247,9 +246,11 @@ mod tests {
         let mut ppu = create_test_ppu_with_rom(chr_rom);
     
         ppu.reg.ppuaddr = 0x0ABC;
+        ppu.read(0x2007);//Dummy Read
         assert_eq!(ppu.read(0x2007), 12);
     
         ppu.reg.ppuaddr = 0x0DBA;
+        ppu.read(0x2007);//Dummy Read
         assert_eq!(ppu.read(0x2007), 212);
     }
     
@@ -260,18 +261,30 @@ mod tests {
         ppu.reg.ppuaddr = 0x2ABC;
         ppu.write(0x2007, 12);
         ppu.reg.ppuaddr = 0x2ABC;
+        ppu.read(0x2007);//Dummy read
         assert_eq!(ppu.read(0x2007), 12);
     
         ppu.reg.ppuaddr = 0x2DBA;
         ppu.write(0x2007, 212);
         ppu.reg.ppuaddr = 0x2DBA;
+        ppu.read(0x2007);//Dummy Read
         assert_eq!(ppu.read(0x2007), 212);
     
         // Mirroring
         ppu.reg.ppuaddr = 0x2EFC;
         ppu.write(0x2007, 128);
         ppu.reg.ppuaddr = 0x3EFC;
+        ppu.read(0x2007);//Dummy Read
         assert_eq!(ppu.read(0x2007), 128);
+    }
+    
+    #[test]
+    fn ppu_needs_no_dummy_read_for_palette_data() {
+        let mut ppu = create_test_ppu();
+        ppu.reg.ppuaddr = 0x3F16;
+        ppu.write(0x2007, 21);
+        ppu.reg.ppuaddr = 0x3F16;
+        assert_eq!(ppu.read(0x2007), 21);
     }
     
     #[test]
