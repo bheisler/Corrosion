@@ -48,7 +48,7 @@ pub struct PaletteIndex {
 impl PaletteIndex {
     fn to_addr(self) -> u16 {
         let mut addr : u16 = 0x3F00;
-        addr = addr | if self.set == PaletteSet::Sprite { 0x20 } else { 0 };
+        addr = addr | if self.set == PaletteSet::Sprite { 0x10 } else { 0 };
         addr = addr | ( self.palette_id as u16 & 0x03 ) << 2;
         addr = addr | self.color_id as u16 & 0x03;
         addr
