@@ -150,12 +150,12 @@ impl PPU {
         }
         let x = pixel as usize;
         let y = scanline as usize;
-        self.screen_buffer[y * SCREEN_WIDTH + x] = self.get_pixel(x as u16, y as u16);
+        self.screen_buffer[y * SCREEN_WIDTH + x] = self.get_pixel(pixel, scanline as u16);
     }
 
-    fn get_pixel(&mut self, x: u16, y: u16) -> Color {
-        let (priority, sprite_pal_idx) = self.get_sprite_pixel(x, y);
-        let background_pal_idx = self.get_background_pixel(x, y);
+    fn get_pixel(&mut self, px: u16, sl: u16) -> Color {
+        let (priority, sprite_pal_idx) = self.get_sprite_pixel(px);
+        let background_pal_idx = self.get_background_pixel(px, sl);
         
         let pal_idx = match (background_pal_idx, priority, sprite_pal_idx) {
             (bck, _, spr) if spr.is_transparent() => bck,

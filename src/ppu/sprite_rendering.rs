@@ -1,5 +1,4 @@
 use memory::MemSegment;
-use super::Color;
 use super::PPU;
 use super::PaletteIndex;
 use super::PaletteSet;
@@ -168,7 +167,7 @@ impl PPU {
         }
     }
     
-    pub fn get_sprite_pixel(&mut self, x: u16, y: u16) -> (SpritePriority, PaletteIndex) {
+    pub fn get_sprite_pixel(&mut self, x: u16) -> (SpritePriority, PaletteIndex) {
         for n in 0..8 {
             let det_x = self.sprite_data.secondary_oam[n];
             if self.is_active( det_x, x ) {

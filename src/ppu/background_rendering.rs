@@ -1,5 +1,4 @@
 use super::PPU;
-use super::Color;
 use super::PaletteIndex;
 use super::PaletteSet;
 use ::memory::MemSegment;
