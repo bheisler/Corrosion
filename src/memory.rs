@@ -27,16 +27,16 @@ pub trait MemSegment {
         self.write(idx, low);
         self.write(idx + 1, high);
     }
-    
+
     fn print(&mut self, range: Range<u16>) {
         let lower = range.start / 16;
         let upper = range.end / 16 + 1;
-        
+
         for y in lower..upper {
             print!("{:04X}: ", y * 16);
             for x in 0..16 {
                 let addr = (y * 16) + x;
-                print!("{:02X} ", self.read( addr ) );
+                print!("{:02X} ", self.read(addr));
                 if x % 4 == 3 {
                     print!(" ");
                 }

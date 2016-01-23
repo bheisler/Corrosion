@@ -1,4 +1,4 @@
-use ::memory::MemSegment;
+use memory::MemSegment;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum AddrByte {
@@ -37,7 +37,7 @@ impl PPUCtrl {
             0x0000
         }
     }
-    
+
     pub fn sprite_table(&self) -> u16 {
         if self.bits & 0b0010_0000 != 0 {
             0x1000
@@ -96,12 +96,12 @@ impl PPUReg {
     pub fn scroll_y(&self) -> u8 {
         ((self.ppuscroll & 0x00FF) > 0) as u8
     }
-    
+
     pub fn incr_ppuaddr(&mut self) {
         let incr_size = self.ppuctrl.vram_addr_step();
         self.ppuaddr = self.ppuaddr.wrapping_add(incr_size);
     }
-    
+
     pub fn incr_oamaddr(&mut self) {
         self.oamaddr = self.oamaddr.wrapping_add(1);
     }
@@ -173,7 +173,7 @@ mod tests {
     use memory::MemSegment;
     use ppu::PPU;
     use ppu::tests::*;
-    
+
     fn assert_register_single_writable(idx: u16, getter: &Fn(&PPU) -> u8) {
         let mut ppu = create_test_ppu();
         ppu.write(idx, 12);
@@ -181,7 +181,7 @@ mod tests {
         ppu.write(idx, 125);
         assert_eq!(getter(&ppu), 125);
     }
-    
+
     fn assert_register_double_writable(idx: u16, getter: &Fn(&PPU) -> u16) {
         let mut ppu = create_test_ppu();
         ppu.write(idx, 0xDE);
@@ -191,7 +191,7 @@ mod tests {
         assert_eq!(getter(&ppu), 0xDEAD);
         assert_eq!(AddrByte::High, ppu.reg.address_latch);
     }
-    
+
     fn assert_register_ignores_writes(idx: u16, getter: &Fn(&PPU) -> u8) {
         let mut ppu = create_test_ppu();
         ppu.write(idx, 12);
@@ -199,7 +199,7 @@ mod tests {
         ppu.write(idx, 125);
         assert_eq!(getter(&ppu), 0);
     }
-    
+
     fn assert_writing_register_fills_latch(idx: u16) {
         let mut ppu = create_test_ppu();
         ppu.write(idx, 12);
@@ -207,7 +207,7 @@ mod tests {
         ppu.write(idx, 125);
         assert_eq!(ppu.reg.dyn_latch, 125);
     }
-    
+
     fn assert_register_is_readable(idx: u16, setter: &Fn(&mut PPU, u8) -> ()) {
         let mut ppu = create_test_ppu();
         setter(&mut ppu, 12);
@@ -215,7 +215,7 @@ mod tests {
         setter(&mut ppu, 125);
         assert_eq!(ppu.read(idx), 125);
     }
-    
+
     fn assert_register_not_readable(idx: u16) {
         let mut ppu = create_test_ppu();
         ppu.reg.dyn_latch = 12;
@@ -223,27 +223,27 @@ mod tests {
         ppu.reg.dyn_latch = 125;
         assert_eq!(ppu.read(idx), 125);
     }
-    
+
     #[test]
     fn ppuctrl_is_write_only_register() {
         assert_register_single_writable(0x2000, &|ref ppu| ppu.reg.ppuctrl.bits);
         assert_writing_register_fills_latch(0x2000);
         assert_register_not_readable(0x2000);
     }
-    
+
     #[test]
     fn ppu_mirrors_address() {
         assert_register_single_writable(0x2008, &|ref ppu| ppu.reg.ppuctrl.bits);
         assert_register_single_writable(0x2010, &|ref ppu| ppu.reg.ppuctrl.bits);
     }
-    
+
     #[test]
     fn ppumask_is_write_only_register() {
         assert_register_single_writable(0x2001, &|ref ppu| ppu.reg.ppumask.bits());
         assert_writing_register_fills_latch(0x2001);
         assert_register_not_readable(0x2001);
     }
-    
+
     #[test]
     fn ppustat_is_read_only_register() {
         assert_register_ignores_writes(0x2002, &|ref ppu| ppu.reg.ppustat.bits);
@@ -254,7 +254,7 @@ mod tests {
                                         ppu.reg.dyn_latch = val;
                                     });
     }
-    
+
     #[test]
     fn reading_ppustat_returns_part_of_dynlatch() {
         let mut ppu = create_test_ppu();
@@ -262,7 +262,7 @@ mod tests {
         ppu.reg.ppustat = PPUStat::from_bits_truncate(0b1010_0101);
         assert_eq!(ppu.read(0x2002), 0b1011_0101);
     }
-    
+
     #[test]
     fn reading_ppustat_clears_addr_latch() {
         let mut ppu = create_test_ppu();
@@ -270,21 +270,21 @@ mod tests {
         ppu.read(0x2002);
         assert_eq!(ppu.reg.address_latch, AddrByte::High);
     }
-    
+
     #[test]
     fn oamaddr_is_write_only_register() {
         assert_register_single_writable(0x2003, &|ref ppu| ppu.reg.oamaddr);
         assert_writing_register_fills_latch(0x2003);
         assert_register_not_readable(0x2003);
     }
-    
+
     #[test]
     fn ppuscroll_is_2x_write_only_register() {
         assert_register_double_writable(0x2005, &|ref ppu| ppu.reg.ppuscroll);
         assert_writing_register_fills_latch(0x2005);
         assert_register_not_readable(0x2005);
     }
-    
+
     #[test]
     fn ppuaddr_is_2x_write_only_register() {
         assert_register_double_writable(0x2006, &|ref ppu| ppu.reg.ppuaddr);

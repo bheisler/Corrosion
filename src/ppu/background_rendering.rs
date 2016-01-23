@@ -1,7 +1,7 @@
 use super::PPU;
 use super::PaletteIndex;
 use super::PaletteSet;
-use ::memory::MemSegment;
+use memory::MemSegment;
 
 const NAMETABLE_WIDTH: usize = 32;
 

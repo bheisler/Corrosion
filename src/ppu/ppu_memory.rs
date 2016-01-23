@@ -1,4 +1,4 @@
-use ::memory::MemSegment;
+use memory::MemSegment;
 use cart::Cart;
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -79,35 +79,35 @@ mod tests {
     use memory::MemSegment;
     use super::*;
     use ppu::PPU;
-    
+
     #[test]
     fn ppu_can_read_write_palette() {
         let mut ppu = create_test_ppu();
-    
+
         ppu.reg.ppuaddr = 0x3F00;
         ppu.write(0x2007, 12);
         ppu.reg.ppuaddr = 0x3F00;
         assert_eq!(ppu.ppu_mem.palette[0], Color::from_bits_truncate(12));
-    
+
         ppu.reg.ppuaddr = 0x3F01;
         ppu.write(0x2007, 212);
         ppu.reg.ppuaddr = 0x3F01;
         assert_eq!(ppu.read(0x2007), 212 & 0x3F);
     }
-    
+
     #[test]
     fn test_palette_mirroring() {
         let mut ppu = create_test_ppu();
-    
+
         let mirrors = [0x3F10, 0x3F14, 0x3F18, 0x3F1C];
         let targets = [0x3F00, 0x3F04, 0x3F08, 0x3F0C];
         for x in 0..4 {
-    
+
             ppu.reg.ppuaddr = targets[x];
             ppu.write(0x2007, 12);
             ppu.reg.ppuaddr = mirrors[x];
             assert_eq!(ppu.read(0x2007), 12);
-    
+
             ppu.reg.ppuaddr = mirrors[x];
             ppu.write(0x2007, 12);
             ppu.reg.ppuaddr = targets[x];

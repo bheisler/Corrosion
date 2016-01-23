@@ -391,9 +391,9 @@ impl MemSegment for CPU {
             0x4014 => 0, //No idea what this should return. PPU dynamic latch garbage, maybe?
             _ => self.mem.read(idx),
         }
-        
+
     }
-    
+
     fn write(&mut self, idx: u16, val: u8) {
         match idx {
             0x4014 => self.dma_transfer(val),
@@ -882,8 +882,8 @@ impl CPU {
         self.regs.pc = self.regs.pc.wrapping_add(2);
         res
     }
-    
-    
+
+
     fn read_w_zero_page(&mut self, zp_idx: u8) -> u16 {
         let low = self.read(zp_idx as u16) as u16;
         let high = self.read(zp_idx.wrapping_add(1) as u16) as u16;
@@ -1017,14 +1017,14 @@ impl CPU {
         decode_opcode!(opcode, self);
         self.incr_cycle(CYCLE_TABLE[opcode as usize] as u64);
     }
-    
+
     fn dma_transfer(&mut self, page: u8) {
         if self.cycle % 2 == 1 {
             self.incr_cycle(1)
         }
         self.incr_cycle(1);
         self.incr_cycle(512);
-        
+
         let page = (page as u16) << 8;
         for x in 0u16..256 {
             let addr = page | x as u16;
@@ -1036,21 +1036,21 @@ impl CPU {
     pub fn halted(&self) -> bool {
         self.halted
     }
-    
+
     pub fn cycle(&self) -> u64 {
         self.cycle
     }
-    
+
     #[cfg(feature="cputrace")]
     pub fn get_x(&self) -> u8 {
         self.regs.x
     }
-    
+
     #[cfg(feature="cputrace")]
     pub fn get_y(&self) -> u8 {
         self.regs.y
     }
-    
+
     #[cfg(feature="cputrace")]
     pub fn get_pc(&self) -> u16 {
         self.regs.pc
