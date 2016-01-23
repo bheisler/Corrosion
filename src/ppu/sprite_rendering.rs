@@ -172,7 +172,10 @@ impl PPU {
         for n in 0..8 {
             let det_x = self.sprite_data.secondary_oam[n];
             if self.is_active( det_x, x ) {
-                return self.do_get_pixel( det_x, x );
+                let pixel = self.do_get_pixel( det_x, x );
+                if !pixel.1.is_transparent() {
+                	return pixel;	
+                }
             }
         }
         return (SpritePriority::Background, TRANSPARENT);
