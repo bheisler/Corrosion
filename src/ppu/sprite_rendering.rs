@@ -158,7 +158,7 @@ impl PPU {
     
     fn convert_oam_entry(&mut self, oam: OAMEntry, sl: i16 ) -> SpriteDetails {
         let tile_id = oam.tile;
-        let fine_y_scroll = sl as u16 - oam.y as u16;
+        let fine_y_scroll = PPU::get_fine_scroll(sl as u16, oam.y as u16, oam.attr.contains(FLIP_VERT));
         let tile_table = self.reg.ppuctrl.sprite_table();
         let tile = self.read_tile_pattern(tile_id, fine_y_scroll, tile_table);
         SpriteDetails {
@@ -182,8 +182,18 @@ impl PPU {
         x.wrapping_sub(details.x as u16) < 8
     }
     
+    fn get_fine_scroll(screen_dist: u16, sprite_dist: u16, flip: bool ) -> u16 {
+        let scroll = screen_dist - sprite_dist;
+        if flip {
+            7 - scroll
+        }
+        else {
+            scroll
+        }
+    }
+    
     fn do_get_pixel(&mut self, details: SpriteDetails, x: u16) -> (SpritePriority, PaletteIndex) {
-        let fine_x = x - details.x as u16;
+        let fine_x = PPU::get_fine_scroll( x, details.x as u16, details.attr.contains(FLIP_HORZ));
         let attr = details.attr;
         let color_id = self.get_color_in_pattern(details.tile, fine_x as u32);
         let idx = PaletteIndex {
