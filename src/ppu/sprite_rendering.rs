@@ -1,4 +1,6 @@
 use ::memory::MemSegment;
+use ppu::Color;
+use ppu::PPU;
 
 bitflags! {
     flags OAMAttr : u8 {
@@ -21,10 +23,10 @@ struct OAMEntry {
 impl Default for OAMEntry {
     fn default() -> OAMEntry {
         OAMEntry {
-            y: 0,
+            y: 0xFF,
             tile: 0,
             attr: OAMAttr::from_bits_truncate(0),
-            x: 0,
+            x: 0xFF,
         }
     }
 }
@@ -51,20 +53,40 @@ impl MemSegment for OAMEntry {
     }
 }
 
-pub struct SpriteRenderingData {
-    primary_oam: [OAMEntry; 64],
+#[derive(Debug, Copy, Clone)]
+struct SpriteDetails {
+    x: u8,
 }
 
-impl Default for SpriteRenderingData {
-    fn default() -> SpriteRenderingData {
-        SpriteRenderingData {
-            primary_oam: [Default::default(); 64]
+impl Default for SpriteDetails {
+    fn default() -> SpriteDetails {
+        SpriteDetails{
+            x: 0xFF,
         }
     }
 }
 
+pub struct SpriteRenderer {
+    primary_oam: [OAMEntry; 64],
+    secondary_oam: [SpriteDetails; 8],
+}
+
+impl Default for SpriteRenderer {
+    fn default() -> SpriteRenderer {
+        SpriteRenderer {
+            primary_oam: [Default::default(); 64],
+            secondary_oam: [Default::default(); 8],
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum SpritePriority {
+    Foreground, Background,
+}
+
 ///Reads the primary OAM table. 
-impl MemSegment for SpriteRenderingData {
+impl MemSegment for SpriteRenderer {
     fn read(&mut self, idx: u16) -> u8 {
         if idx > 256 {
             invalid_address!(idx);
@@ -77,6 +99,50 @@ impl MemSegment for SpriteRenderingData {
             invalid_address!(idx);
         }
         self.primary_oam[idx as usize / 4].write( idx % 4, val )
+    }
+}
+
+impl PPU {
+    pub fn visible_scanline_sprite(&mut self, pixel: u16, scanline: i16) {
+        if pixel == 0 {
+            self.sprite_eval(scanline);
+        }
+    }
+    
+    fn sprite_eval(&mut self, scanline: i16) {
+        let mut n = 0;
+        self.sprite_data.secondary_oam = [Default::default(); 8];
+        for x in 0..64 {
+            let oam = self.sprite_data.primary_oam[x];
+            if self.is_on_scanline( oam, scanline ) {
+                self.sprite_data.secondary_oam[n] = self.convert_oam_entry(oam);
+                n += 1;
+                if n == 8 {
+                    return;
+                }
+            }
+        }
+    }
+    
+    fn is_on_scanline(&self, oam: OAMEntry, scanline: i16) -> bool {
+        let y = oam.y as i16;
+        y <= scanline && scanline <= y + 8
+    }
+    
+    fn convert_oam_entry(&mut self, oam: OAMEntry ) -> SpriteDetails {
+        SpriteDetails {
+            x: oam.x,
+        }
+    }
+    
+    pub fn get_sprite_pixel(&mut self, x: u16, y: u16) -> (SpritePriority, Color) {
+        for n in 0..8 {
+            let det_x = self.sprite_data.secondary_oam[n].x as u16;
+            if det_x <= x && x <= det_x + 8 {
+                return (SpritePriority::Foreground, Color::from_bits_truncate( 0x30 ));
+            }
+        }
+        return (SpritePriority::Foreground, Color::from_bits_truncate(0x00));
     }
 }
 
@@ -107,5 +173,18 @@ mod tests {
         ppu.reg.oamaddr = 10;
         ppu.write(0x2004, 3);
         assert_eq!(ppu.oam[2].attr.bits(), 3);
+    }
+    
+    #[test]
+    fn test_sprite_on_scanline() {
+    	let mut ppu = create_test_ppu();
+    	let mut oam : OAMEntry = Default::default();
+    	oam.y = 10;
+    	
+    	assert!(!ppu.is_on_scanline(oam, 9));
+    	for sl in 10..18 {
+    	    assert!(ppu.is_on_scanline(oam, sl));
+    	}
+    	assert!(!ppu.is_on_scanline(oam, 18));
     }
 }

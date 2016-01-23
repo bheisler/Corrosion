@@ -41,7 +41,7 @@ pub struct PPU {
     screen: Box<Screen>,
     screen_buffer: [Color; SCREEN_BUFFER_SIZE],
 
-    sprite_data: SpriteRenderingData,
+    sprite_data: SpriteRenderer,
 
     global_cyc: u64,
     cyc: u16,
@@ -118,6 +118,7 @@ impl PPU {
 
     fn visible_scanline(&mut self, pixel: u16, scanline: i16) {
         // Nothing here yet
+        self.visible_scanline_sprite(pixel, scanline);
         if pixel >= 256 {
             return;
         }
@@ -127,7 +128,15 @@ impl PPU {
     }
 
     fn get_pixel(&mut self, x: u16, y: u16) -> Color {
-        self.get_background_pixel(x, y)
+        let (priority, sprite_color) = self.get_sprite_pixel(x, y);
+        let background_color = self.get_background_pixel(x, y);
+        
+        if sprite_color.bits() != 0 {
+            sprite_color
+        }
+        else {
+            background_color
+        }
     }
 
     fn start_vblank(&mut self) -> bool {
