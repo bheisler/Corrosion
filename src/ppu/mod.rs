@@ -69,6 +69,22 @@ impl PaletteIndex {
     }
 }
 
+
+#[derive(Debug, Copy, Clone)]
+pub struct TilePattern {
+    lo: u8,
+    hi: u8,
+}
+
+impl Default for TilePattern {
+    fn default() -> TilePattern {
+        TilePattern{
+            lo: 0,
+            hi: 0,
+        }
+    }
+}
+
 pub struct PPU {
     reg: PPUReg,
     ppudata_read_buffer: u8,
@@ -192,10 +208,13 @@ impl PPU {
         Color::from_bits_truncate(bits)
     }
 
-    fn read_tile_pattern(&mut self, tile_id: u8, fine_y_scroll: u16, tile_table: u16) -> (u8, u8) {
+    fn read_tile_pattern(&mut self, tile_id: u8, fine_y_scroll: u16, tile_table: u16) -> TilePattern {
         let lo_addr = self.get_tile_addr(tile_id, 0, fine_y_scroll, tile_table);
         let hi_addr = self.get_tile_addr(tile_id, 8, fine_y_scroll, tile_table);
-        (self.ppu_mem.read(lo_addr), self.ppu_mem.read(hi_addr))
+        TilePattern{
+            lo: self.ppu_mem.read(lo_addr), 
+            hi: self.ppu_mem.read(hi_addr),
+        }
     }
 
     fn get_tile_addr(&self, tile_id: u8, plane: u8, fine_y_scroll: u16, tile_table: u16) -> u16 {
@@ -207,8 +226,9 @@ impl PPU {
         tile_addr
     }
 
-    fn get_color_in_pattern(&self, pattern: (u8, u8), fine_x: u32) -> u8 {
-        let (lo, hi) = pattern;
+    fn get_color_in_pattern(&self, pattern: TilePattern, fine_x: u32) -> u8 {
+        let lo = pattern.lo;
+        let hi = pattern.hi;
         let shift = 0x07 - fine_x;
         let color_id_lo = lo.wrapping_shr(shift) & 0x01;
         let color_id_hi = (hi.wrapping_shr(shift) & 0x01) << 1;

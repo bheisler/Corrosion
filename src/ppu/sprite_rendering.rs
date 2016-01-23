@@ -2,6 +2,7 @@ use memory::MemSegment;
 use super::PPU;
 use super::PaletteIndex;
 use super::PaletteSet;
+use super::TilePattern;
 
 const TRANSPARENT: PaletteIndex = PaletteIndex {
     set: PaletteSet::Sprite,
@@ -78,7 +79,7 @@ impl MemSegment for OAMEntry {
 struct SpriteDetails {
     x: u8,
     attr: OAMAttr,
-    tile: (u8, u8),
+    tile: TilePattern,
 }
 
 impl Default for SpriteDetails {
@@ -86,7 +87,7 @@ impl Default for SpriteDetails {
         SpriteDetails {
             x: 0xFF,
             attr: OAMAttr::empty(),
-            tile: (0, 0),
+            tile: Default::default(),
         }
     }
 }
