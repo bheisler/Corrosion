@@ -387,10 +387,18 @@ pub struct CPU {
 
 impl MemSegment for CPU {
     fn read(&mut self, idx: u16) -> u8 {
-        self.mem.read(idx)
+        match idx {
+            0x4014 => 0, //No idea what this should return. PPU dynamic latch garbage, maybe?
+            _ => self.mem.read(idx),
+        }
+        
     }
+    
     fn write(&mut self, idx: u16, val: u8) {
-        self.mem.write(idx, val)
+        match idx {
+            0x4014 => self.dma_transfer(val),
+            _ => self.mem.write(idx, val),
+        }
     }
 }
 
@@ -425,7 +433,7 @@ impl CPU {
         println!{
             "Stack: {:>60}",
             (self.regs.sp..0xFF)
-                .map(|idx| self.mem.read(0x0100 + idx as u16))
+                .map(|idx| self.read(0x0100 + idx as u16))
                 .map(|byte| format!("{:02X}", byte))
                 .fold("".to_string(), |left, right| left + " " + &right )
         }
@@ -485,7 +493,7 @@ impl CPU {
     fn indirect_x(&mut self) -> MemoryAddressingMode {
         let arg = self.load_incr_pc();
         let zp_idx = arg.wrapping_add(self.regs.x);
-        let ptr = self.mem.read_w_zero_page(zp_idx);
+        let ptr = self.read_w_zero_page(zp_idx);
         MemoryAddressingMode {
             ptr_base: ptr,
             ptr: ptr,
@@ -493,7 +501,7 @@ impl CPU {
     }
     fn indirect_y(&mut self) -> MemoryAddressingMode {
         let arg = self.load_incr_pc();
-        let ptr_base = self.mem.read_w_zero_page(arg);
+        let ptr_base = self.read_w_zero_page(arg);
         let ptr = ptr_base.wrapping_add(self.regs.y as u16);
         MemoryAddressingMode {
             ptr_base: ptr_base,
@@ -658,7 +666,7 @@ impl CPU {
     }
     fn jmpi(&mut self) {
         let arg = self.load_w_incr_pc();
-        self.regs.pc = self.mem.read_w_same_page(arg);
+        self.regs.pc = self.read_w_same_page(arg);
     }
     fn jsr(&mut self) {
         let target = self.load_w_incr_pc();
@@ -676,7 +684,7 @@ impl CPU {
         self.regs.pc = self.stack_pop_w();
     }
     fn brk(&mut self) {
-        let target = self.mem.read_w(0xFFFE);
+        let target = self.read_w(0xFFFE);
         let return_addr = self.regs.pc - 1;
         self.regs.pc = target;
         self.stack_push_w(return_addr);
@@ -849,11 +857,11 @@ impl CPU {
     }
 
     pub fn init(&mut self) {
-        self.regs.pc = self.mem.read_w(0xFFFC);
+        self.regs.pc = self.read_w(0xFFFC);
     }
 
     pub fn nmi(&mut self) {
-        let target = self.mem.read_w(0xFFFA);
+        let target = self.read_w(0xFFFA);
         let return_addr = self.regs.pc;
         self.regs.pc = target;
         self.stack_push_w(return_addr);
@@ -862,15 +870,31 @@ impl CPU {
     }
 
     fn load_incr_pc(&mut self) -> u8 {
-        let res = self.mem.read(self.regs.pc);
+        let pc = self.regs.pc;
+        let res = self.read(pc);
         self.regs.pc = self.regs.pc.wrapping_add(1);
         res
     }
 
     fn load_w_incr_pc(&mut self) -> u16 {
-        let res = self.mem.read_w(self.regs.pc);
+        let pc = self.regs.pc;
+        let res = self.read_w(pc);
         self.regs.pc = self.regs.pc.wrapping_add(2);
         res
+    }
+    
+    
+    fn read_w_zero_page(&mut self, zp_idx: u8) -> u16 {
+        let low = self.read(zp_idx as u16) as u16;
+        let high = self.read(zp_idx.wrapping_add(1) as u16) as u16;
+        (high << 8) | low
+    }
+    fn read_w_same_page(&mut self, idx: u16) -> u16 {
+        let page = idx & 0xFF00;
+        let page_idx = idx as u8;
+        let low = self.read(page | page_idx as u16) as u16;
+        let high = self.read(page | page_idx.wrapping_add(1) as u16) as u16;
+        (high << 8) | low
     }
 
     fn set_sign(&mut self, arg: u8) {
@@ -945,19 +969,23 @@ impl CPU {
 
     fn stack_push(&mut self, val: u8) {
         self.regs.sp = self.regs.sp.wrapping_sub(1);
-        self.mem.write(self.regs.sp as u16 + 0x0101, val);
+        let address = self.regs.sp as u16 + 0x0101;
+        self.write(address, val);
     }
     fn stack_push_w(&mut self, val: u16) {
         self.regs.sp = self.regs.sp.wrapping_sub(2);
-        self.mem.write_w(self.regs.sp as u16 + 0x0101, val);
+        let address = self.regs.sp as u16 + 0x0101;
+        self.write_w(address, val);
     }
     fn stack_pop(&mut self) -> u8 {
         self.regs.sp = self.regs.sp.wrapping_add(1);
-        self.mem.read(self.regs.sp as u16 + 0x0100)
+        let address = self.regs.sp as u16 + 0x0100;
+        self.read(address)
     }
     fn stack_pop_w(&mut self) -> u16 {
         self.regs.sp = self.regs.sp.wrapping_add(2);
-        self.mem.read_w(self.regs.sp as u16 + 0x00FF)
+        let address = self.regs.sp as u16 + 0x00FF;
+        self.read_w(address)
     }
 
     fn incr_cycle(&mut self, cycles: u64) {
@@ -988,6 +1016,21 @@ impl CPU {
         let opcode: u8 = self.load_incr_pc();
         decode_opcode!(opcode, self);
         self.incr_cycle(CYCLE_TABLE[opcode as usize] as u64);
+    }
+    
+    fn dma_transfer(&mut self, page: u8) {
+        if self.cycle % 2 == 1 {
+            self.incr_cycle(1)
+        }
+        self.incr_cycle(1);
+        self.incr_cycle(512);
+        
+        let page = (page as u16) << 8;
+        for x in 0u16..256 {
+            let addr = page | x as u16;
+            let byte = self.read(addr);
+            self.mem.ppu.borrow_mut().write(0x2004, byte);
+        }
     }
 
     pub fn halted(&self) -> bool {

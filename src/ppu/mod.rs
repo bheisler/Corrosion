@@ -72,7 +72,7 @@ impl PPU {
             frame: 0,
         }
     }
-
+    
     pub fn run_to(&mut self, cpu_cycle: u64) -> StepResult {
         let mut hit_nmi = false;
         while self.global_cyc < (cpu_cycle * 3) {

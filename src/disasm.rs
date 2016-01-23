@@ -378,7 +378,7 @@ impl<'a> Disassembler<'a> {
         match idx {
             0x2000...0x3FFF => 0xFF,
             0x4000...0x401F => 0xFF,
-            _ => self.cpu.mem.read(idx),
+            _ => self.cpu.read(idx),
         }
     }
     fn read_safe_w(&mut self, idx: u16) -> u16 {
