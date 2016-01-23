@@ -1,6 +1,8 @@
-use ::memory::MemSegment;
-use ppu::Color;
-use ppu::PPU;
+use memory::MemSegment;
+use super::Color;
+use super::PPU;
+use super::PaletteIndex;
+use super::PaletteSet;
 
 bitflags! {
     flags OAMAttr : u8 {
@@ -135,14 +137,24 @@ impl PPU {
         }
     }
     
-    pub fn get_sprite_pixel(&mut self, x: u16, y: u16) -> (SpritePriority, Color) {
+    pub fn get_sprite_pixel(&mut self, x: u16, y: u16) -> (SpritePriority, PaletteIndex) {
         for n in 0..8 {
             let det_x = self.sprite_data.secondary_oam[n].x as u16;
             if det_x <= x && x <= det_x + 8 {
-                return (SpritePriority::Foreground, Color::from_bits_truncate( 0x30 ));
+                let idx = PaletteIndex {
+                    set: PaletteSet::Sprite,
+                    palette_id: 1,
+                    color_id: 1,
+                };
+                return (SpritePriority::Background, idx);
             }
         }
-        return (SpritePriority::Foreground, Color::from_bits_truncate(0x00));
+        let idx = PaletteIndex {
+                    set: PaletteSet::Sprite,
+                    palette_id: 0,
+                    color_id: 0,
+                };
+        return (SpritePriority::Background, idx);
     }
 }
 

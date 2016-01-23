@@ -33,6 +33,32 @@ impl Color {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum PaletteSet{
+    Background, Sprite,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct PaletteIndex {
+    pub set: PaletteSet,
+    pub palette_id: u8,
+    pub color_id: u8,
+}
+
+impl PaletteIndex {
+    fn to_addr(self) -> u16 {
+        let mut addr : u16 = 0x3F00;
+        addr = addr | if self.set == PaletteSet::Sprite { 0x20 } else { 0 };
+        addr = addr | ( self.palette_id as u16 & 0x03 ) << 2;
+        addr = addr | self.color_id as u16 & 0x03;
+        addr
+    }
+    
+    fn is_transparent(&self) -> bool {
+        self.color_id == 0
+    }
+}
+
 pub struct PPU {
     reg: PPUReg,
     ppudata_read_buffer: u8,
@@ -128,15 +154,16 @@ impl PPU {
     }
 
     fn get_pixel(&mut self, x: u16, y: u16) -> Color {
-        let (priority, sprite_color) = self.get_sprite_pixel(x, y);
-        let background_color = self.get_background_pixel(x, y);
+        let (priority, sprite_pal_idx) = self.get_sprite_pixel(x, y);
+        let background_pal_idx = self.get_background_pixel(x, y);
         
-        if sprite_color.bits() != 0 {
-            sprite_color
-        }
-        else {
-            background_color
-        }
+        let pal_idx = match (background_pal_idx, priority, sprite_pal_idx) {
+            (bck, _, spr) if spr.is_transparent() => bck,
+            (bck, _, spr) if bck.is_transparent() => spr,
+            (_, SpritePriority::Foreground, spr) => spr,
+            (bck, SpritePriority::Background, _) => bck, 
+        };
+        self.read_palette(pal_idx)
     }
 
     fn start_vblank(&mut self) -> bool {
@@ -148,6 +175,11 @@ impl PPU {
         } else {
             false
         }
+    }
+    
+    fn read_palette(&mut self, idx: PaletteIndex) -> Color {
+        let bits = self.ppu_mem.read(idx.to_addr());
+        Color::from_bits_truncate(bits)
     }
 
     #[cfg(feature="cputrace")]

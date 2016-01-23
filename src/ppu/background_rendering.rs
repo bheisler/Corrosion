@@ -1,18 +1,24 @@
 use super::PPU;
 use super::Color;
+use super::PaletteIndex;
+use super::PaletteSet;
 use ::memory::MemSegment;
 
 const NAMETABLE_WIDTH: usize = 32;
 
 impl PPU {
-    pub fn get_background_pixel(&mut self, screen_x: u16, screen_y: u16) -> Color {
+    pub fn get_background_pixel(&mut self, screen_x: u16, screen_y: u16) -> PaletteIndex {
         let x = screen_x + self.reg.scroll_x() as u16;
         let y = screen_y + self.reg.scroll_y() as u16;
 
         let color_id = self.get_color_id(x, y);
         let palette_id = self.get_palette_id(x, y);
 
-        self.read_palette(palette_id, color_id)
+        PaletteIndex {
+            set: PaletteSet::Background,
+            palette_id: palette_id,
+            color_id: color_id,
+        }
     }
 
     fn get_color_id(&mut self, x: u16, y: u16) -> u8 {
@@ -77,11 +83,5 @@ impl PPU {
             at >>= 2
         }
         at & 0x03
-    }
-
-    fn read_palette(&mut self, palette_id: u8, color_id: u8) -> Color {
-        let offset = (palette_id << 2) | color_id;
-        let bits = self.ppu_mem.read(0x3F00 + offset as u16);
-        Color::from_bits_truncate(bits)
     }
 }
