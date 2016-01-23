@@ -4,6 +4,12 @@ use super::PPU;
 use super::PaletteIndex;
 use super::PaletteSet;
 
+const TRANSPARENT: PaletteIndex = PaletteIndex{
+    set: PaletteSet::Sprite,
+    palette_id: 0,
+    color_id: 0,
+};
+
 bitflags! {
     flags OAMAttr : u8 {
         const FLIP_VERT = 0b1000_0000,
@@ -11,6 +17,21 @@ bitflags! {
         const BEHIND    = 0b0010_0000,
         const PALETTE1  = 0b0000_0010,
         const PALETTE2  = 0b0000_0001,
+    }
+}
+
+impl OAMAttr {
+    fn palette(&self) -> u8 {
+        self.bits & 0x03
+    } 
+    
+    fn priority(&self) -> SpritePriority {
+        if self.contains(BEHIND) {
+            SpritePriority::Background
+        }
+        else {
+            SpritePriority::Foreground
+        }
     }
 }
 
@@ -58,12 +79,16 @@ impl MemSegment for OAMEntry {
 #[derive(Debug, Copy, Clone)]
 struct SpriteDetails {
     x: u8,
+    attr: OAMAttr,
+    tile: (u8, u8),
 }
 
 impl Default for SpriteDetails {
     fn default() -> SpriteDetails {
         SpriteDetails{
             x: 0xFF,
+            attr: OAMAttr::empty(),
+            tile: (0, 0),
         }
     }
 }
@@ -117,7 +142,7 @@ impl PPU {
         for x in 0..64 {
             let oam = self.sprite_data.primary_oam[x];
             if self.is_on_scanline( oam, scanline ) {
-                self.sprite_data.secondary_oam[n] = self.convert_oam_entry(oam);
+                self.sprite_data.secondary_oam[n] = self.convert_oam_entry(oam, scanline);
                 n += 1;
                 if n == 8 {
                     return;
@@ -128,33 +153,45 @@ impl PPU {
     
     fn is_on_scanline(&self, oam: OAMEntry, scanline: i16) -> bool {
         let y = oam.y as i16;
-        y <= scanline && scanline <= y + 8
+        y <= scanline && scanline < y + 8
     }
     
-    fn convert_oam_entry(&mut self, oam: OAMEntry ) -> SpriteDetails {
+    fn convert_oam_entry(&mut self, oam: OAMEntry, sl: i16 ) -> SpriteDetails {
+        let tile_id = oam.tile;
+        let fine_y_scroll = sl as u16 - oam.y as u16;
+        let tile_table = self.reg.ppuctrl.sprite_table();
+        let tile = self.read_tile_pattern(tile_id, fine_y_scroll, tile_table);
         SpriteDetails {
             x: oam.x,
+            attr: oam.attr,
+            tile: tile,
         }
     }
     
     pub fn get_sprite_pixel(&mut self, x: u16, y: u16) -> (SpritePriority, PaletteIndex) {
         for n in 0..8 {
-            let det_x = self.sprite_data.secondary_oam[n].x as u16;
-            if det_x <= x && x <= det_x + 8 {
-                let idx = PaletteIndex {
-                    set: PaletteSet::Sprite,
-                    palette_id: 1,
-                    color_id: 1,
-                };
-                return (SpritePriority::Background, idx);
+            let det_x = self.sprite_data.secondary_oam[n];
+            if self.is_active( det_x, x ) {
+                return self.do_get_pixel( det_x, x );
             }
         }
+        return (SpritePriority::Background, TRANSPARENT);
+    }
+    
+    fn is_active(&self, details: SpriteDetails, x: u16) -> bool {
+        x.wrapping_sub(details.x as u16) <= 8
+    }
+    
+    fn do_get_pixel(&mut self, details: SpriteDetails, x: u16) -> (SpritePriority, PaletteIndex) {
+        let fine_x = x - details.x as u16;
+        let attr = details.attr;
+        let color_id = self.get_color_in_pattern(details.tile, fine_x as u32);
         let idx = PaletteIndex {
-                    set: PaletteSet::Sprite,
-                    palette_id: 0,
-                    color_id: 0,
-                };
-        return (SpritePriority::Background, idx);
+            set: PaletteSet::Sprite,
+            palette_id: attr.palette(),
+            color_id: color_id,
+        };
+        return (attr.priority(), idx);
     }
 }
 

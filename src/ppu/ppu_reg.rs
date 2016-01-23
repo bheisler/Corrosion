@@ -37,6 +37,14 @@ impl PPUCtrl {
             0x0000
         }
     }
+    
+    pub fn sprite_table(&self) -> u16 {
+        if self.bits & 0b0010_0000 != 0 {
+            0x1000
+        } else {
+            0x0000
+        }
+    }
 
     pub fn generate_vblank_nmi(&self) -> bool {
         self.bits & 0b1000_0000 != 0
