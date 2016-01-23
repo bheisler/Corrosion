@@ -12,8 +12,10 @@ pub struct SDLScreen<'a> {
     texture: Texture,
 }
 
-const SCREEN_WIDTH: u32 = ::ppu::SCREEN_WIDTH as u32;
-const SCREEN_HEIGHT: u32 = ::ppu::SCREEN_HEIGHT as u32;
+const SCALE: usize = 3;
+
+const SCREEN_WIDTH: u32 = (::ppu::SCREEN_WIDTH * SCALE) as u32;
+const SCREEN_HEIGHT: u32 = (::ppu::SCREEN_HEIGHT * SCALE) as u32;
 
 impl<'a> SDLScreen<'a> {
     pub fn new(sdl_context: &Sdl) -> SDLScreen<'a> {
@@ -52,9 +54,14 @@ impl<'a> Screen for SDLScreen<'a> {
     fn draw(&mut self, buf: &[Color; SCREEN_BUFFER_SIZE]) {
         self.texture
             .with_lock(None, |buffer: &mut [u8], pitch: usize| {
-                for y in 0..::ppu::SCREEN_HEIGHT {
-                    for x in 0..::ppu::SCREEN_WIDTH {
-                        let color = buf[y * ::ppu::SCREEN_WIDTH + x];
+                for y in 0..SCREEN_HEIGHT {
+                    for x in 0..SCREEN_HEIGHT {
+                        let y = y as usize;
+                        let x = x as usize;
+                        let nes_x = x / SCALE;
+                        let nes_y = y / SCALE;
+                        let nes_idx = nes_y * ::ppu::SCREEN_WIDTH + nes_x;
+                        let color = buf[nes_idx];
                         let pal_idx = color.bits() as usize * 3;
                         let offset = y * pitch + x * 3;
                         buffer[offset + 0] = PALETTE[pal_idx + 0];
