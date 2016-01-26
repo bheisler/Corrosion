@@ -155,7 +155,7 @@ impl PPU {
     fn run_cycle(&mut self) -> bool {
         match (self.cyc, self.sl) {
             (c, -1) => self.prerender_scanline(c),
-            (c, sl @ 0...239) => self.visible_scanline(c, sl),
+            (c, sl @ 0...239) => self.visible_scanline(c, sl as u16),
             (_, 240) => (), //Post-render idle scanline
             (1, 241) => return self.start_vblank(),
             (_, 241...260) => (), //VBlank lines
@@ -173,7 +173,7 @@ impl PPU {
         }
     }
 
-    fn visible_scanline(&mut self, pixel: u16, scanline: i16) {
+    fn visible_scanline(&mut self, pixel: u16, scanline: u16) {
         // Nothing here yet
         self.visible_scanline_sprite(pixel, scanline);
         if pixel >= 256 {

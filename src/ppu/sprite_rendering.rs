@@ -130,13 +130,13 @@ impl MemSegment for SpriteRenderer {
 }
 
 impl PPU {
-    pub fn visible_scanline_sprite(&mut self, pixel: u16, scanline: i16) {
+    pub fn visible_scanline_sprite(&mut self, pixel: u16, scanline: u16) {
         if pixel == 0 {
             self.sprite_eval(scanline);
         }
     }
 
-    fn sprite_eval(&mut self, scanline: i16) {
+    fn sprite_eval(&mut self, scanline: u16) {
         let mut n = 0;
         self.sprite_data.secondary_oam = [Default::default(); 8];
         for x in 0..64 {
@@ -151,14 +151,14 @@ impl PPU {
         }
     }
 
-    fn is_on_scanline(&self, oam: OAMEntry, scanline: i16) -> bool {
-        let y = oam.y as i16;
+    fn is_on_scanline(&self, oam: OAMEntry, scanline: u16) -> bool {
+        let y = oam.y as u16;
         y <= scanline && scanline < y + 8
     }
 
-    fn convert_oam_entry(&mut self, oam: OAMEntry, sl: i16) -> SpriteDetails {
+    fn convert_oam_entry(&mut self, oam: OAMEntry, sl: u16) -> SpriteDetails {
         let tile_id = oam.tile;
-        let fine_y_scroll = PPU::get_fine_scroll(sl as u16,
+        let fine_y_scroll = PPU::get_fine_scroll(sl,
                                                  oam.y as u16,
                                                  oam.attr.contains(FLIP_VERT));
         let tile_table = self.reg.ppuctrl.sprite_table();
