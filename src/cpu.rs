@@ -1,5 +1,11 @@
 #![macro_use]
 
+const OAMDMA: u16 = 0x4014;
+const NMI_VECTOR: u16 = 0xFFFA;
+const RESET_VECTOR: u16 = 0xFFFC;
+const IRQ_VECTOR: u16 = 0xFFFE;
+const STACK_PAGE: u16 = 0x0100;
+
 macro_rules! decode_opcode {
     ($opcode:expr, $this:expr) => { match $opcode {
         //Stores
@@ -388,7 +394,7 @@ pub struct CPU {
 impl MemSegment for CPU {
     fn read(&mut self, idx: u16) -> u8 {
         match idx {
-            0x4014 => 0, //No idea what this should return. PPU dynamic latch garbage, maybe?
+            OAMDMA => 0, //No idea what this should return. PPU dynamic latch garbage, maybe?
             _ => self.mem.read(idx),
         }
 
@@ -396,7 +402,7 @@ impl MemSegment for CPU {
 
     fn write(&mut self, idx: u16, val: u8) {
         match idx {
-            0x4014 => self.dma_transfer(val),
+            OAMDMA => self.dma_transfer(val),
             _ => self.mem.write(idx, val),
         }
     }
@@ -433,7 +439,7 @@ impl CPU {
         println!{
             "Stack: {:>60}",
             (self.regs.sp..0xFF)
-                .map(|idx| self.read(0x0100 + idx as u16))
+                .map(|idx| self.read(STACK_PAGE + idx as u16))
                 .map(|byte| format!("{:02X}", byte))
                 .fold("".to_string(), |left, right| left + " " + &right )
         }
@@ -684,7 +690,7 @@ impl CPU {
         self.regs.pc = self.stack_pop_w();
     }
     fn brk(&mut self) {
-        let target = self.read_w(0xFFFE);
+        let target = self.read_w(IRQ_VECTOR);
         let return_addr = self.regs.pc - 1;
         self.regs.pc = target;
         self.stack_push_w(return_addr);
@@ -857,11 +863,11 @@ impl CPU {
     }
 
     pub fn init(&mut self) {
-        self.regs.pc = self.read_w(0xFFFC);
+        self.regs.pc = self.read_w(RESET_VECTOR);
     }
 
     pub fn nmi(&mut self) {
-        let target = self.read_w(0xFFFA);
+        let target = self.read_w(NMI_VECTOR);
         let return_addr = self.regs.pc;
         self.regs.pc = target;
         self.stack_push_w(return_addr);
@@ -969,22 +975,22 @@ impl CPU {
 
     fn stack_push(&mut self, val: u8) {
         self.regs.sp = self.regs.sp.wrapping_sub(1);
-        let address = self.regs.sp as u16 + 0x0101;
+        let address = self.regs.sp as u16 + STACK_PAGE + 1;
         self.write(address, val);
     }
     fn stack_push_w(&mut self, val: u16) {
         self.regs.sp = self.regs.sp.wrapping_sub(2);
-        let address = self.regs.sp as u16 + 0x0101;
+        let address = self.regs.sp as u16 + STACK_PAGE + 1;
         self.write_w(address, val);
     }
     fn stack_pop(&mut self) -> u8 {
         self.regs.sp = self.regs.sp.wrapping_add(1);
-        let address = self.regs.sp as u16 + 0x0100;
+        let address = self.regs.sp as u16 + STACK_PAGE;
         self.read(address)
     }
     fn stack_pop_w(&mut self) -> u16 {
         self.regs.sp = self.regs.sp.wrapping_add(2);
-        let address = self.regs.sp as u16 + 0x00FF;
+        let address = self.regs.sp as u16 + STACK_PAGE - 1;
         self.read_w(address)
     }
 
@@ -1026,7 +1032,7 @@ impl CPU {
         self.incr_cycle(512);
 
         let page = (page as u16) << 8;
-        for x in 0u16..256 {
+        for x in 0x0000..0x00FF {
             let addr = page | x as u16;
             let byte = self.read(addr);
             self.mem.ppu.borrow_mut().write(0x2004, byte);
