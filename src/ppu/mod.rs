@@ -164,8 +164,10 @@ impl PPU {
         false
     }
 
-    fn prerender_scanline(&mut self, _: u16) {
-        // Nothing here yet
+    fn prerender_scanline(&mut self, cycle: u16) {
+        if cycle == 0 {
+            self.reg.ppustat.remove(VBLANK);
+        }
     }
 
     fn visible_scanline(&mut self, pixel: u16, scanline: i16) {
