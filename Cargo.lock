@@ -1,5 +1,5 @@
 [root]
-name = "nes-emulator"
+name = "corrosion"
 version = "0.1.0"
 dependencies = [
  "bitflags 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",

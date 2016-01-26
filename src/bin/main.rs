@@ -1,9 +1,9 @@
-extern crate nes_emulator;
+extern crate corrosion;
 
 use std::env;
 use std::path::Path;
-use nes_emulator::cart::Cart;
-use nes_emulator::start_emulator;
+use corrosion::cart::Cart;
+use corrosion::start_emulator;
 
 fn main() {
     let args = env::args();
