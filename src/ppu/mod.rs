@@ -15,6 +15,7 @@ mod sprite_rendering;
 use ppu::sprite_rendering::*;
 
 mod background_rendering;
+use ppu::background_rendering::*;
 
 pub const SCREEN_WIDTH: usize = 256;
 pub const SCREEN_HEIGHT: usize = 240;
@@ -94,6 +95,7 @@ pub struct PPU {
     screen_buffer: [Color; SCREEN_BUFFER_SIZE],
 
     sprite_data: SpriteRenderer,
+    background_data: BackgroundRenderer,
 
     global_cyc: u64,
     cyc: u16,
@@ -117,6 +119,7 @@ impl PPU {
             screen: screen,
 
             sprite_data: Default::default(),
+            background_data: Default::default(),
 
             global_cyc: 0,
             cyc: 0,
@@ -174,8 +177,8 @@ impl PPU {
     }
 
     fn visible_scanline(&mut self, pixel: u16, scanline: u16) {
-        // Nothing here yet
         self.visible_scanline_sprite(pixel, scanline);
+        self.visible_scanline_background(pixel, scanline);
         if pixel >= 256 {
             return;
         }

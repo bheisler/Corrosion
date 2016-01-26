@@ -1,16 +1,50 @@
 use super::PPU;
 use super::PaletteIndex;
 use super::PaletteSet;
+use super::TilePattern;
 use memory::MemSegment;
 
 const NAMETABLE_WIDTH: usize = 32;
 
+pub struct BackgroundRenderer {
+    tile: TilePattern,
+    attr: u8,
+    fetch: bool,
+}
+
+impl Default for BackgroundRenderer {
+    fn default() -> BackgroundRenderer {
+        BackgroundRenderer {
+            tile: Default::default(),
+            attr: 0,
+            fetch: true,
+        }
+    }
+}
+
 impl PPU {
+    pub fn visible_scanline_background(&mut self, pixel: u16, scanline: u16) {
+        let x = pixel + self.reg.scroll_x() as u16;
+        let y = scanline + self.reg.scroll_y() as u16;
+        if self.background_data.fetch {
+            let nametable_addr = self.get_nametable_addr(x, y);
+            let tile_idx = self.ppu_mem.read(nametable_addr);
+    
+            let tile_table = self.reg.ppuctrl.background_table();
+            self.background_data.tile = self.read_tile_pattern(tile_idx, y & 0x07, tile_table);
+            
+            let attribute_addr = self.get_attribute_addr(x, y);
+            self.background_data.attr = self.ppu_mem.read(attribute_addr);
+            
+            self.background_data.fetch = false;
+        }
+    }
+    
     pub fn get_background_pixel(&mut self, screen_x: u16, screen_y: u16) -> PaletteIndex {
         let x = screen_x + self.reg.scroll_x() as u16;
         let y = screen_y + self.reg.scroll_y() as u16;
 
-        let color_id = self.get_color_id(x, y);
+        let color_id = self.get_color_id(x);
         let palette_id = self.get_palette_id(x, y);
 
         PaletteIndex {
@@ -20,14 +54,11 @@ impl PPU {
         }
     }
 
-    fn get_color_id(&mut self, x: u16, y: u16) -> u8 {
-        let nametable_addr = self.get_nametable_addr(x, y);
-        let tile_idx = self.ppu_mem.read(nametable_addr);
-
-        let tile_table = self.reg.ppuctrl.background_table();
-        let pattern = self.read_tile_pattern(tile_idx, y & 0x07, tile_table);
-
-        self.get_color_in_pattern(pattern, x as u32 & 0x07)
+    fn get_color_id(&mut self, x: u16) -> u8 {
+        let pattern = self.background_data.tile;
+        let fine_x = x as u32 & 0x07;
+        self.background_data.fetch = fine_x == 7;
+        self.get_color_in_pattern(pattern, fine_x)
     }
 
     fn get_nametable_addr(&self, px_x: u16, px_y: u16) -> u16 {
@@ -38,9 +69,8 @@ impl PPU {
     }
 
     fn get_palette_id(&mut self, x: u16, y: u16) -> u8 {
-        let attribute_addr = self.get_attribute_addr(x, y);
-        let attribute_byte = self.ppu_mem.read(attribute_addr);
-        self.get_palette_from_attribute(attribute_byte, x, y)
+        let attr = self.background_data.attr;
+        self.get_palette_from_attribute(attr, x, y)
     }
 
     fn get_attribute_addr(&self, x: u16, y: u16) -> u16 {
