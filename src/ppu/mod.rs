@@ -168,6 +168,9 @@ impl PPU {
         if cycle == 0 {
             self.reg.ppustat.remove(VBLANK);
         }
+        if cycle == 339 && self.frame % 2 == 1 {
+            self.tick_cycle()
+        }
     }
 
     fn visible_scanline(&mut self, pixel: u16, scanline: i16) {
