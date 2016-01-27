@@ -4,6 +4,7 @@ extern crate bitflags;
 #[macro_use]
 extern crate quick_error;
 extern crate sdl2;
+extern crate stopwatch;
 
 pub mod cart;
 pub mod memory;
@@ -29,6 +30,8 @@ use sdl2::event::Event;
 use std::rc::Rc;
 use std::cell::RefCell;
 
+use stopwatch::Stopwatch;
+
 fn pump_events(pump: &mut EventPump) -> bool {
     for event in pump.poll_iter() {
         match event {
@@ -51,7 +54,7 @@ fn run_frame(cpu: &mut CPU, ppu: &Rc<RefCell<PPU>>) {
         if frame_end {
             break;
         }
-    } 
+    }
 }
 
 pub fn start_emulator(cart: Cart) {
@@ -68,10 +71,17 @@ pub fn start_emulator(cart: Cart) {
     let mut cpu = CPU::new(mem);
     cpu.init();
 
+    let mut stopwatch = Stopwatch::start_new();
+    let smoothing = 0.9;
+    let mut avg_frame_time = 0.0f64;
     loop {
         if pump_events(&mut event_pump) || cpu.halted() {
             break;
         }
         run_frame(&mut cpu, &ppu);
+        let current = stopwatch.elapsed().num_nanoseconds().unwrap() as f64;
+        avg_frame_time = (avg_frame_time * smoothing) + (current * (1.0 - smoothing));
+        println!("Frames per second:{:.*}", 2, 1000000000.0 / avg_frame_time);
+        stopwatch.restart();
     }
 }

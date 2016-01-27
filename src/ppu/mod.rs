@@ -79,10 +79,7 @@ pub struct TilePattern {
 
 impl Default for TilePattern {
     fn default() -> TilePattern {
-        TilePattern{
-            lo: 0,
-            hi: 0,
-        }
+        TilePattern { lo: 0, hi: 0 }
     }
 }
 
@@ -216,11 +213,15 @@ impl PPU {
         Color::from_bits_truncate(bits)
     }
 
-    fn read_tile_pattern(&mut self, tile_id: u8, fine_y_scroll: u16, tile_table: u16) -> TilePattern {
+    fn read_tile_pattern(&mut self,
+                         tile_id: u8,
+                         fine_y_scroll: u16,
+                         tile_table: u16)
+                         -> TilePattern {
         let lo_addr = self.get_tile_addr(tile_id, 0, fine_y_scroll, tile_table);
         let hi_addr = self.get_tile_addr(tile_id, 8, fine_y_scroll, tile_table);
-        TilePattern{
-            lo: self.ppu_mem.read(lo_addr), 
+        TilePattern {
+            lo: self.ppu_mem.read(lo_addr),
             hi: self.ppu_mem.read(hi_addr),
         }
     }
@@ -257,7 +258,7 @@ impl PPU {
     pub fn vram_addr(&self) -> u16 {
         self.reg.ppuaddr
     }
-    
+
     pub fn frame(&self) -> u32 {
         self.frame
     }

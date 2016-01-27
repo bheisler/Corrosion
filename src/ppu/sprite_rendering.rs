@@ -158,9 +158,7 @@ impl PPU {
 
     fn convert_oam_entry(&mut self, oam: OAMEntry, sl: u16) -> SpriteDetails {
         let tile_id = oam.tile;
-        let fine_y_scroll = PPU::get_fine_scroll(sl,
-                                                 oam.y as u16,
-                                                 oam.attr.contains(FLIP_VERT));
+        let fine_y_scroll = PPU::get_fine_scroll(sl, oam.y as u16, oam.attr.contains(FLIP_VERT));
         let tile_table = self.reg.ppuctrl.sprite_table();
         let tile = self.read_tile_pattern(tile_id, fine_y_scroll, tile_table);
         SpriteDetails {

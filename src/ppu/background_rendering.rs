@@ -29,17 +29,17 @@ impl PPU {
         if self.background_data.fetch {
             let nametable_addr = self.get_nametable_addr(x, y);
             let tile_idx = self.ppu_mem.read(nametable_addr);
-    
+
             let tile_table = self.reg.ppuctrl.background_table();
             self.background_data.tile = self.read_tile_pattern(tile_idx, y & 0x07, tile_table);
-            
+
             let attribute_addr = self.get_attribute_addr(x, y);
             self.background_data.attr = self.ppu_mem.read(attribute_addr);
-            
+
             self.background_data.fetch = false;
         }
     }
-    
+
     pub fn get_background_pixel(&mut self, screen_x: u16, screen_y: u16) -> PaletteIndex {
         let x = screen_x + self.reg.scroll_x() as u16;
         let y = screen_y + self.reg.scroll_y() as u16;
