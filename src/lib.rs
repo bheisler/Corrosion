@@ -39,6 +39,21 @@ fn pump_events(pump: &mut EventPump) -> bool {
     false
 }
 
+fn run_frame(cpu: &mut CPU, ppu: &Rc<RefCell<PPU>>) {
+    loop {
+        let cycle = cpu.cycle();
+        let nmi = ppu.borrow_mut().run_to(cycle);
+        let frame_end = nmi == ::ppu::StepResult::NMI;
+        if frame_end {
+            cpu.nmi();
+        }
+        cpu.step();
+        if frame_end {
+            break;
+        }
+    } 
+}
+
 pub fn start_emulator(cart: Cart) {
     let sdl = sdl2::init().unwrap();
     let screen = screen::sdl::SDLScreen::new(&sdl);
@@ -57,11 +72,6 @@ pub fn start_emulator(cart: Cart) {
         if pump_events(&mut event_pump) || cpu.halted() {
             break;
         }
-        let cycle = cpu.cycle();
-        let nmi = ppu.borrow_mut().run_to(cycle);
-        if nmi == ::ppu::StepResult::NMI {
-            cpu.nmi();
-        }
-        cpu.step();
+        run_frame(&mut cpu, &ppu);
     }
 }

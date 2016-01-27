@@ -257,6 +257,10 @@ impl PPU {
     pub fn vram_addr(&self) -> u16 {
         self.reg.ppuaddr
     }
+    
+    pub fn frame(&self) -> u32 {
+        self.frame
+    }
 }
 
 impl MemSegment for PPU {
