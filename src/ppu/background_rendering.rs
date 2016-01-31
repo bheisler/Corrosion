@@ -9,7 +9,6 @@ const NAMETABLE_WIDTH: usize = 32;
 pub struct BackgroundRenderer {
     tile: TilePattern,
     attr: u8,
-    fetch: bool,
 }
 
 impl Default for BackgroundRenderer {
@@ -17,7 +16,6 @@ impl Default for BackgroundRenderer {
         BackgroundRenderer {
             tile: Default::default(),
             attr: 0,
-            fetch: true,
         }
     }
 }
@@ -26,7 +24,7 @@ impl PPU {
     pub fn visible_scanline_background(&mut self, pixel: u16, scanline: u16) {
         let x = pixel + self.reg.scroll_x() as u16;
         let y = scanline + self.reg.scroll_y() as u16;
-        if self.background_data.fetch {
+        if x % 8 == 0 {
             let nametable_addr = self.get_nametable_addr(x, y);
             let tile_idx = self.ppu_mem.read(nametable_addr);
 
@@ -35,8 +33,6 @@ impl PPU {
 
             let attribute_addr = self.get_attribute_addr(x, y);
             self.background_data.attr = self.ppu_mem.read(attribute_addr);
-
-            self.background_data.fetch = false;
         }
     }
 
@@ -57,11 +53,10 @@ impl PPU {
     fn get_color_id(&mut self, x: u16) -> u8 {
         let pattern = self.background_data.tile;
         let fine_x = x as u32 & 0x07;
-        self.background_data.fetch = fine_x == 7;
         self.get_color_in_pattern(pattern, fine_x)
     }
 
-    fn get_nametable_addr(&self, px_x: u16, px_y: u16) -> u16 {
+    pub fn get_nametable_addr(&self, px_x: u16, px_y: u16) -> u16 {
         let x = px_x / 8;
         let y = px_y / 8;
         let result = self.reg.ppuctrl.nametable_addr() + y * NAMETABLE_WIDTH as u16 + x;
