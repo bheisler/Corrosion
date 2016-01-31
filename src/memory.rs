@@ -70,12 +70,12 @@ pub struct CpuMemory {
     ram: RAM,
     pub ppu: Rc<RefCell<PPU>>,
     apu: APU,
-    io: IO,
+    io: Rc<RefCell<IO>>,
     cart: Rc<RefCell<Cart>>,
 }
 
 impl CpuMemory {
-    pub fn new(ppu: Rc<RefCell<PPU>>, apu: APU, io: IO, cart: Rc<RefCell<Cart>>) -> CpuMemory {
+    pub fn new(ppu: Rc<RefCell<PPU>>, apu: APU, io: Rc<RefCell<IO>>, cart: Rc<RefCell<Cart>>) -> CpuMemory {
         CpuMemory {
             ram: RAM::new(),
             ppu: ppu,
@@ -92,7 +92,7 @@ impl MemSegment for CpuMemory {
             0x0000...0x1FFF => self.ram.read(idx),
             0x2000...0x3FFF => self.ppu.borrow_mut().read(idx),
             0x4000...0x4015 => self.apu.read(idx),
-            0x4016...0x4017 => self.io.read(idx),
+            0x4016...0x4017 => self.io.borrow_mut().read(idx),
             0x4018...0x4019 => self.apu.read(idx),
             0x4020...0xFFFF => self.cart.borrow().prg_read(idx),
             x => invalid_address!(x),
@@ -104,7 +104,7 @@ impl MemSegment for CpuMemory {
             0x0000...0x1FFF => self.ram.write(idx, val),
             0x2000...0x3FFF => self.ppu.borrow_mut().write(idx, val),
             0x4000...0x4015 => self.apu.write(idx, val),
-            0x4016 => self.io.write(idx, val),
+            0x4016 => self.io.borrow_mut().write(idx, val),
             0x4017...0x4019 => self.apu.write(idx, val),
             0x4020...0xFFFF => self.cart.borrow_mut().prg_write(idx, val),
             x => invalid_address!(x),
@@ -119,6 +119,7 @@ mod tests {
     use std::cell::RefCell;
     use mappers::{Mapper, MapperParams};
     use screen::DummyScreen;
+    use io::DummyIO;
 
     fn create_test_memory() -> CpuMemory {
         let nrom = Mapper::new(0,
@@ -127,7 +128,7 @@ mod tests {
         let cart = Rc::new(RefCell::new(cart));
         let ppu = ::ppu::PPU::new(cart.clone(), Box::new(DummyScreen::new()));
         let ppu = Rc::new(RefCell::new(ppu));
-        CpuMemory::new(ppu, ::apu::APU::new(), ::io::IO::new(), cart)
+        CpuMemory::new(ppu, ::apu::APU::new(), Rc::new(RefCell::new(DummyIO::new())), cart)
     }
 
     #[test]
