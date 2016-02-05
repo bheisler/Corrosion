@@ -14,6 +14,7 @@ pub mod apu;
 pub mod io;
 pub mod cpu;
 pub mod screen;
+pub mod audio;
 
 mod util;
 
@@ -63,12 +64,13 @@ fn run_frame(cpu: &mut CPU, io: &Rc<RefCell<IO>>, ppu: &Rc<RefCell<PPU>>) {
 pub fn start_emulator(cart: Cart) {
     let sdl = sdl2::init().unwrap();
     let screen = screen::sdl::SDLScreen::new(&sdl);
+    let audio_out = audio::sdl::SDLAudioOut::new(&sdl);
     let event_pump = Rc::new(RefCell::new(sdl.event_pump().unwrap()));
 
     let cart: Rc<RefCell<Cart>> = Rc::new(RefCell::new(cart));
     let ppu = PPU::new(cart.clone(), Box::new(screen));
     let ppu = Rc::new(RefCell::new(ppu));
-    let apu = APU::new();
+    let apu = APU::new(Box::new(audio_out));
     let io : Rc<RefCell<IO>> = Rc::new(RefCell::new(io::sdl::SdlIO::new(event_pump.clone())));
     let mem = CpuMemory::new(ppu.clone(), apu, io.clone(), cart);
     let mut cpu = CPU::new(mem);

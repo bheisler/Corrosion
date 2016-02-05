@@ -1,4 +1,5 @@
 use super::memory::MemSegment;
+use audio::AudioOut;
 
 struct Pulse {
     flags: u8,
@@ -77,10 +78,12 @@ pub struct APU {
     frame: u8,
     control: u8,
     status: u8,
+    
+    device: Box<AudioOut>,
 }
 
 impl APU {
-    pub fn new() -> APU {
+    pub fn new( device: Box<AudioOut> ) -> APU {
         APU {
             pulse1: Pulse::new(),
             pulse2: Pulse::new(),
@@ -90,6 +93,8 @@ impl APU {
             frame: 0,
             control: 0,
             status: 0,
+            
+            device: device,
         }
     }
 }
@@ -137,9 +142,10 @@ impl MemSegment for APU {
 mod tests {
     use super::*;
     use memory::MemSegment;
+    use audio::DummyAudioOut;
 
     fn assert_register_writable(idx: u16, getter: &Fn(&APU) -> u8) {
-        let mut apu = APU::new();
+        let mut apu = APU::new(Box::new(DummyAudioOut));
         apu.write(idx, 12);
         assert_eq!(getter(&apu), 12);
         apu.write(idx, 125);
@@ -147,7 +153,7 @@ mod tests {
     }
 
     fn assert_register_not_readable(idx: u16) {
-        let mut apu = APU::new();
+        let mut apu = APU::new(Box::new(DummyAudioOut));
         apu.write(idx, 12);
         assert_eq!(apu.read(idx), 0);
         apu.write(idx, 125);

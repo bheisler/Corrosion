@@ -120,6 +120,7 @@ mod tests {
     use mappers::{Mapper, MapperParams};
     use screen::DummyScreen;
     use io::DummyIO;
+    use audio::DummyAudioOut;
 
     fn create_test_memory() -> CpuMemory {
         let nrom = Mapper::new(0,
@@ -128,7 +129,7 @@ mod tests {
         let cart = Rc::new(RefCell::new(cart));
         let ppu = ::ppu::PPU::new(cart.clone(), Box::new(DummyScreen::new()));
         let ppu = Rc::new(RefCell::new(ppu));
-        CpuMemory::new(ppu, ::apu::APU::new(), Rc::new(RefCell::new(DummyIO::new())), cart)
+        CpuMemory::new(ppu, ::apu::APU::new(Box::new(DummyAudioOut)), Rc::new(RefCell::new(DummyIO::new())), cart)
     }
 
     #[test]
