@@ -85,8 +85,57 @@ impl Length {
     }
 }
 
+struct Envelope {
+    should_loop: bool,
+    disable: bool,
+    n: u8,
+    
+    divider: u8,
+    counter: u8,
+}
+
+impl Envelope {
+    fn new() -> Envelope {
+        Envelope {
+            should_loop: false,
+            disable: false,
+            n: 0,
+            divider: 0,
+            counter: 0,
+        }
+    }
+    
+    fn write(&mut self, val: u8) {
+        self.should_loop = (val >> 5) & 0x01 != 0;
+        self.disable     = (val >> 6) & 0x01 != 0;
+        self.n           = val & 0x0F;
+        self.divider = self.n;
+        self.counter = 15;
+    }
+    
+    fn tick(&mut self) {
+        if self.divider == 0 {
+            self.envelope_tick();
+            self.divider = self.n;
+        }
+        else {
+            self.divider -= 1;
+        }
+    }
+    
+    fn envelope_tick(&mut self) {
+        if self.should_loop && self.counter == 0 {
+            self.counter = 15;
+        }
+        else {
+            self.counter = self.counter.saturating_sub(1);
+        }
+    }
+}
+
 struct Pulse {
     flags: u8,
+    envelope: Envelope,
     sweep: u8,
     timer: u8,
     length: Length,
@@ -96,6 +145,7 @@ impl Pulse {
     fn new() -> Pulse {
         Pulse {
             flags: 0,
+            envelope: Envelope::new(),
             sweep: 0,
             timer: 0,
             length: Length::new(5),
@@ -106,7 +156,10 @@ impl Pulse {
 impl Writable for Pulse {
     fn write(&mut self, idx: u16, val: u8) {
         match idx % 4 {
-            0 => self.length.write_halt(val),
+            0 => {
+                self.length.write_halt(val);
+                self.envelope.write(val);
+            },
             1 => (),
             2 => (),
             3 => self.length.write_counter(val),
@@ -144,7 +197,7 @@ impl Writable for Triangle {
 }
 
 struct Noise {
-    volume: u8,
+    envelope: Envelope,
     mode: u8,
     length: Length,
 }
@@ -152,7 +205,7 @@ struct Noise {
 impl Noise {
     fn new() -> Noise {
         Noise {
-            volume: 0,
+            envelope: Envelope::new(),
             mode: 0,
             length: Length::new(5),
         }
@@ -162,7 +215,10 @@ impl Noise {
 impl Writable for Noise {
     fn write(&mut self, idx: u16, val: u8) {
         match idx % 4 {
-            0 => self.length.write_halt(val),
+            0 => {
+                self.length.write_halt(val);
+                self.envelope.write(val);
+            },
             1 => (),
             2 => (),
             3 => self.length.write_counter(val),
