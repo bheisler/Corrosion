@@ -1,6 +1,11 @@
 use super::memory::MemSegment;
 use audio::{AudioOut};
 
+pub type Sample = i16;
+
+const CPU_CYCLES_PER_EVEN_TICK: u64 = 7438;
+const CPUCYCLES_PER_ODD_TICK: u64 = 7439;
+
 const NES_FPS: usize = 60;
 const FRAMES_PER_BUFFER : usize = 6;
 pub const BUFFERS_PER_SECOND : usize = NES_FPS / FRAMES_PER_BUFFER; //must always be a positive integer
@@ -10,7 +15,14 @@ const SAMPLES_PER_FRAME: usize = (SAMPLE_RATE / NES_FPS);
 pub const BUFFER_SIZE: usize = SAMPLES_PER_FRAME * FRAMES_PER_BUFFER;
 
 pub struct OutputBuffer {
-    pub samples: [f32; BUFFER_SIZE as usize],
+    pub samples: [i16; BUFFER_SIZE as usize],
+}
+
+bitflags! {
+    flags Frame : u8 {
+        const MODE = 0b1000_0000, //0 = 4-step, 1 = 5-step
+        const IRQ  = 0b0100_0000, //0 = disabled, 1 = enabled
+    }
 }
 
 struct Pulse {
@@ -87,21 +99,17 @@ pub struct APU {
     triangle: Triangle,
     noise: Noise,
     dmc: DMC,
-    frame: u8,
+    frame: Frame,
     control: u8,
     status: u8,
     
-    frame_count: usize,
-    
-    square: SquareWave,
     device: Box<AudioOut>,
+    
+    global_cyc: u64,
+    tick: u64,
+    next_tick_cyc: u64,
 }
 
-struct SquareWave {
-    phase_inc: f32,
-    phase: f32,
-    volume: f32
-}
 
 impl APU {
     pub fn new( device: Box<AudioOut> ) -> APU {
@@ -111,40 +119,71 @@ impl APU {
             triangle: Triangle::new(),
             noise: Noise::new(),
             dmc: DMC::new(),
-            frame: 0,
+            frame: Frame::empty(),
             control: 0,
             status: 0,
             
-            frame_count: 0,
-            
-            square: SquareWave {
-                phase_inc: 612.0 / SAMPLE_RATE as f32,
-                phase: 0.0,
-                volume: 0.25
-            },
             device: device,
+            
+            global_cyc: 0,
+            tick: 0,
+            next_tick_cyc: 0,
         }
     }
     
-    pub fn generate(&mut self) {
-        self.frame_count += 1;
-        if self.frame_count % FRAMES_PER_BUFFER != 0 {
-            return;
+    pub fn run_to(&mut self, cpu_cycle: u64) {
+        while ( self.global_cyc < cpu_cycle ) {
+            if self.global_cyc == self.next_tick_cyc {
+                self.tick();
+                self.tick += 1;
+                self.next_tick_cyc += if self.tick %2 == 0 {
+                    CPU_CYCLES_PER_EVEN_TICK
+                }
+                else {
+                    CPUCYCLES_PER_ODD_TICK
+                }
+            } 
+            self.global_cyc += 1;
         }
-        
-        let mut buffer = OutputBuffer {
-            samples: [0f32; BUFFER_SIZE as usize],
-        };
-        
-        for x in buffer.samples.iter_mut() {
-            *x = match self.square.phase {
-                0.0...0.5 => self.square.volume,
-                _ => -self.square.volume
-            };
-            self.square.phase = (self.square.phase + self.square.phase_inc) % 1.0;
+    }
+    
+    ///Represents the 240Hz output of the frame sequencer's divider
+    fn tick(&mut self) {
+        if !self.frame.contains(MODE) {
+            match self.tick % 4 {
+                0 => { self.envelope_tick(); }
+                1 => { self.envelope_tick(); self.length_tick(); }
+                2 => { self.envelope_tick(); }
+                3 => { self.envelope_tick(); self.length_tick(); self.raise_irq(); }
+                _ => ()
+            }
         }
+        else {
+            match self.tick % 5 {
+                0 => { self.envelope_tick(); self.length_tick() }
+                1 => { self.envelope_tick(); }
+                2 => { self.envelope_tick(); self.length_tick() }
+                3 => { self.envelope_tick(); }
+                4 => ()
+                _ => ()
+            }
+        }
+    }
+    
+    fn envelope_tick(&mut self) {
         
-        self.device.play(&buffer);
+    }
+    
+    fn length_tick(&mut self) {
+        
+    }
+    
+    fn raise_irq(&mut self) {
+        
+    }
+    
+    pub fn play(&mut self) {
+        
     }
 }
 
@@ -181,7 +220,16 @@ impl MemSegment for APU {
             0x0014 => (),
             0x0015 => self.control = val,
             0x0016 => (),
-            0x0017 => self.frame = val,
+            0x0017 => {
+                self.frame = Frame::from_bits_truncate(val);
+                self.tick = 0;
+                self.next_tick_cyc = if self.frame.contains( MODE ) {
+                    self.global_cyc;
+                }
+                else {
+                    self.global_cyc + CPU_CYCLES_PER_EVEN_TICK;
+                }
+            },
             _ => (),
         }
     }

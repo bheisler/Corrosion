@@ -49,10 +49,11 @@ fn run_frame(cpu: &mut CPU, io: &Rc<RefCell<IO>>, ppu: &Rc<RefCell<PPU>>, apu: &
     loop {
         io.borrow_mut().poll();
         let cycle = cpu.cycle();
+        apu.borrow_mut().run_to(cycle);
         let nmi = ppu.borrow_mut().run_to(cycle);
         let frame_end = nmi == ::ppu::StepResult::NMI;
         if frame_end {
-            apu.borrow_mut().generate();
+            apu.borrow_mut().play();
             cpu.nmi();
         }
         cpu.step();

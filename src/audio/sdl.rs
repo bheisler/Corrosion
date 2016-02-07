@@ -1,5 +1,6 @@
 use super::AudioOut;
 use ::apu::OutputBuffer;
+use ::apu::Sample;
 use sdl2::Sdl;
 use sdl2::AudioSubsystem;
 use sdl2::audio::{AudioCallback, AudioSpecDesired, AudioDevice};
@@ -10,15 +11,15 @@ const OUT_SAMPLE_RATE: i32 = 44100;
 const BUFFER_SIZE : usize = OUT_SAMPLE_RATE as usize / ::apu::BUFFERS_PER_SECOND;
 
 struct BufferOut {
-    samples: [f32; BUFFER_SIZE],
+    samples: [Sample; BUFFER_SIZE],
     playback_counter: usize,
     condvar: Arc<Condvar>,
 }
 
 impl AudioCallback for BufferOut {
-    type Channel = f32;
+    type Channel = Sample;
 
-    fn callback(&mut self, out: &mut [f32]) {
+    fn callback(&mut self, out: &mut [Sample]) {
         let out_len = out.len();
         let output_iter = out.iter_mut();
         let playback_counter = self.playback_counter;
@@ -73,7 +74,7 @@ impl SDLAudioOut {
     
         let device = audio_subsystem.open_playback(None, desired_spec, |_| {
             BufferOut {
-                samples: [0f32; BUFFER_SIZE],
+                samples: [0; BUFFER_SIZE],
                 playback_counter: 0,
                 condvar: condvar.clone(),
             }
