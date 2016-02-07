@@ -14,6 +14,25 @@ const SAMPLE_RATE: usize = 44100;
 const SAMPLES_PER_FRAME: usize = (SAMPLE_RATE / NES_FPS);
 pub const BUFFER_SIZE: usize = SAMPLES_PER_FRAME * FRAMES_PER_BUFFER;
 
+static LENGTH_TABLE: [u8; 32] = [
+    0x0A, 0xFE,
+    0x14, 0x02,
+    0x28, 0x04,
+    0x50, 0x06,
+    0xA0, 0x08,
+    0x3C, 0x0A,
+    0x0E, 0x0C,
+    0x1A, 0x0E,
+    0x0C, 0x10,
+    0x18, 0x12,
+    0x30, 0x14,
+    0x60, 0x16,
+    0xC0, 0x18,
+    0x48, 0x1A,
+    0x10, 0x1C,
+    0x20, 0x1E,
+];
+
 pub struct OutputBuffer {
     pub samples: [i16; BUFFER_SIZE as usize],
 }
@@ -25,11 +44,52 @@ bitflags! {
     }
 }
 
+trait Writable {
+    fn write(&mut self, idx: u16, val: u8);
+}
+
+struct Length {
+    halt_bit: usize,
+    halted: bool,
+    remaining: u8,
+}
+
+impl Length {
+    fn write_halt(&mut self, val: u8) {
+        self.halted = (val >> self.halt_bit ) & 0x01 != 0;
+        if self.halted {
+            self.remaining = 0;
+        }
+    }
+    
+    fn write_counter(&mut self, val: u8) {
+        if !self.halted {
+            self.remaining = LENGTH_TABLE[(val >> 3) as usize];
+        }
+    }
+    
+    fn is_enabled(&self) -> bool {
+        self.remaining > 0
+    }
+    
+    fn tick(&mut self) {
+        self.remaining = self.remaining.saturating_sub(1);
+    }
+    
+    fn new(halt_bit: usize) -> Length {
+        Length {
+            halt_bit: halt_bit,
+            halted: false,
+            remaining: 0,
+        }
+    }
+}
+
 struct Pulse {
     flags: u8,
     sweep: u8,
     timer: u8,
-    length: u8,
+    length: Length,
 }
 
 impl Pulse {
@@ -38,7 +98,19 @@ impl Pulse {
             flags: 0,
             sweep: 0,
             timer: 0,
-            length: 0,
+            length: Length::new(5),
+        }
+    }
+}
+
+impl Writable for Pulse {
+    fn write(&mut self, idx: u16, val: u8) {
+        match idx % 4 {
+            0 => self.length.write_halt(val),
+            1 => (),
+            2 => (),
+            3 => self.length.write_counter(val),
+            _ => (),
         }
     }
 }
@@ -46,7 +118,7 @@ impl Pulse {
 struct Triangle {
     counter: u8,
     timer: u8,
-    length: u8,
+    length: Length,
 }
 
 impl Triangle {
@@ -54,7 +126,19 @@ impl Triangle {
         Triangle {
             counter: 0,
             timer: 0,
-            length: 0,
+            length: Length::new(7),
+        }
+    }
+}
+
+impl Writable for Triangle {
+    fn write(&mut self, idx: u16, val: u8) {
+        match idx % 4 {
+            0 => self.length.write_halt(val),
+            1 => (),
+            2 => (),
+            3 => self.length.write_counter(val),
+            _ => (),
         }
     }
 }
@@ -62,7 +146,7 @@ impl Triangle {
 struct Noise {
     volume: u8,
     mode: u8,
-    length: u8,
+    length: Length,
 }
 
 impl Noise {
@@ -70,7 +154,19 @@ impl Noise {
         Noise {
             volume: 0,
             mode: 0,
-            length: 0,
+            length: Length::new(5),
+        }
+    }
+}
+
+impl Writable for Noise {
+    fn write(&mut self, idx: u16, val: u8) {
+        match idx % 4 {
+            0 => self.length.write_halt(val),
+            1 => (),
+            2 => (),
+            3 => self.length.write_counter(val),
+            _ => (),
         }
     }
 }
@@ -78,8 +174,8 @@ impl Noise {
 struct DMC {
     freq: u8,
     direct: u8,
-    addr: u8,
-    length: u8,
+    sample_addr: u8,
+    sample_length: u8,
 }
 
 impl DMC {
@@ -87,9 +183,15 @@ impl DMC {
         DMC {
             freq: 0,
             direct: 0,
-            addr: 0,
-            length: 0,
+            sample_addr: 0,
+            sample_length: 0,
         }
+    }
+}
+
+impl Writable for DMC {
+    fn write(&mut self, idx: u16, val: u8) {
+        
     }
 }
 
@@ -132,7 +234,7 @@ impl APU {
     }
     
     pub fn run_to(&mut self, cpu_cycle: u64) {
-        while ( self.global_cyc < cpu_cycle ) {
+        while self.global_cyc < cpu_cycle {
             if self.global_cyc == self.next_tick_cyc {
                 self.tick();
                 self.tick += 1;
@@ -151,21 +253,21 @@ impl APU {
     fn tick(&mut self) {
         if !self.frame.contains(MODE) {
             match self.tick % 4 {
-                0 => { self.envelope_tick(); }
-                1 => { self.envelope_tick(); self.length_tick(); }
-                2 => { self.envelope_tick(); }
-                3 => { self.envelope_tick(); self.length_tick(); self.raise_irq(); }
-                _ => ()
+                0 => { self.envelope_tick(); },
+                1 => { self.envelope_tick(); self.length_tick(); },
+                2 => { self.envelope_tick(); },
+                3 => { self.envelope_tick(); self.length_tick(); self.raise_irq(); },
+                _ => (),
             }
         }
         else {
             match self.tick % 5 {
-                0 => { self.envelope_tick(); self.length_tick() }
-                1 => { self.envelope_tick(); }
-                2 => { self.envelope_tick(); self.length_tick() }
-                3 => { self.envelope_tick(); }
-                4 => ()
-                _ => ()
+                0 => { self.envelope_tick(); self.length_tick() },
+                1 => { self.envelope_tick(); },
+                2 => { self.envelope_tick(); self.length_tick() },
+                3 => { self.envelope_tick(); },
+                4 => (),
+                _ => (),
             }
         }
     }
@@ -175,7 +277,10 @@ impl APU {
     }
     
     fn length_tick(&mut self) {
-        
+        self.pulse1.length.tick();
+        self.pulse2.length.tick();
+        self.triangle.length.tick();
+        self.noise.length.tick();
     }
     
     fn raise_irq(&mut self) {
@@ -197,91 +302,27 @@ impl MemSegment for APU {
 
     fn write(&mut self, idx: u16, val: u8) {
         match idx % 0x20 {
-            0x0000 => self.pulse1.flags = val,
-            0x0001 => self.pulse1.sweep = val,
-            0x0002 => self.pulse1.timer = val,
-            0x0003 => self.pulse1.length = val,
-            0x0004 => self.pulse2.flags = val,
-            0x0005 => self.pulse2.sweep = val,
-            0x0006 => self.pulse2.timer = val,
-            0x0007 => self.pulse2.length = val,
-            0x0008 => self.triangle.counter = val,
-            0x0009 => (),
-            0x000A => self.triangle.timer = val,
-            0x000B => self.triangle.length = val,
-            0x000C => self.noise.volume = val,
-            0x000D => (),
-            0x000E => self.noise.mode = val,
-            0x000F => self.noise.length = val,
-            0x0010 => self.dmc.freq = val,
-            0x0011 => self.dmc.direct = val,
-            0x0012 => self.dmc.addr = val,
-            0x0013 => self.dmc.length = val,
+            x @ 0x00...0x03 => self.pulse1.write(x, val),
+            x @ 0x04...0x07 => self.pulse2.write(x, val),
+            x @ 0x08...0x0B => self.triangle.write(x, val),
+            x @ 0x0C...0x0F => self.noise.write(x, val),
+            x @ 0x10...0x13 => self.dmc.write(x, val),
             0x0014 => (),
             0x0015 => self.control = val,
             0x0016 => (),
             0x0017 => {
                 self.frame = Frame::from_bits_truncate(val);
                 self.tick = 0;
-                self.next_tick_cyc = if self.frame.contains( MODE ) {
-                    self.global_cyc;
+                if self.frame.contains( MODE ) {
+                    //Trigger a tick immediately
+                    self.next_tick_cyc = self.global_cyc
                 }
                 else {
-                    self.global_cyc + CPU_CYCLES_PER_EVEN_TICK;
+                    //Reset the tick divider
+                    self.next_tick_cyc = self.global_cyc + CPU_CYCLES_PER_EVEN_TICK
                 }
             },
             _ => (),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use memory::MemSegment;
-    use audio::DummyAudioOut;
-
-    fn assert_register_writable(idx: u16, getter: &Fn(&APU) -> u8) {
-        let mut apu = APU::new(Box::new(DummyAudioOut));
-        apu.write(idx, 12);
-        assert_eq!(getter(&apu), 12);
-        apu.write(idx, 125);
-        assert_eq!(getter(&apu), 125);
-    }
-
-    fn assert_register_not_readable(idx: u16) {
-        let mut apu = APU::new(Box::new(DummyAudioOut));
-        apu.write(idx, 12);
-        assert_eq!(apu.read(idx), 0);
-        apu.write(idx, 125);
-        assert_eq!(apu.read(idx), 0);
-    }
-
-    fn test_writable_register(idx: u16, getter: &Fn(&APU) -> u8) {
-        assert_register_writable(idx, getter);
-        assert_register_not_readable(idx);
-    }
-
-    #[test]
-    fn test_writable_registers() {
-        test_writable_register(0x4000, &|ref apu| apu.pulse1.flags);
-        test_writable_register(0x4001, &|ref apu| apu.pulse1.sweep);
-        test_writable_register(0x4002, &|ref apu| apu.pulse1.timer);
-        test_writable_register(0x4003, &|ref apu| apu.pulse1.length);
-        test_writable_register(0x4004, &|ref apu| apu.pulse2.flags);
-        test_writable_register(0x4005, &|ref apu| apu.pulse2.sweep);
-        test_writable_register(0x4006, &|ref apu| apu.pulse2.timer);
-        test_writable_register(0x4007, &|ref apu| apu.pulse2.length);
-        test_writable_register(0x4008, &|ref apu| apu.triangle.counter);
-        test_writable_register(0x400A, &|ref apu| apu.triangle.timer);
-        test_writable_register(0x400B, &|ref apu| apu.triangle.length);
-        test_writable_register(0x400C, &|ref apu| apu.noise.volume);
-        test_writable_register(0x400E, &|ref apu| apu.noise.mode);
-        test_writable_register(0x400F, &|ref apu| apu.noise.length);
-        test_writable_register(0x4010, &|ref apu| apu.dmc.freq);
-        test_writable_register(0x4011, &|ref apu| apu.dmc.direct);
-        test_writable_register(0x4012, &|ref apu| apu.dmc.addr);
-        test_writable_register(0x4013, &|ref apu| apu.dmc.length);
-        test_writable_register(0x4017, &|ref apu| apu.frame);
     }
 }
