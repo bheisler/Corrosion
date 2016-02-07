@@ -1,5 +1,17 @@
 use super::memory::MemSegment;
-use audio::AudioOut;
+use audio::{AudioOut};
+
+const NES_FPS: usize = 60;
+const FRAMES_PER_BUFFER : usize = 6;
+pub const BUFFERS_PER_SECOND : usize = NES_FPS / FRAMES_PER_BUFFER; //must always be a positive integer
+
+const SAMPLE_RATE: usize = 44100;
+const SAMPLES_PER_FRAME: usize = (SAMPLE_RATE / NES_FPS);
+pub const BUFFER_SIZE: usize = SAMPLES_PER_FRAME * FRAMES_PER_BUFFER;
+
+pub struct OutputBuffer {
+    pub samples: [f32; BUFFER_SIZE as usize],
+}
 
 struct Pulse {
     flags: u8,
@@ -79,7 +91,16 @@ pub struct APU {
     control: u8,
     status: u8,
     
+    frame_count: usize,
+    
+    square: SquareWave,
     device: Box<AudioOut>,
+}
+
+struct SquareWave {
+    phase_inc: f32,
+    phase: f32,
+    volume: f32
 }
 
 impl APU {
@@ -94,8 +115,36 @@ impl APU {
             control: 0,
             status: 0,
             
+            frame_count: 0,
+            
+            square: SquareWave {
+                phase_inc: 612.0 / SAMPLE_RATE as f32,
+                phase: 0.0,
+                volume: 0.25
+            },
             device: device,
         }
+    }
+    
+    pub fn generate(&mut self) {
+        self.frame_count += 1;
+        if self.frame_count % FRAMES_PER_BUFFER != 0 {
+            return;
+        }
+        
+        let mut buffer = OutputBuffer {
+            samples: [0f32; BUFFER_SIZE as usize],
+        };
+        
+        for x in buffer.samples.iter_mut() {
+            *x = match self.square.phase {
+                0.0...0.5 => self.square.volume,
+                _ => -self.square.volume
+            };
+            self.square.phase = (self.square.phase + self.square.phase_inc) % 1.0;
+        }
+        
+        self.device.play(&buffer);
     }
 }
 
