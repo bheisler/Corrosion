@@ -133,23 +133,124 @@ impl Envelope {
     }
 }
 
+struct Timer {
+    period: u16,
+    current_step: u32,
+    
+    //The timer is clocked for every sample, so the period logic is in the Pulse.play function
+}
+
+impl Timer {
+    fn new() -> Timer {
+        Timer{
+            period: 0,
+            current_step: 0,
+        }
+    }
+    
+    fn write_low(&mut self, val: u8) {
+        self.period = ( self.period & 0xFF00 ) | val as u16; 
+    } 
+    
+    fn write_high(&mut self, val: u8) {
+        self.period = ( self.period & 0x00FF ) | (val & 0x0007) as u16;
+    }
+    
+    fn add_period_shift(&mut self, shift: i16) {
+        let new_period = (self.period as i16).wrapping_add( shift );
+        self.period = new_period as u16;
+    }
+}
+
+struct Sweep {
+    enable: bool,
+    period: u8,
+    negate: bool,
+    shift: u8,
+    
+    is_pulse2: bool,
+    divider: u8,
+    reload: bool,
+}
+
+impl Sweep {
+    fn new(is_pulse2: bool) -> Sweep {
+        Sweep {
+            enable: false,
+            period: 0,
+            negate: false,
+            shift: 0,
+            
+            is_pulse2: is_pulse2,
+            divider: 0,
+            reload: false,
+        }
+    }
+    
+    fn write(&mut self, val: u8) {
+        self.enable = (val & 0b1000_0000) != 0;
+        self.period = (val & 0b0111_0000) >> 4;
+        self.negate = (val & 0b0000_1000) != 0;
+        self.shift  =  val & 0b0000_0111;
+        self.reload = true;
+    }
+    
+    fn tick(&mut self, timer: &mut Timer) {
+        if !self.enable {
+            return;
+        }
+        
+        self.divider = self.divider.saturating_sub(1);
+        if self.divider == 0 {
+            self.divider = self.period;
+            let period_shift = self.period_shift(timer);
+            timer.add_period_shift( period_shift );
+        }
+        
+        if self.reload {
+            self.divider = self.period;
+            self.reload = false;
+        }
+    }
+    
+    fn period_shift(&self, timer: &Timer) -> i16 {
+        let mut shift = timer.period as i16;
+        shift = shift >> self.shift;
+        if self.negate {
+            shift = -shift;
+            if self.is_pulse2 {
+                shift = shift + 1;
+            }
+        }
+        shift
+    }
+}
+
 struct Pulse {
-    flags: u8,
     envelope: Envelope,
-    sweep: u8,
-    timer: u8,
+    sweep: Sweep,
+    timer: Timer,
     length: Length,
 }
 
 impl Pulse {
-    fn new() -> Pulse {
+    fn new(is_pulse2: bool) -> Pulse {
         Pulse {
-            flags: 0,
             envelope: Envelope::new(),
-            sweep: 0,
-            timer: 0,
+            sweep: Sweep::new(is_pulse2),
+            timer: Timer::new(),
             length: Length::new(5),
         }
+    }
+    
+    fn length_tick(&mut self) {
+        self.length.tick();
+        let timer = &mut self.timer;
+        self.sweep.tick(timer)
+    }
+    
+    fn envelope_tick(&mut self) {
+        self.envelope.tick();
     }
 }
 
@@ -160,9 +261,12 @@ impl Writable for Pulse {
                 self.length.write_halt(val);
                 self.envelope.write(val);
             },
-            1 => (),
-            2 => (),
-            3 => self.length.write_counter(val),
+            1 => self.sweep.write(val),
+            2 => self.timer.write_low(val),
+            3 => { 
+                self.length.write_counter(val);
+                self.timer.write_high(val);
+            },
             _ => (),
         }
     }
@@ -181,6 +285,14 @@ impl Triangle {
             timer: 0,
             length: Length::new(7),
         }
+    }
+    
+    fn length_tick(&mut self) {
+        self.length.tick();
+    }
+    
+    fn envelope_tick(&mut self) {
+        //Nothing yet
     }
 }
 
@@ -209,6 +321,10 @@ impl Noise {
             mode: 0,
             length: Length::new(5),
         }
+    }
+    
+    fn length_tick(&mut self) {
+        self.length.tick();
     }
 }
 
@@ -272,8 +388,8 @@ pub struct APU {
 impl APU {
     pub fn new( device: Box<AudioOut> ) -> APU {
         APU {
-            pulse1: Pulse::new(),
-            pulse2: Pulse::new(),
+            pulse1: Pulse::new(false),
+            pulse2: Pulse::new(true),
             triangle: Triangle::new(),
             noise: Noise::new(),
             dmc: DMC::new(),
@@ -329,14 +445,16 @@ impl APU {
     }
     
     fn envelope_tick(&mut self) {
-        
+        self.pulse1.envelope_tick();
+        self.pulse2.envelope_tick();
+        self.triangle.envelope_tick();
     }
     
     fn length_tick(&mut self) {
-        self.pulse1.length.tick();
-        self.pulse2.length.tick();
-        self.triangle.length.tick();
-        self.noise.length.tick();
+        self.pulse1.length_tick();
+        self.pulse2.length_tick();
+        self.triangle.length_tick();
+        self.noise.length_tick();
     }
     
     fn raise_irq(&mut self) {
