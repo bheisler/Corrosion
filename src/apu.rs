@@ -9,7 +9,7 @@ const CPU_CYCLES_PER_EVEN_TICK: u64 = 7438;
 const CPUCYCLES_PER_ODD_TICK: u64 = 7439;
 
 const NES_FPS: usize = 60;
-const FRAMES_PER_BUFFER : usize = 6;
+const FRAMES_PER_BUFFER : usize = 5;
 pub const BUFFERS_PER_SECOND : usize = NES_FPS / FRAMES_PER_BUFFER; //must always be a positive integer
 
 const SAMPLE_RATE: usize = 44100;
@@ -43,7 +43,7 @@ static PULSE_DUTY_CYCLES: [[i16; 8]; 4] = [
 ];
 
 fn new_blipbuf() -> BlipBuf {
-    let mut buf = BlipBuf::new(BUFFER_SIZE as u32);
+    let mut buf = BlipBuf::new((BUFFER_SIZE as u32) * 2);
     buf.set_rates(NES_CLOCK_RATE as f64, SAMPLE_RATE as f64);
     buf
 }
@@ -79,7 +79,7 @@ impl Length {
     }
     
     fn write_counter(&mut self, val: u8) {
-        println!("Length enabled: {}", val);
+        //println!("Length enabled: {}", val);
         if !self.halted {
             self.remaining = LENGTH_TABLE[(val >> 3) as usize];
         }
@@ -150,7 +150,7 @@ impl Envelope {
     }
     
     fn volume(&self) -> i16 {
-        if self.disable {
+        (15000 / 16) * if self.disable {
             self.n as i16
         }
         else {
@@ -326,8 +326,10 @@ impl Pulse {
         }
     }
     
-    fn set_amplitude(&self, amp: i16, cycle: u32) {
-        println!("Amplitude = {} at {}", amp, cycle);
+    fn set_amplitude(&mut self, amp: Sample, cycle: u32) {
+        let last_amp = self.last_amp;
+        self.buffer.add_delta(cycle, (amp - last_amp) as i32);
+        self.last_amp = amp;
     }
 }
 
@@ -469,6 +471,7 @@ pub struct APU {
     
     device: Box<AudioOut>,
     
+    frame_count: usize,
     global_cyc: u64,
     tick: u64,
     next_tick_cyc: u64,
@@ -490,6 +493,7 @@ impl APU {
             
             device: device,
             
+            frame_count: 0,
             global_cyc: 0,
             tick: 0,
             next_tick_cyc: 0,
@@ -574,8 +578,32 @@ impl APU {
     }
     
     pub fn frame_end(&mut self, cpu_cyc: u64) {
+        self.frame_count = self.frame_count.saturating_sub(1);
+        if self.frame_count == 0 {
+            self.frame_count = FRAMES_PER_BUFFER;
+        }
+        else {
+            return;
+        }
+        
         self.run_to(cpu_cyc);
+        let cycles_since_last_frame = (cpu_cyc - self.last_frame_cyc) as u32;
         self.last_frame_cyc = cpu_cyc;
+        self.pulse1.buffer.end_frame(cycles_since_last_frame);
+        self.pulse2.buffer.end_frame(cycles_since_last_frame);
+        let mut samples1 = [0 as Sample; BUFFER_SIZE as usize];
+        self.pulse1.buffer.read_samples(&mut samples1, false);
+        let mut samples2 = [0 as Sample; BUFFER_SIZE as usize];
+        self.pulse2.buffer.read_samples(&mut samples2, false);
+        
+        let mut buffer = OutputBuffer {
+            samples: [0; BUFFER_SIZE as usize],
+        };
+        for x in 0..BUFFER_SIZE {
+            buffer.samples[x] = samples1[x] + samples2[x];
+        }
+        
+        self.device.play(&buffer);
     }
 }
 
@@ -588,7 +616,6 @@ impl MemSegment for APU {
     }
 
     fn write(&mut self, idx: u16, val: u8) {
-        println!("Writing {:02X} to {:04X}", val, idx);
         match idx % 0x20 {
             x @ 0x00...0x03 => self.pulse1.write(x, val),
             x @ 0x04...0x07 => self.pulse2.write(x, val),

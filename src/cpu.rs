@@ -395,7 +395,7 @@ impl MemSegment for CPU {
     fn read(&mut self, idx: u16) -> u8 {
         match idx {
             OAMDMA => 0, //No idea what this should return. PPU dynamic latch garbage, maybe?
-            0x4000...0x4015 | 0x4018...0x4019 => {
+            0x4015 => {
                 let cycle = self.cycle;
                 self.mem.apu.borrow_mut().run_to(cycle);
                 self.mem.read(idx)
@@ -408,10 +408,10 @@ impl MemSegment for CPU {
     fn write(&mut self, idx: u16, val: u8) {
         match idx {
             OAMDMA => self.dma_transfer(val),
-            0x4000...0x4015 | 0x4018...0x4019 => {
+            0x4000...0x4013 | 0x4015 | 0x4017 => {
                 let cycle = self.cycle;
                 self.mem.apu.borrow_mut().run_to(cycle);
-                self.mem.read(idx);
+                self.mem.write(idx, val);
             },
             _ => self.mem.write(idx, val),
         }
@@ -423,7 +423,7 @@ impl CPU {
     fn trace(&mut self) {
         let opcode = Disassembler::new(self).decode();
         println!(
-            "{:04X} {:9} {}{:30}  A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:3} SL:{:3} VRAM:{:04X}",
+            "{:04X} {:9} {}{:30}  A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:3} SL:{}",// VRAM:{:04X}",
             self.regs.pc,
             opcode.bytes.iter()
                 .map(|byte| format!("{:02X}", byte))
@@ -437,7 +437,7 @@ impl CPU {
             self.regs.sp,
             self.mem.ppu.borrow().cycle(),
             self.mem.ppu.borrow().scanline(),
-            self.mem.ppu.borrow().vram_addr(),
+            //self.mem.ppu.borrow().vram_addr(),
         );
     }
 
