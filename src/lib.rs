@@ -5,6 +5,7 @@ extern crate bitflags;
 extern crate quick_error;
 extern crate sdl2;
 extern crate stopwatch;
+extern crate blip_buf;
 
 pub mod cart;
 pub mod memory;
@@ -49,11 +50,10 @@ fn run_frame(cpu: &mut CPU, io: &Rc<RefCell<IO>>, ppu: &Rc<RefCell<PPU>>, apu: &
     loop {
         io.borrow_mut().poll();
         let cycle = cpu.cycle();
-        apu.borrow_mut().run_to(cycle);
         let nmi = ppu.borrow_mut().run_to(cycle);
         let frame_end = nmi == ::ppu::StepResult::NMI;
         if frame_end {
-            apu.borrow_mut().play();
+            apu.borrow_mut().frame_end(cycle);
             cpu.nmi();
         }
         cpu.step();

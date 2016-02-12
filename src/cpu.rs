@@ -395,6 +395,11 @@ impl MemSegment for CPU {
     fn read(&mut self, idx: u16) -> u8 {
         match idx {
             OAMDMA => 0, //No idea what this should return. PPU dynamic latch garbage, maybe?
+            0x4000...0x4015 | 0x4018...0x4019 => {
+                let cycle = self.cycle;
+                self.mem.apu.borrow_mut().run_to(cycle);
+                self.mem.read(idx)
+            },
             _ => self.mem.read(idx),
         }
 
@@ -403,6 +408,11 @@ impl MemSegment for CPU {
     fn write(&mut self, idx: u16, val: u8) {
         match idx {
             OAMDMA => self.dma_transfer(val),
+            0x4000...0x4015 | 0x4018...0x4019 => {
+                let cycle = self.cycle;
+                self.mem.apu.borrow_mut().run_to(cycle);
+                self.mem.read(idx);
+            },
             _ => self.mem.write(idx, val),
         }
     }
