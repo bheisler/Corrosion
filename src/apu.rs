@@ -1,22 +1,22 @@
 use super::memory::MemSegment;
-use audio::{AudioOut};
+use audio::AudioOut;
+use std::cmp;
 use blip_buf::BlipBuf;
 
 pub type Sample = i16;
 
 const NES_CLOCK_RATE: u64 = 1789773;
-const CPU_CYCLES_PER_EVEN_TICK: u64 = 7438;
+const CPU_CYCLES_PER_EVEN_TICK: u64 = 7438; //TODO: This is wrong.
 const CPUCYCLES_PER_ODD_TICK: u64 = 7439;
 
 const NES_FPS: usize = 60;
 const FRAMES_PER_BUFFER : usize = 1;
-pub const BUFFERS_PER_SECOND : usize = NES_FPS / FRAMES_PER_BUFFER; //must always be a positive integer
 
 const SAMPLE_RATE: usize = 44100;
 const SAMPLES_PER_FRAME: usize = (SAMPLE_RATE / NES_FPS);
 pub const BUFFER_SIZE: usize = SAMPLES_PER_FRAME * FRAMES_PER_BUFFER;
 
-const VOLUME_MULT: i16 = (32767i16 / 16);
+const VOLUME_MULT: i16 = (32767i16 / 16) / 2;
 
 static LENGTH_TABLE: [u8; 32] = [
     0x0A, 0xFE,
@@ -43,16 +43,6 @@ static PULSE_DUTY_CYCLES: [[i16; 8]; 4] = [
     [0, 1, 0, 0, 0, -1, 0, 0],
     [0, -1, 0, 1, 0, 0, 0, 0],
 ];
-
-fn new_blipbuf() -> BlipBuf {
-    let mut buf = BlipBuf::new(BUFFER_SIZE as u32);
-    buf.set_rates(NES_CLOCK_RATE as f64, SAMPLE_RATE as f64);
-    buf
-}
-
-pub struct OutputBuffer {
-    pub samples: [i16; BUFFER_SIZE as usize],
-}
 
 bitflags! {
     flags Frame : u8 {
@@ -270,11 +260,11 @@ struct Pulse {
     length: Length,
     
     last_amp: Sample,
-    buffer: BlipBuf,
+    buffer: SampleBuffer,
 }
 
 impl Pulse {
-    fn new(is_pulse2: bool) -> Pulse {
+    fn new(is_pulse2: bool, buffer: SampleBuffer) -> Pulse {
         Pulse {
             duty: 0,
             envelope: Envelope::new(),
@@ -283,7 +273,7 @@ impl Pulse {
             length: Length::new(5),
             
             last_amp: 0,
-            buffer: new_blipbuf(),
+            buffer: buffer,
         }
     }
     
@@ -465,6 +455,56 @@ impl Writable for DMC {
     }
 }
 
+struct SampleBuffer {
+    blip: BlipBuf,
+    samples: Vec<Sample>,
+    transfer_samples: u32,
+}
+
+impl SampleBuffer {
+    fn new(out_rate: f64) -> SampleBuffer {
+        let samples_per_frame = out_rate as u32 / NES_FPS as u32;
+        let transfer_samples = samples_per_frame * FRAMES_PER_BUFFER as u32;
+        
+        //TODO: This probably doesn't need to be so large.
+        let mut buf = BlipBuf::new(transfer_samples * 2);
+        buf.set_rates(NES_CLOCK_RATE as f64, out_rate);
+        let samples = vec![0; (transfer_samples * 2) as usize];
+        
+        SampleBuffer {
+            blip: buf,
+            samples: samples,
+            transfer_samples: transfer_samples,
+        }
+    }
+    
+    fn available(&self) -> u32 {
+        self.blip.samples_avail()
+    }
+    
+    fn read(&mut self) -> &[Sample] {
+        let samples_read = self.blip.read_samples(&mut self.samples, false);
+        let slice : &[Sample] = &self.samples;
+        &slice[0..samples_read]
+    }
+    
+    fn add_delta(&mut self, clock_time: u32, delta: i32) {
+        self.blip.add_delta(clock_time, delta)
+    }
+    
+    fn end_frame(&mut self, clock_duration: u32) {
+        self.blip.end_frame(clock_duration)
+    }
+    
+    fn clocks_needed(&self) -> u32 {
+        self.blip.clocks_needed(self.transfer_samples)
+    }
+    
+    fn clear(&mut self) {
+        self.blip.clear()
+    }
+}
+
 pub struct APU {
     pulse1: Pulse,
     pulse2: Pulse,
@@ -481,15 +521,17 @@ pub struct APU {
     global_cyc: u64,
     tick: u64,
     next_tick_cyc: u64,
+    next_transfer_cyc: u64,
     last_frame_cyc: u64,
 }
 
 
 impl APU {
     pub fn new( device: Box<AudioOut> ) -> APU {
-        APU {
-            pulse1: Pulse::new(false),
-            pulse2: Pulse::new(true),
+        let sample_rate = device.sample_rate();
+        let mut apu = APU {
+            pulse1: Pulse::new(false, SampleBuffer::new(sample_rate)),
+            pulse2: Pulse::new(true, SampleBuffer::new(sample_rate)),
             triangle: Triangle::new(),
             noise: Noise::new(),
             dmc: DMC::new(),
@@ -503,38 +545,40 @@ impl APU {
             global_cyc: 0,
             tick: 0,
             next_tick_cyc: 0,
+            next_transfer_cyc: 0,
             last_frame_cyc: 0,
-        }
+        };
+        apu.next_transfer_cyc = apu.pulse1.buffer.clocks_needed() as u64;
+        apu
     }
     
     pub fn run_to(&mut self, cpu_cycle: u64) {
         while self.global_cyc < cpu_cycle {
             let current_cycle = self.global_cyc;
-            if self.next_tick_cyc < cpu_cycle {
-                let next_tick = self.next_tick_cyc;
-                self.play(current_cycle, next_tick);
-                self.global_cyc = self.next_tick_cyc;
-            }
-            else {
-                self.play(current_cycle, cpu_cycle);
-                self.global_cyc = cpu_cycle;
-            }
+            
+            let next_step = cmp::min(cmp::min(cpu_cycle, self.next_tick_cyc), self.next_transfer_cyc);
+            self.play(current_cycle, next_step);
+            self.global_cyc = next_step;
             
             if self.global_cyc == self.next_tick_cyc {
                 self.tick();
-                self.tick += 1;
-                self.next_tick_cyc += if self.tick %2 == 0 {
-                    CPU_CYCLES_PER_EVEN_TICK
-                }
-                else {
-                    CPUCYCLES_PER_ODD_TICK
-                }
+            }
+            if self.global_cyc == self.next_transfer_cyc {
+                self.transfer();
             } 
         }
     }
     
     ///Represents the 240Hz output of the frame sequencer's divider
     fn tick(&mut self) {
+        self.tick += 1;
+        self.next_tick_cyc += if self.tick %2 == 0 {
+            CPU_CYCLES_PER_EVEN_TICK
+        }
+        else {
+            CPUCYCLES_PER_ODD_TICK
+        };
+                
         if !self.frame.contains(MODE) {
             match self.tick % 4 {
                 0 => { self.envelope_tick(); },
@@ -583,29 +627,22 @@ impl APU {
         self.dmc.play(from, to);
     }
     
-    pub fn frame_end(&mut self, cpu_cyc: u64) {
-        self.frame_count = self.frame_count.saturating_sub(1);
-        if self.frame_count == 0 {
-            self.frame_count = FRAMES_PER_BUFFER;
-        }
-        else {
-            return;
-        }
-        
-        self.run_to(cpu_cyc);
+    fn transfer(&mut self) {
+        let cpu_cyc = self.global_cyc;
         let cycles_since_last_frame = (cpu_cyc - self.last_frame_cyc) as u32;
         self.last_frame_cyc = cpu_cyc;
         self.pulse1.buffer.end_frame(cycles_since_last_frame);
         self.pulse2.buffer.end_frame(cycles_since_last_frame);
-        
-        let mut buffer = OutputBuffer {
-            samples: [0; BUFFER_SIZE as usize],
-        };
-        for x in buffer.samples.iter_mut() {
-            *x = *x * VOLUME_MULT;
-        }
-        self.pulse1.buffer.read_samples(&mut buffer.samples, false);
-        self.device.play(&buffer);
+        let samples : Vec<Sample> = self.pulse1.buffer.read().iter().zip(self.pulse2.buffer.read().iter())
+            .map(|(p1, p2)| p1 + p2)
+            .map(|x| x * VOLUME_MULT)
+            .collect();
+        self.device.play(&samples);
+        self.next_transfer_cyc = cpu_cyc + self.pulse1.buffer.clocks_needed() as u64;
+    }
+    
+    pub fn frame_end(&mut self, cpu_cyc: u64) {
+        self.run_to(cpu_cyc);
     }
 }
 
