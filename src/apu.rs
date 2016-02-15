@@ -4,17 +4,19 @@ use blip_buf::BlipBuf;
 
 pub type Sample = i16;
 
-const NES_CLOCK_RATE: u64 = 1789800;
+const NES_CLOCK_RATE: u64 = 1789773;
 const CPU_CYCLES_PER_EVEN_TICK: u64 = 7438;
 const CPUCYCLES_PER_ODD_TICK: u64 = 7439;
 
 const NES_FPS: usize = 60;
-const FRAMES_PER_BUFFER : usize = 5;
+const FRAMES_PER_BUFFER : usize = 1;
 pub const BUFFERS_PER_SECOND : usize = NES_FPS / FRAMES_PER_BUFFER; //must always be a positive integer
 
 const SAMPLE_RATE: usize = 44100;
 const SAMPLES_PER_FRAME: usize = (SAMPLE_RATE / NES_FPS);
 pub const BUFFER_SIZE: usize = SAMPLES_PER_FRAME * FRAMES_PER_BUFFER;
+
+const VOLUME_MULT: i16 = (32767i16 / 16);
 
 static LENGTH_TABLE: [u8; 32] = [
     0x0A, 0xFE,
@@ -43,7 +45,7 @@ static PULSE_DUTY_CYCLES: [[i16; 8]; 4] = [
 ];
 
 fn new_blipbuf() -> BlipBuf {
-    let mut buf = BlipBuf::new((BUFFER_SIZE as u32) * 2);
+    let mut buf = BlipBuf::new(BUFFER_SIZE as u32);
     buf.set_rates(NES_CLOCK_RATE as f64, SAMPLE_RATE as f64);
     buf
 }
@@ -79,7 +81,6 @@ impl Length {
     }
     
     fn write_counter(&mut self, val: u8) {
-        //println!("Length enabled: {}", val);
         if !self.halted {
             self.remaining = LENGTH_TABLE[(val >> 3) as usize];
         }
@@ -150,7 +151,7 @@ impl Envelope {
     }
     
     fn volume(&self) -> i16 {
-        (15000 / 16) * if self.disable {
+        if self.disable {
             self.n as i16
         }
         else {
@@ -314,7 +315,7 @@ impl Pulse {
                 current_cyc += remaining;
                 self.timer.duty_index = ( self.timer.duty_index + 1 ) % 8;
                 match PULSE_DUTY_CYCLES[self.duty][self.timer.duty_index] {
-                    -1 => self.set_amplitude(-volume, current_cyc),
+                    -1 => self.set_amplitude(0, current_cyc),
                     0 => (),
                     1 => self.set_amplitude(volume, current_cyc),
                     _ => (),
@@ -329,7 +330,11 @@ impl Pulse {
     
     fn set_amplitude(&mut self, amp: Sample, cycle: u32) {
         let last_amp = self.last_amp;
-        self.buffer.add_delta(cycle, (amp - last_amp) as i32);
+        let delta = (amp - last_amp) as i32;
+        if delta == 0 {
+            return;
+        }
+        self.buffer.add_delta(cycle, delta);
         self.last_amp = amp;
     }
 }
@@ -592,18 +597,14 @@ impl APU {
         self.last_frame_cyc = cpu_cyc;
         self.pulse1.buffer.end_frame(cycles_since_last_frame);
         self.pulse2.buffer.end_frame(cycles_since_last_frame);
-        let mut samples1 = [0 as Sample; BUFFER_SIZE as usize];
-        self.pulse1.buffer.read_samples(&mut samples1, false);
-        let mut samples2 = [0 as Sample; BUFFER_SIZE as usize];
-        self.pulse2.buffer.read_samples(&mut samples2, false);
         
         let mut buffer = OutputBuffer {
             samples: [0; BUFFER_SIZE as usize],
         };
-        for x in 0..BUFFER_SIZE {
-            buffer.samples[x] = samples1[x] + samples2[x];
+        for x in buffer.samples.iter_mut() {
+            *x = *x * VOLUME_MULT;
         }
-        
+        self.pulse1.buffer.read_samples(&mut buffer.samples, false);
         self.device.play(&buffer);
     }
 }
