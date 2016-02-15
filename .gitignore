@@ -6,3 +6,4 @@
 output
 nestest*
 SDL2.dll
+/.cargo/

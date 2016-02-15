@@ -181,11 +181,12 @@ impl Timer {
     } 
     
     fn write_high(&mut self, val: u8) {
-        self.period = ( self.period & 0x00FF ) | (val & 0x0007) as u16;
+        self.period = ( self.period & 0x00FF ) | (val as u16 & 0x0007) << 8;
     }
     
     fn add_period_shift(&mut self, shift: i16) {
         let new_period = (self.period as i16).wrapping_add( shift );
+        self.period = new_period as u16;
     }
     
     fn wavelen(&self) -> u32 { (self.period as u32 + 1) * 2 }
