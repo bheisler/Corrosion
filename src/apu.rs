@@ -6,8 +6,9 @@ use blip_buf::BlipBuf;
 pub type Sample = i16;
 
 const NES_CLOCK_RATE: u64 = 1789773;
-const CPU_CYCLES_PER_EVEN_TICK: u64 = 7438; //TODO: This is wrong.
-const CPUCYCLES_PER_ODD_TICK: u64 = 7439;
+const TICK_RATE: u64 = 240;
+const CPU_CYCLES_PER_EVEN_TICK: u64 = NES_CLOCK_RATE / TICK_RATE;
+const CPU_CYCLES_PER_ODD_TICK: u64 = CPU_CYCLES_PER_EVEN_TICK + 1;
 
 const NES_FPS: usize = 60;
 const FRAMES_PER_BUFFER : usize = 1;
@@ -300,7 +301,9 @@ impl Pulse {
         while current_cyc < to_cyc {
             let wavelen = self.timer.wavelen();
             let remaining = wavelen - self.timer.current_step;
-            if remaining < to_cyc {
+            let end_wavelen = current_cyc + remaining;
+            
+            if end_wavelen < to_cyc {
                 self.timer.current_step = 0;
                 current_cyc += remaining;
                 self.timer.duty_index = ( self.timer.duty_index + 1 ) % 8;
@@ -324,7 +327,7 @@ impl Pulse {
         if delta == 0 {
             return;
         }
-        self.buffer.add_delta(cycle, delta);
+        self.buffer.add_delta(cycle, delta * VOLUME_MULT as i32);
         self.last_amp = amp;
     }
 }
@@ -466,10 +469,9 @@ impl SampleBuffer {
         let samples_per_frame = out_rate as u32 / NES_FPS as u32;
         let transfer_samples = samples_per_frame * FRAMES_PER_BUFFER as u32;
         
-        //TODO: This probably doesn't need to be so large.
-        let mut buf = BlipBuf::new(transfer_samples * 2);
+        let mut buf = BlipBuf::new(transfer_samples);
         buf.set_rates(NES_CLOCK_RATE as f64, out_rate);
-        let samples = vec![0; (transfer_samples * 2) as usize];
+        let samples = vec![0; (transfer_samples) as usize];
         
         SampleBuffer {
             blip: buf,
@@ -576,7 +578,7 @@ impl APU {
             CPU_CYCLES_PER_EVEN_TICK
         }
         else {
-            CPUCYCLES_PER_ODD_TICK
+            CPU_CYCLES_PER_ODD_TICK
         };
                 
         if !self.frame.contains(MODE) {
@@ -633,9 +635,11 @@ impl APU {
         self.last_frame_cyc = cpu_cyc;
         self.pulse1.buffer.end_frame(cycles_since_last_frame);
         self.pulse2.buffer.end_frame(cycles_since_last_frame);
+        //self.pulse2.buffer.clear();
         let samples : Vec<Sample> = self.pulse1.buffer.read().iter().zip(self.pulse2.buffer.read().iter())
             .map(|(p1, p2)| p1 + p2)
-            .map(|x| x * VOLUME_MULT)
+            //.inspect(|x| assert!(-16i16 <= **x && **x <= 16i16, "Value {} out of range", x))
+            //.map(|x| x * VOLUME_MULT)
             .collect();
         self.device.play(&samples);
         self.next_transfer_cyc = cpu_cyc + self.pulse1.buffer.clocks_needed() as u64;
