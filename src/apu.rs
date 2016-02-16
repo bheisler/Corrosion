@@ -262,6 +262,8 @@ struct Pulse {
     
     last_amp: Sample,
     buffer: SampleBuffer,
+    
+    enabled: bool,
 }
 
 impl Pulse {
@@ -275,6 +277,8 @@ impl Pulse {
             
             last_amp: 0,
             buffer: buffer,
+            
+            enabled: true,
         }
     }
     
@@ -290,7 +294,8 @@ impl Pulse {
     
     fn play(&mut self, from_cyc: u32, to_cyc: u32) {
         if !self.sweep.audible() ||
-           !self.length.audible() {
+           !self.length.audible() ||
+           !self.enabled {
            
            self.set_amplitude(0, from_cyc);
            return;
@@ -355,6 +360,8 @@ struct Triangle {
     counter: u8,
     timer: u8,
     length: Length,
+    
+    enabled: bool,
 }
 
 impl Triangle {
@@ -363,6 +370,8 @@ impl Triangle {
             counter: 0,
             timer: 0,
             length: Length::new(7),
+            
+            enabled: false,
         }
     }
     
@@ -395,6 +404,8 @@ struct Noise {
     envelope: Envelope,
     mode: u8,
     length: Length,
+    
+    enabled: bool,
 }
 
 impl Noise {
@@ -403,6 +414,8 @@ impl Noise {
             envelope: Envelope::new(),
             mode: 0,
             length: Length::new(5),
+            
+            enabled: false,
         }
     }
     
@@ -435,6 +448,8 @@ struct DMC {
     direct: u8,
     sample_addr: u8,
     sample_length: u8,
+    
+    enabled: bool,
 }
 
 impl DMC {
@@ -444,6 +459,8 @@ impl DMC {
             direct: 0,
             sample_addr: 0,
             sample_length: 0,
+            
+            enabled: false,
         }
     }
     
@@ -514,12 +531,9 @@ pub struct APU {
     noise: Noise,
     dmc: DMC,
     frame: Frame,
-    control: u8,
-    status: u8,
     
     device: Box<AudioOut>,
     
-    frame_count: usize,
     global_cyc: u64,
     tick: u64,
     next_tick_cyc: u64,
@@ -538,12 +552,9 @@ impl APU {
             noise: Noise::new(),
             dmc: DMC::new(),
             frame: Frame::empty(),
-            control: 0,
-            status: 0,
             
             device: device,
             
-            frame_count: 0,
             global_cyc: 0,
             tick: 0,
             next_tick_cyc: 0,
@@ -653,12 +664,16 @@ impl APU {
 impl MemSegment for APU {
     fn read(&mut self, idx: u16) -> u8 {
         match idx % 0x20 {
-            0x0015 => 0, //TODO
+            0x0015 => {
+                println!("Reading 0x4015");
+                0
+            }, //TODO
             _ => 0,
         }
     }
 
     fn write(&mut self, idx: u16, val: u8) {
+        //println!("Writing {:02X} to {:04X}", val, idx); 
         match idx % 0x20 {
             x @ 0x00...0x03 => self.pulse1.write(x, val),
             x @ 0x04...0x07 => self.pulse2.write(x, val),
@@ -666,7 +681,13 @@ impl MemSegment for APU {
             x @ 0x0C...0x0F => self.noise.write(x, val),
             x @ 0x10...0x13 => self.dmc.write(x, val),
             0x0014 => (),
-            0x0015 => self.control = val,
+            0x0015 => {
+                self.dmc.enabled =      (val & 0b0001_0000) != 0;
+                self.noise.enabled =    (val & 0b0000_1000) != 0;
+                self.triangle.enabled = (val & 0b0000_0100) != 0;
+                self.pulse2.enabled =   (val & 0b0000_0010) != 0;
+                self.pulse1.enabled =   (val & 0b0000_0001) != 0;
+            },
             0x0016 => (),
             0x0017 => {
                 self.frame = Frame::from_bits_truncate(val);

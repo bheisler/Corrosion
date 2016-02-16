@@ -8,8 +8,7 @@ use std::sync::Arc;
 use std::cmp;
 
 const OUT_SAMPLE_RATE: i32 = 44100;
-//TODO: This probably doesn't need to be so big.
-const BUFFER_SIZE : usize = OUT_SAMPLE_RATE as usize;
+const BUFFER_SIZE : usize = OUT_SAMPLE_RATE as usize / 15;
 
 struct BufferOut {
     samples: [Sample; BUFFER_SIZE],
