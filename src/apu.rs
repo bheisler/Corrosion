@@ -85,6 +85,14 @@ impl Length {
         self.remaining > 0
     }
     
+    fn active(&self) -> u8 {
+        if self.audible() {
+            1
+        } else {
+            0
+        }
+    }
+    
     fn new(halt_bit: usize) -> Length {
         Length {
             halt_bit: halt_bit,
@@ -665,9 +673,15 @@ impl MemSegment for APU {
     fn read(&mut self, idx: u16) -> u8 {
         match idx % 0x20 {
             0x0015 => {
-                println!("Reading 0x4015");
-                0
-            }, //TODO
+                let mut status : u8 = 0;
+                status = status | ( self.pulse1.length.active()   << 0 );
+                status = status | ( self.pulse2.length.active()   << 1 );
+                status = status | ( self.triangle.length.active() << 2 );
+                status = status | ( self.noise.length.active()    << 3 );
+                //TODO add DMC status
+                //TODO add interrupt flags when I implement the interrupts
+                status
+            },
             _ => 0,
         }
     }
