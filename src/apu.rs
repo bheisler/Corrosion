@@ -543,7 +543,7 @@ pub struct APU {
     device: Box<AudioOut>,
     
     global_cyc: u64,
-    tick: u64,
+    tick: u8,
     next_tick_cyc: u64,
     next_transfer_cyc: u64,
     last_frame_cyc: u64,
@@ -592,7 +592,6 @@ impl APU {
     
     ///Represents the 240Hz output of the frame sequencer's divider
     fn tick(&mut self) {
-        self.tick += 1;
         self.next_tick_cyc += if self.tick %2 == 0 {
             CPU_CYCLES_PER_EVEN_TICK
         }
@@ -601,12 +600,12 @@ impl APU {
         };
                 
         if !self.frame.contains(MODE) {
-            match self.tick % 4 {
+            match self.tick {
                 0 => { self.envelope_tick(); },
                 1 => { self.envelope_tick(); self.length_tick(); },
                 2 => { self.envelope_tick(); },
                 3 => { self.envelope_tick(); self.length_tick(); self.raise_irq(); },
-                _ => (),
+                _ => { self.tick = 0; },
             }
         }
         else {
@@ -616,9 +615,10 @@ impl APU {
                 2 => { self.envelope_tick(); self.length_tick() },
                 3 => { self.envelope_tick(); },
                 4 => (),
-                _ => (),
+                _ => { self.tick = 0; },
             }
         }
+        self.tick += 1;
     }
     
     fn envelope_tick(&mut self) {
