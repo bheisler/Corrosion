@@ -60,25 +60,25 @@ trait Writable {
 struct Length {
     halt_bit: usize,
     halted: bool,
+    enabled: bool,
     remaining: u8,
 }
 
 impl Length {
     fn write_halt(&mut self, val: u8) {
         self.halted = (val >> self.halt_bit ) & 0x01 != 0;
-        if self.halted {
-            self.remaining = 0;
-        }
     }
     
     fn write_counter(&mut self, val: u8) {
-        if !self.halted {
+        if self.enabled {
             self.remaining = LENGTH_TABLE[(val >> 3) as usize];
         }
     }
     
     fn tick(&mut self) {
-        self.remaining = self.remaining.saturating_sub(1);
+        if !self.halted {
+            self.remaining = self.remaining.saturating_sub(1);
+        }
     }
     
     fn audible(&self) -> bool {
@@ -93,10 +93,18 @@ impl Length {
         }
     }
     
+    fn set_enable(&mut self, enable: bool) {
+        self.enabled = enable;
+        if !enable {
+            self.remaining = 0;
+        }
+    }
+    
     fn new(halt_bit: usize) -> Length {
         Length {
             halt_bit: halt_bit,
             halted: false,
+            enabled: false,
             remaining: 0,
         }
     }
@@ -270,8 +278,6 @@ struct Pulse {
     
     last_amp: Sample,
     buffer: SampleBuffer,
-    
-    enabled: bool,
 }
 
 impl Pulse {
@@ -285,8 +291,6 @@ impl Pulse {
             
             last_amp: 0,
             buffer: buffer,
-            
-            enabled: true,
         }
     }
     
@@ -302,8 +306,7 @@ impl Pulse {
     
     fn play(&mut self, from_cyc: u32, to_cyc: u32) {
         if !self.sweep.audible() ||
-           !self.length.audible() ||
-           !self.enabled {
+           !self.length.audible() {
            
            self.set_amplitude(0, from_cyc);
            return;
@@ -368,8 +371,6 @@ struct Triangle {
     counter: u8,
     timer: u8,
     length: Length,
-    
-    enabled: bool,
 }
 
 impl Triangle {
@@ -378,8 +379,6 @@ impl Triangle {
             counter: 0,
             timer: 0,
             length: Length::new(7),
-            
-            enabled: false,
         }
     }
     
@@ -412,8 +411,6 @@ struct Noise {
     envelope: Envelope,
     mode: u8,
     length: Length,
-    
-    enabled: bool,
 }
 
 impl Noise {
@@ -422,8 +419,6 @@ impl Noise {
             envelope: Envelope::new(),
             mode: 0,
             length: Length::new(5),
-            
-            enabled: false,
         }
     }
     
@@ -456,8 +451,6 @@ struct DMC {
     direct: u8,
     sample_addr: u8,
     sample_length: u8,
-    
-    enabled: bool,
 }
 
 impl DMC {
@@ -467,8 +460,6 @@ impl DMC {
             direct: 0,
             sample_addr: 0,
             sample_length: 0,
-            
-            enabled: false,
         }
     }
     
@@ -696,11 +687,10 @@ impl MemSegment for APU {
             x @ 0x10...0x13 => self.dmc.write(x, val),
             0x0014 => (),
             0x0015 => {
-                self.dmc.enabled =      (val & 0b0001_0000) != 0;
-                self.noise.enabled =    (val & 0b0000_1000) != 0;
-                self.triangle.enabled = (val & 0b0000_0100) != 0;
-                self.pulse2.enabled =   (val & 0b0000_0010) != 0;
-                self.pulse1.enabled =   (val & 0b0000_0001) != 0;
+                self.noise.length.set_enable(val & 0b0000_1000 != 0);
+                self.triangle.length.set_enable(val & 0b0000_0100 != 0);
+                self.pulse2.length.set_enable(val & 0b0000_0010 != 0);
+                self.pulse1.length.set_enable(val & 0b0000_0001 != 0);
             },
             0x0016 => (),
             0x0017 => {
