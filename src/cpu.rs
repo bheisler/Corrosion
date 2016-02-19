@@ -22,7 +22,7 @@ impl IrqInterrupt {
 
 macro_rules! decode_opcode {
     ($opcode:expr, $this:expr) => { match $opcode {
-        //Stores
+// Stores
         0x86 => { let mode = $this.zero_page();   $this.stx( mode ) },
         0x96 => { let mode = $this.zero_page_y(); $this.stx( mode ) },
         0x8E => { let mode = $this.absolute();    $this.stx( mode ) },
@@ -39,7 +39,7 @@ macro_rules! decode_opcode {
         0x81 => { let mode = $this.indirect_x();  $this.sta( mode ) },
         0x91 => { let mode = $this.indirect_y();  $this.sta( mode ) },
 
-        //Loads
+// Loads
         0xA2 => { let mode = $this.immediate();   $this.ldx( mode ) },
         0xA6 => { let mode = $this.zero_page();   $this.ldx( mode ) },
         0xB6 => { let mode = $this.zero_page_y(); $this.ldx( mode ) },
@@ -61,7 +61,7 @@ macro_rules! decode_opcode {
         0xA1 => { let mode = $this.indirect_x();  $this.lda( mode ) },
         0xB1 => { let mode = $this.indirect_y();  $this.lda( mode ) },
 
-        //Logic/math operations
+// Logic/math operations
         0x24 => { let mode = $this.zero_page();   $this.bit( mode ) },
         0x2C => { let mode = $this.absolute();    $this.bit( mode ) },
 
@@ -167,7 +167,7 @@ macro_rules! decode_opcode {
         0x2E => { let mode = $this.absolute();    $this.rol( mode ) },
         0x3E => { let mode = $this.absolute_x();  $this.rol( mode ) },
 
-        //Jumps
+// Jumps
         0x4C => $this.jmp(),
         0x6C => $this.jmpi(),
         0x20 => $this.jsr(),
@@ -175,7 +175,7 @@ macro_rules! decode_opcode {
         0x40 => $this.rti(),
         0x00 => $this.brk(),
 
-        //Branches
+// Branches
         0xB0 => $this.bcs(),
         0x90 => $this.bcc(),
         0xF0 => $this.beq(),
@@ -185,13 +185,13 @@ macro_rules! decode_opcode {
         0x30 => $this.bmi(),
         0x10 => $this.bpl(),
 
-        //Stack
+// Stack
         0x28 => $this.plp(),
         0x08 => $this.php(),
         0x68 => $this.pla(),
         0x48 => $this.pha(),
 
-        //Misc
+// Misc
         0xEA => $this.nop(),
         0x38 => $this.sec(),
         0x18 => $this.clc(),
@@ -206,7 +206,7 @@ macro_rules! decode_opcode {
         0x9A => $this.txs(),
         0x98 => $this.tya(),
 
-        //Unofficial NOPs
+// Unofficial NOPs
         0x04 | 0x44 | 0x64 => { $this.unofficial( ); let mode = $this.zero_page(); $this.u_nop(mode) }
         0x0C => { $this.unofficial( ); let mode = $this.absolute(); $this.u_nop(mode) }
         0x14 | 0x34 | 0x54 | 0x74 | 0xD4 | 0xF4 => { $this.unofficial( ); let mode = $this.zero_page_x(); $this.u_nop(mode) }
@@ -278,7 +278,7 @@ macro_rules! decode_opcode {
 
         0x02 | 0x12 | 0x22 | 0x32 | 0x42 | 0x52 | 0x62 | 0x72 | 0x82 | 0x92 | 0xB2 | 0xD2 | 0xF2 => $this.kil(),
 
-        //Else
+// Else
         x => panic!( "Unknown or unsupported opcode: {:02X}", x ),
     } }
 }
@@ -412,7 +412,7 @@ impl MemSegment for CPU {
             0x4015 => {
                 self.run_apu();
                 self.mem.read(idx)
-            },
+            }
             _ => self.mem.read(idx),
         }
 
@@ -424,7 +424,7 @@ impl MemSegment for CPU {
             0x4000...0x4013 | 0x4015 | 0x4017 => {
                 self.run_apu();
                 self.mem.write(idx, val);
-            },
+            }
             _ => self.mem.write(idx, val),
         }
     }
@@ -435,7 +435,7 @@ impl CPU {
     fn trace(&mut self) {
         let opcode = Disassembler::new(self).decode();
         println!(
-            "{:04X} {:9} {}{:30}  A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:3} SL:{}",// VRAM:{:04X}",
+            "{:04X} {:9} {}{:30}  A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:3} SL:{:3}. VRAM:{:04X}",
             self.regs.pc,
             opcode.bytes.iter()
                 .map(|byte| format!("{:02X}", byte))
@@ -449,7 +449,7 @@ impl CPU {
             self.regs.sp,
             self.mem.ppu.borrow().cycle(),
             self.mem.ppu.borrow().scanline(),
-            //self.mem.ppu.borrow().vram_addr(),
+            self.mem.ppu.borrow().vram_addr(),
         );
     }
 
@@ -897,19 +897,19 @@ impl CPU {
         let status = self.regs.p;
         self.stack_push(status.bits());
     }
-    
+
     pub fn irq(&mut self) {
-        if self.regs.p.contains( I ) {
+        if self.regs.p.contains(I) {
             return;
         }
-        
+
         let target = self.read_w(IRQ_VECTOR);
         let return_addr = self.regs.pc;
         self.regs.pc = target;
         self.stack_push_w(return_addr);
         let status = self.regs.p;
         self.stack_push(status.bits());
-        self.regs.p.insert( I );
+        self.regs.p.insert(I);
     }
 
     fn load_incr_pc(&mut self) -> u8 {
@@ -1058,14 +1058,14 @@ impl CPU {
         if self.mem.apu.requested_run_cycle() <= self.cycle {
             self.run_apu();
         }
-        
+
         self.trace();
         self.stack_dump();
         let opcode: u8 = self.load_incr_pc();
         decode_opcode!(opcode, self);
         self.incr_cycle(CYCLE_TABLE[opcode as usize] as u64);
     }
-    
+
     fn run_apu(&mut self) {
         let irq = self.mem.apu.run_to(self.cycle);
         match irq {

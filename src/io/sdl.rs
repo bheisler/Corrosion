@@ -13,14 +13,14 @@ use util::ShiftRegister8;
 ///almost always 0x40, we can just use that as a constant for now.
 const OPEN_BUS: u8 = 0x40;
 
-const A:      u8 = 1 << 0;
-const B:      u8 = 1 << 1;
+const A: u8 = 1 << 0;
+const B: u8 = 1 << 1;
 const SELECT: u8 = 1 << 2;
-const START:  u8 = 1 << 3;
-const UP:     u8 = 1 << 4;
-const DOWN:   u8 = 1 << 5;
-const LEFT:   u8 = 1 << 6;
-const RIGHT:  u8 = 1 << 7;
+const START: u8 = 1 << 3;
+const UP: u8 = 1 << 4;
+const DOWN: u8 = 1 << 5;
+const LEFT: u8 = 1 << 6;
+const RIGHT: u8 = 1 << 7;
 
 pub struct SdlIO {
     event_pump: Rc<RefCell<EventPump>>,
@@ -30,7 +30,7 @@ pub struct SdlIO {
 }
 
 impl SdlIO {
-    pub fn new(pump: Rc<RefCell<EventPump>> ) -> SdlIO {
+    pub fn new(pump: Rc<RefCell<EventPump>>) -> SdlIO {
         SdlIO {
             event_pump: pump,
             strobe: false,
@@ -61,22 +61,22 @@ impl MemSegment for SdlIO {
 fn read_key(state: &KeyboardState, key: Scancode, val: u8) -> u8 {
     if state.is_scancode_pressed(key) {
         val
-    }
-    else {
+    } else {
         0
     }
 }
 
 impl IO for SdlIO {
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     fn poll(&mut self) {
         if !self.strobe {
             return;
         }
-        
+
         let pump_ref = self.event_pump.borrow();
         let state = KeyboardState::new(&*pump_ref);
-        
-        let c1 = 0 | 
+
+        let c1 = 0 |
             read_key(&state, Scancode::Z, A) |
             read_key(&state, Scancode::X, B) |
             read_key(&state, Scancode::Return, START) |

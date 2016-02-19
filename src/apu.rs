@@ -12,7 +12,7 @@ const CPU_CYCLES_PER_EVEN_TICK: u64 = NES_CLOCK_RATE / TICK_RATE;
 const CPU_CYCLES_PER_ODD_TICK: u64 = CPU_CYCLES_PER_EVEN_TICK + 1;
 
 const NES_FPS: usize = 60;
-const FRAMES_PER_BUFFER : usize = 1;
+const FRAMES_PER_BUFFER: usize = 1;
 
 const SAMPLE_RATE: usize = 44100;
 const SAMPLES_PER_FRAME: usize = (SAMPLE_RATE / NES_FPS);
@@ -20,6 +20,7 @@ pub const BUFFER_SIZE: usize = SAMPLES_PER_FRAME * FRAMES_PER_BUFFER;
 
 const VOLUME_MULT: i16 = (32767i16 / 16) / 2;
 
+#[cfg_attr(rustfmt, rustfmt_skip)]
 static LENGTH_TABLE: [u8; 32] = [
     0x0A, 0xFE,
     0x14, 0x02,
@@ -39,12 +40,10 @@ static LENGTH_TABLE: [u8; 32] = [
     0x20, 0x1E,
 ];
 
-static PULSE_DUTY_CYCLES: [[i16; 8]; 4] = [
-    [0, 1, -1, 0, 0, 0, 0, 0],
-    [0, 1, 0, -1, 0, 0, 0, 0],
-    [0, 1, 0, 0, 0, -1, 0, 0],
-    [0, -1, 0, 1, 0, 0, 0, 0],
-];
+static PULSE_DUTY_CYCLES: [[i16; 8]; 4] = [[0, 1, -1, 0, 0, 0, 0, 0],
+                                           [0, 1, 0, -1, 0, 0, 0, 0],
+                                           [0, 1, 0, 0, 0, -1, 0, 0],
+                                           [0, -1, 0, 1, 0, 0, 0, 0]];
 
 bitflags! {
     flags Frame : u8 {
@@ -67,25 +66,25 @@ struct Length {
 
 impl Length {
     fn write_halt(&mut self, val: u8) {
-        self.halted = (val >> self.halt_bit ) & 0x01 != 0;
+        self.halted = (val >> self.halt_bit) & 0x01 != 0;
     }
-    
+
     fn write_counter(&mut self, val: u8) {
         if self.enabled {
             self.remaining = LENGTH_TABLE[(val >> 3) as usize];
         }
     }
-    
+
     fn tick(&mut self) {
         if !self.halted {
             self.remaining = self.remaining.saturating_sub(1);
         }
     }
-    
+
     fn audible(&self) -> bool {
         self.remaining > 0
     }
-    
+
     fn active(&self) -> u8 {
         if self.audible() {
             1
@@ -93,14 +92,14 @@ impl Length {
             0
         }
     }
-    
+
     fn set_enable(&mut self, enable: bool) {
         self.enabled = enable;
         if !enable {
             self.remaining = 0;
         }
     }
-    
+
     fn new(halt_bit: usize) -> Length {
         Length {
             halt_bit: halt_bit,
@@ -115,7 +114,7 @@ struct Envelope {
     should_loop: bool,
     disable: bool,
     n: u8,
-    
+
     divider: u8,
     counter: u8,
 }
@@ -130,75 +129,74 @@ impl Envelope {
             counter: 0,
         }
     }
-    
+
     fn write(&mut self, val: u8) {
         self.should_loop = (val >> 5) & 0x01 != 0;
-        self.disable     = (val >> 6) & 0x01 != 0;
-        self.n           = val & 0x0F;
+        self.disable = (val >> 6) & 0x01 != 0;
+        self.n = val & 0x0F;
         self.divider = self.n;
         self.counter = 15;
     }
-    
+
     fn tick(&mut self) {
         if self.divider == 0 {
             self.envelope_tick();
             self.divider = self.n;
-        }
-        else {
+        } else {
             self.divider -= 1;
         }
     }
-    
+
     fn envelope_tick(&mut self) {
         if self.should_loop && self.counter == 0 {
             self.counter = 15;
-        }
-        else {
+        } else {
             self.counter = self.counter.saturating_sub(1);
         }
     }
-    
+
     fn volume(&self) -> i16 {
         if self.disable {
             self.n as i16
-        }
-        else {
+        } else {
             self.counter as i16
         }
     }
 }
 
+// The timer is clocked for every sample, so the period logic is in the
+// Pulse.play function
 struct Timer {
     period: u16,
     current_step: u32,
     duty_index: usize,
-    
-    //The timer is clocked for every sample, so the period logic is in the Pulse.play function
 }
 
 impl Timer {
     fn new() -> Timer {
-        Timer{
+        Timer {
             period: 0,
             current_step: 0,
             duty_index: 0,
         }
     }
-    
+
     fn write_low(&mut self, val: u8) {
-        self.period = ( self.period & 0xFF00 ) | val as u16;
-    } 
-    
-    fn write_high(&mut self, val: u8) {
-        self.period = ( self.period & 0x00FF ) | (val as u16 & 0x0007) << 8;
+        self.period = (self.period & 0xFF00) | val as u16;
     }
-    
+
+    fn write_high(&mut self, val: u8) {
+        self.period = (self.period & 0x00FF) | (val as u16 & 0x0007) << 8;
+    }
+
     fn add_period_shift(&mut self, shift: i16) {
-        let new_period = (self.period as i16).wrapping_add( shift );
+        let new_period = (self.period as i16).wrapping_add(shift);
         self.period = new_period as u16;
     }
-    
-    fn wavelen(&self) -> u32 { (self.period as u32 + 1) * 2 }
+
+    fn wavelen(&self) -> u32 {
+        (self.period as u32 + 1) * 2
+    }
 }
 
 struct Sweep {
@@ -206,7 +204,7 @@ struct Sweep {
     period: u8,
     negate: bool,
     shift: u8,
-    
+
     is_pulse2: bool,
     divider: u8,
     reload: bool,
@@ -219,44 +217,44 @@ impl Sweep {
             period: 0,
             negate: false,
             shift: 0,
-            
+
             is_pulse2: is_pulse2,
             divider: 0,
             reload: false,
         }
     }
-    
+
     fn write(&mut self, val: u8) {
         self.enable = (val & 0b1000_0000) != 0;
         self.period = (val & 0b0111_0000) >> 4;
         self.negate = (val & 0b0000_1000) != 0;
-        self.shift  =  val & 0b0000_0111;
+        self.shift = val & 0b0000_0111;
         self.reload = true;
     }
-    
+
     fn tick(&mut self, timer: &mut Timer) {
         if !self.enable {
             return;
         }
-        
+
         self.divider = self.divider.saturating_sub(1);
         if self.divider == 0 {
             self.divider = self.period;
             let period_shift = self.period_shift(timer);
-            timer.add_period_shift( period_shift );
+            timer.add_period_shift(period_shift);
         }
-        
+
         if self.reload {
             self.divider = self.period;
             self.reload = false;
         }
     }
-    
+
     fn audible(&self) -> bool {
-        //TODO
+        // TODO
         true
     }
-    
+
     fn period_shift(&self, timer: &Timer) -> i16 {
         let mut shift = timer.period as i16;
         shift = shift >> self.shift;
@@ -276,7 +274,7 @@ struct Pulse {
     sweep: Sweep,
     timer: Timer,
     length: Length,
-    
+
     last_amp: Sample,
     buffer: SampleBuffer,
 }
@@ -289,55 +287,53 @@ impl Pulse {
             sweep: Sweep::new(is_pulse2),
             timer: Timer::new(),
             length: Length::new(5),
-            
+
             last_amp: 0,
             buffer: buffer,
         }
     }
-    
+
     fn length_tick(&mut self) {
         self.length.tick();
         let timer = &mut self.timer;
         self.sweep.tick(timer)
     }
-    
+
     fn envelope_tick(&mut self) {
         self.envelope.tick();
     }
-    
+
     fn play(&mut self, from_cyc: u32, to_cyc: u32) {
-        if !self.sweep.audible() ||
-           !self.length.audible() {
-           
-           self.set_amplitude(0, from_cyc);
-           return;
+        if !self.sweep.audible() || !self.length.audible() {
+
+            self.set_amplitude(0, from_cyc);
+            return;
         }
         let volume = self.envelope.volume();
-        
+
         let mut current_cyc = from_cyc;
         while current_cyc < to_cyc {
             let wavelen = self.timer.wavelen();
             let remaining = wavelen - self.timer.current_step;
             let end_wavelen = current_cyc + remaining;
-            
+
             if end_wavelen < to_cyc {
                 self.timer.current_step = 0;
                 current_cyc += remaining;
-                self.timer.duty_index = ( self.timer.duty_index + 1 ) % 8;
+                self.timer.duty_index = (self.timer.duty_index + 1) % 8;
                 match PULSE_DUTY_CYCLES[self.duty][self.timer.duty_index] {
                     -1 => self.set_amplitude(0, current_cyc),
                     0 => (),
                     1 => self.set_amplitude(volume, current_cyc),
                     _ => (),
                 };
-            }
-            else {
+            } else {
                 self.timer.current_step = to_cyc - current_cyc;
                 current_cyc = to_cyc;
             }
         }
     }
-    
+
     fn set_amplitude(&mut self, amp: Sample, cycle: u32) {
         let last_amp = self.last_amp;
         let delta = (amp - last_amp) as i32;
@@ -356,13 +352,13 @@ impl Writable for Pulse {
                 self.duty = (val >> 6) as usize;
                 self.length.write_halt(val);
                 self.envelope.write(val);
-            },
+            }
             1 => self.sweep.write(val),
             2 => self.timer.write_low(val),
-            3 => { 
+            3 => {
                 self.length.write_counter(val);
                 self.timer.write_high(val);
-            },
+            }
             _ => (),
         }
     }
@@ -384,18 +380,16 @@ impl Triangle {
             length: Length::new(7),
         }
     }
-    
+
     fn length_tick(&mut self) {
         self.length.tick();
     }
-    
+
     fn envelope_tick(&mut self) {
-        //Nothing yet
+        // Nothing yet
     }
-    
-    fn play(&mut self, from_cyc: u32, to_cyc: u32) {
-        
-    }
+
+    fn play(&mut self, from_cyc: u32, to_cyc: u32) {}
 }
 
 impl Writable for Triangle {
@@ -426,14 +420,12 @@ impl Noise {
             length: Length::new(5),
         }
     }
-    
+
     fn length_tick(&mut self) {
         self.length.tick();
     }
-    
-    fn play(&mut self, from_cyc: u32, to_cyc: u32) {
-        
-    }
+
+    fn play(&mut self, from_cyc: u32, to_cyc: u32) {}
 }
 
 impl Writable for Noise {
@@ -442,7 +434,7 @@ impl Writable for Noise {
             0 => {
                 self.length.write_halt(val);
                 self.envelope.write(val);
-            },
+            }
             1 => (),
             2 => (),
             3 => self.length.write_counter(val),
@@ -469,17 +461,13 @@ impl DMC {
             sample_length: 0,
         }
     }
-    
-    fn play(&mut self, from_cyc: u32, to_cyc: u32) {
-        
-    }
+
+    fn play(&mut self, from_cyc: u32, to_cyc: u32) {}
 }
 
 #[allow(unused_variables)] //TODO: Remove this
 impl Writable for DMC {
-    fn write(&mut self, idx: u16, val: u8) {
-        
-    }
+    fn write(&mut self, idx: u16, val: u8) {}
 }
 
 struct SampleBuffer {
@@ -492,32 +480,32 @@ impl SampleBuffer {
     fn new(out_rate: f64) -> SampleBuffer {
         let samples_per_frame = out_rate as u32 / NES_FPS as u32;
         let transfer_samples = samples_per_frame * FRAMES_PER_BUFFER as u32;
-        
+
         let mut buf = BlipBuf::new(transfer_samples);
         buf.set_rates(NES_CLOCK_RATE as f64, out_rate);
         let samples = vec![0; (transfer_samples) as usize];
-        
+
         SampleBuffer {
             blip: buf,
             samples: samples,
             transfer_samples: transfer_samples,
         }
     }
-    
+
     fn read(&mut self) -> &[Sample] {
         let samples_read = self.blip.read_samples(&mut self.samples, false);
-        let slice : &[Sample] = &self.samples;
+        let slice: &[Sample] = &self.samples;
         &slice[0..samples_read]
     }
-    
+
     fn add_delta(&mut self, clock_time: u32, delta: i32) {
         self.blip.add_delta(clock_time, delta)
     }
-    
+
     fn end_frame(&mut self, clock_duration: u32) {
         self.blip.end_frame(clock_duration)
     }
-    
+
     fn clocks_needed(&self) -> u32 {
         self.blip.clocks_needed(self.transfer_samples)
     }
@@ -530,20 +518,20 @@ pub struct APU {
     noise: Noise,
     dmc: DMC,
     frame: Frame,
-    
+
     device: Box<AudioOut>,
-    
+
     global_cyc: u64,
     tick: u8,
     next_tick_cyc: u64,
     next_transfer_cyc: u64,
     last_frame_cyc: u64,
-    
+
     irq_requested: bool,
 }
 
 impl APU {
-    pub fn new( device: Box<AudioOut> ) -> APU {
+    pub fn new(device: Box<AudioOut>) -> APU {
         let sample_rate = device.sample_rate();
         let mut apu = APU {
             pulse1: Pulse::new(false, SampleBuffer::new(sample_rate)),
@@ -552,50 +540,51 @@ impl APU {
             noise: Noise::new(),
             dmc: DMC::new(),
             frame: Frame::empty(),
-            
+
             device: device,
-            
+
             global_cyc: 0,
             tick: 0,
             next_tick_cyc: CPU_CYCLES_PER_EVEN_TICK,
             next_transfer_cyc: 0,
             last_frame_cyc: 0,
-            
+
             irq_requested: false,
         };
         apu.next_transfer_cyc = apu.pulse1.buffer.clocks_needed() as u64;
         apu
     }
-    
+
     pub fn run_to(&mut self, cpu_cycle: u64) -> IrqInterrupt {
         let mut interrupt = IrqInterrupt::None;
-        
+
         while self.global_cyc < cpu_cycle {
             let current_cycle = self.global_cyc;
-            
-            let next_step = cmp::min(cmp::min(cpu_cycle, self.next_tick_cyc), self.next_transfer_cyc);
+
+            let next_step = cmp::min(cmp::min(cpu_cycle, self.next_tick_cyc),
+                                     self.next_transfer_cyc);
             self.play(current_cycle, next_step);
             self.global_cyc = next_step;
-            
+
             if self.global_cyc == self.next_tick_cyc {
-                interrupt = interrupt.or( self.tick() );
+                interrupt = interrupt.or(self.tick());
             }
             if self.global_cyc == self.next_transfer_cyc {
                 self.transfer();
-            } 
+            }
         }
         interrupt
     }
-    
-    ///Represents the 240Hz output of the frame sequencer's divider
+
+    /// Represents the 240Hz output of the frame sequencer's divider
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     fn tick(&mut self) -> IrqInterrupt {
-        self.next_tick_cyc += if self.tick %2 == 0 {
+        self.next_tick_cyc += if self.tick % 2 == 0 {
             CPU_CYCLES_PER_EVEN_TICK
-        }
-        else {
+        } else {
             CPU_CYCLES_PER_ODD_TICK
         };
-        
+
         if !self.frame.contains(MODE) {
             match self.tick {
                 0 => { self.tick += 1; self.envelope_tick(); },
@@ -617,28 +606,28 @@ impl APU {
         }
         IrqInterrupt::None
     }
-    
+
     fn envelope_tick(&mut self) {
         self.pulse1.envelope_tick();
         self.pulse2.envelope_tick();
         self.triangle.envelope_tick();
     }
-    
+
     fn length_tick(&mut self) {
         self.pulse1.length_tick();
         self.pulse2.length_tick();
         self.triangle.length_tick();
         self.noise.length_tick();
     }
-    
+
     fn raise_irq(&mut self) -> IrqInterrupt {
-        if !self.frame.contains( SUPPRESS_IRQ ) {
+        if !self.frame.contains(SUPPRESS_IRQ) {
             self.irq_requested = true;
             return IrqInterrupt::IRQ;
         }
         return IrqInterrupt::None;
     }
-    
+
     fn play(&mut self, from_cyc: u64, to_cyc: u64) {
         let from = (from_cyc - self.last_frame_cyc) as u32;
         let to = (to_cyc - self.last_frame_cyc) as u32;
@@ -648,55 +637,58 @@ impl APU {
         self.noise.play(from, to);
         self.dmc.play(from, to);
     }
-    
+
     fn transfer(&mut self) {
         let cpu_cyc = self.global_cyc;
         let cycles_since_last_frame = (cpu_cyc - self.last_frame_cyc) as u32;
         self.last_frame_cyc = cpu_cyc;
         self.pulse1.buffer.end_frame(cycles_since_last_frame);
         self.pulse2.buffer.end_frame(cycles_since_last_frame);
-        //self.pulse2.buffer.clear();
-        let samples : Vec<Sample> = self.pulse1.buffer.read().iter().zip(self.pulse2.buffer.read().iter())
-            .map(|(p1, p2)| p1 + p2)
-            //.inspect(|x| assert!(-16i16 <= **x && **x <= 16i16, "Value {} out of range", x))
-            //.map(|x| x * VOLUME_MULT)
-            .collect();
+        let samples: Vec<Sample> = self.pulse1
+                                       .buffer
+                                       .read()
+                                       .iter()
+                                       .zip(self.pulse2.buffer.read().iter())
+                                       .map(|(p1, p2)| p1 + p2)
+                                       .collect();
         self.device.play(&samples);
         self.next_transfer_cyc = cpu_cyc + self.pulse1.buffer.clocks_needed() as u64;
     }
-    
+
     ///Returns the cycle number representing the next time the CPU should run the APU.
     ///Min of the next APU IRQ, the next DMC IRQ, and the next tick time. When the CPU cycle reaches
     ///this number, the CPU must run the APU.
     pub fn requested_run_cycle(&self) -> u64 {
-        //In practice, the next tick time should cover the APU IRQ as well, since the IRQ happens
-        //on tick boundaries. The DMC IRQ isn't implemented yet.
-        //Using the tick time ensures that the APU will never get too far behind the CPU.
+        // In practice, the next tick time should cover the APU IRQ as well, since the
+        // IRQ happens on tick boundaries. The DMC IRQ isn't implemented yet.
+        // Using the tick time ensures that the APU will never get too far behind the
+        // CPU.
         self.next_tick_cyc
     }
 }
 
 impl MemSegment for APU {
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     fn read(&mut self, idx: u16) -> u8 {
         match idx % 0x20 {
             0x0015 => {
-                let mut status : u8 = 0;
-                status = status | ( self.pulse1.length.active()   << 0 );
-                status = status | ( self.pulse2.length.active()   << 1 );
-                status = status | ( self.triangle.length.active() << 2 );
-                status = status | ( self.noise.length.active()    << 3 );
+                let mut status: u8 = 0;
+                status = status | (self.pulse1.length.active() << 0);
+                status = status | (self.pulse2.length.active() << 1);
+                status = status | (self.triangle.length.active() << 2);
+                status = status | (self.noise.length.active() << 3);
                 status = status | if self.irq_requested { 1 << 6 } else { 0 };
-                //TODO add DMC status
-                //TODO add DMC interrupt flag
+    // TODO add DMC status
+    // TODO add DMC interrupt flag
                 self.irq_requested = false;
                 status
-            },
+            }
             _ => 0,
         }
     }
 
     fn write(&mut self, idx: u16, val: u8) {
-        //println!("Writing {:02X} to {:04X}", val, idx); 
+        // println!("Writing {:02X} to {:04X}", val, idx);
         match idx % 0x20 {
             x @ 0x00...0x03 => self.pulse1.write(x, val),
             x @ 0x04...0x07 => self.pulse2.write(x, val),
@@ -709,24 +701,23 @@ impl MemSegment for APU {
                 self.triangle.length.set_enable(val & 0b0000_0100 != 0);
                 self.pulse2.length.set_enable(val & 0b0000_0010 != 0);
                 self.pulse1.length.set_enable(val & 0b0000_0001 != 0);
-            },
+            }
             0x0016 => (),
             0x0017 => {
                 self.frame = Frame::from_bits_truncate(val);
                 if self.frame.contains(SUPPRESS_IRQ) {
                     self.irq_requested = false;
                 }
-                
+
                 self.tick = 0;
-                if self.frame.contains( MODE ) {
-                    //Trigger a tick immediately
+                if self.frame.contains(MODE) {
+                    // Trigger a tick immediately
                     self.next_tick_cyc = self.global_cyc
-                }
-                else {
-                    //Reset the tick divider
+                } else {
+                    // Reset the tick divider
                     self.next_tick_cyc = self.global_cyc + CPU_CYCLES_PER_EVEN_TICK
                 }
-            },
+            }
             _ => (),
         }
     }

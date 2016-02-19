@@ -75,7 +75,11 @@ pub struct CpuMemory {
 }
 
 impl CpuMemory {
-    pub fn new(ppu: Rc<RefCell<PPU>>, apu: APU, io: Rc<RefCell<IO>>, cart: Rc<RefCell<Cart>>) -> CpuMemory {
+    pub fn new(ppu: Rc<RefCell<PPU>>,
+               apu: APU,
+               io: Rc<RefCell<IO>>,
+               cart: Rc<RefCell<Cart>>)
+               -> CpuMemory {
         CpuMemory {
             ram: RAM::new(),
             ppu: ppu,

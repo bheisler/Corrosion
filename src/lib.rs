@@ -72,7 +72,7 @@ pub fn start_emulator(cart: Cart) {
     let ppu = PPU::new(cart.clone(), Box::new(screen));
     let ppu = Rc::new(RefCell::new(ppu));
     let apu = APU::new(Box::new(audio_out));
-    let io : Rc<RefCell<IO>> = Rc::new(RefCell::new(io::sdl::SdlIO::new(event_pump.clone())));
+    let io: Rc<RefCell<IO>> = Rc::new(RefCell::new(io::sdl::SdlIO::new(event_pump.clone())));
     let mem = CpuMemory::new(ppu.clone(), apu, io.clone(), cart);
     let mut cpu = CPU::new(mem);
     cpu.init();
