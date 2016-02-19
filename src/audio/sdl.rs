@@ -46,6 +46,9 @@ impl AudioCallback for BufferOut {
                 self.too_slow = true;
                 *dest = 0;
             }
+            if self.too_slow {
+                self.input_counter = self.playback_counter;
+            }
         }
         
         self.condvar.notify_one();

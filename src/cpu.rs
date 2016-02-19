@@ -6,6 +6,20 @@ const RESET_VECTOR: u16 = 0xFFFC;
 const IRQ_VECTOR: u16 = 0xFFFE;
 const STACK_PAGE: u16 = 0x0100;
 
+pub enum IrqInterrupt {
+    IRQ,
+    None,
+}
+
+impl IrqInterrupt {
+    pub fn or(self, other: IrqInterrupt) -> IrqInterrupt {
+        match self {
+            IrqInterrupt::IRQ => IrqInterrupt::IRQ,
+            IrqInterrupt::None => other,
+        }
+    }
+}
+
 macro_rules! decode_opcode {
     ($opcode:expr, $this:expr) => { match $opcode {
         //Stores
@@ -360,7 +374,7 @@ bitflags! {
     flags Status : u8 {
         const C = 0b0000_0001, //Carry flag
         const Z = 0b0000_0010, //Zero flag
-        const I = 0b0000_0100, //Enable Interrupts
+        const I = 0b0000_0100, //Suppress IRQ
         const D = 0b0000_1000, //Enable BCD mode
         const B = 0b0001_0000, //BRK
         const U = 0b0010_0000, //Unused, should always be 1
@@ -396,8 +410,7 @@ impl MemSegment for CPU {
         match idx {
             OAMDMA => 0, //No idea what this should return. PPU dynamic latch garbage, maybe?
             0x4015 => {
-                let cycle = self.cycle;
-                self.mem.apu.borrow_mut().run_to(cycle);
+                self.run_apu();
                 self.mem.read(idx)
             },
             _ => self.mem.read(idx),
@@ -409,8 +422,7 @@ impl MemSegment for CPU {
         match idx {
             OAMDMA => self.dma_transfer(val),
             0x4000...0x4013 | 0x4015 | 0x4017 => {
-                let cycle = self.cycle;
-                self.mem.apu.borrow_mut().run_to(cycle);
+                self.run_apu();
                 self.mem.write(idx, val);
             },
             _ => self.mem.write(idx, val),
@@ -700,8 +712,9 @@ impl CPU {
         self.regs.pc = self.stack_pop_w();
     }
     fn brk(&mut self) {
+        self.regs.pc -= 1;
         let target = self.read_w(IRQ_VECTOR);
-        let return_addr = self.regs.pc - 1;
+        let return_addr = self.regs.pc;
         self.regs.pc = target;
         self.stack_push_w(return_addr);
         let mut status = self.regs.p;
@@ -884,6 +897,20 @@ impl CPU {
         let status = self.regs.p;
         self.stack_push(status.bits());
     }
+    
+    pub fn irq(&mut self) {
+        if self.regs.p.contains( I ) {
+            return;
+        }
+        
+        let target = self.read_w(IRQ_VECTOR);
+        let return_addr = self.regs.pc;
+        self.regs.pc = target;
+        self.stack_push_w(return_addr);
+        let mut status = self.regs.p;
+        self.stack_push(status.bits());
+        self.regs.p.insert( I );
+    }
 
     fn load_incr_pc(&mut self) -> u8 {
         let pc = self.regs.pc;
@@ -1027,11 +1054,24 @@ impl CPU {
         if self.halted {
             return;
         }
+
+        if self.mem.apu.borrow().requested_run_cycle() <= self.cycle {
+            self.run_apu();
+        }
+        
         self.trace();
         self.stack_dump();
         let opcode: u8 = self.load_incr_pc();
         decode_opcode!(opcode, self);
         self.incr_cycle(CYCLE_TABLE[opcode as usize] as u64);
+    }
+    
+    fn run_apu(&mut self) {
+        let irq = self.mem.apu.borrow_mut().run_to(self.cycle);
+        match irq {
+            IrqInterrupt::IRQ => self.irq(),
+            _ => (),
+        }
     }
 
     fn dma_transfer(&mut self, page: u8) {

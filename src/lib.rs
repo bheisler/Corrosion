@@ -47,13 +47,12 @@ fn pump_events(pump: &Rc<RefCell<EventPump>>) -> bool {
 }
 
 fn run_frame(cpu: &mut CPU, io: &Rc<RefCell<IO>>, ppu: &Rc<RefCell<PPU>>, apu: &Rc<RefCell<APU>>) {
+    io.borrow_mut().poll();
     loop {
-        io.borrow_mut().poll();
         let cycle = cpu.cycle();
         let nmi = ppu.borrow_mut().run_to(cycle);
         let frame_end = nmi == ::ppu::StepResult::NMI;
         if frame_end {
-            apu.borrow_mut().frame_end(cycle);
             cpu.nmi();
         }
         cpu.step();

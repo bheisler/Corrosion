@@ -2,6 +2,7 @@ use super::memory::MemSegment;
 use audio::AudioOut;
 use std::cmp;
 use blip_buf::BlipBuf;
+use cpu::IrqInterrupt;
 
 pub type Sample = i16;
 
@@ -48,7 +49,7 @@ static PULSE_DUTY_CYCLES: [[i16; 8]; 4] = [
 bitflags! {
     flags Frame : u8 {
         const MODE = 0b1000_0000, //0 = 4-step, 1 = 5-step
-        const IRQ  = 0b0100_0000, //0 = disabled, 1 = enabled
+        const SUPPRESS_IRQ  = 0b0100_0000, //0 = disabled, 1 = enabled
     }
 }
 
@@ -538,8 +539,9 @@ pub struct APU {
     next_tick_cyc: u64,
     next_transfer_cyc: u64,
     last_frame_cyc: u64,
+    
+    irq_requested: bool,
 }
-
 
 impl APU {
     pub fn new( device: Box<AudioOut> ) -> APU {
@@ -556,15 +558,19 @@ impl APU {
             
             global_cyc: 0,
             tick: 0,
-            next_tick_cyc: 0,
+            next_tick_cyc: CPU_CYCLES_PER_EVEN_TICK,
             next_transfer_cyc: 0,
             last_frame_cyc: 0,
+            
+            irq_requested: false,
         };
         apu.next_transfer_cyc = apu.pulse1.buffer.clocks_needed() as u64;
         apu
     }
     
-    pub fn run_to(&mut self, cpu_cycle: u64) {
+    pub fn run_to(&mut self, cpu_cycle: u64) -> IrqInterrupt {
+        let mut interrupt = IrqInterrupt::None;
+        
         while self.global_cyc < cpu_cycle {
             let current_cycle = self.global_cyc;
             
@@ -573,43 +579,44 @@ impl APU {
             self.global_cyc = next_step;
             
             if self.global_cyc == self.next_tick_cyc {
-                self.tick();
+                interrupt = interrupt.or( self.tick() );
             }
             if self.global_cyc == self.next_transfer_cyc {
                 self.transfer();
             } 
         }
+        interrupt
     }
     
     ///Represents the 240Hz output of the frame sequencer's divider
-    fn tick(&mut self) {
+    fn tick(&mut self) -> IrqInterrupt {
         self.next_tick_cyc += if self.tick %2 == 0 {
             CPU_CYCLES_PER_EVEN_TICK
         }
         else {
             CPU_CYCLES_PER_ODD_TICK
         };
-                
+        
         if !self.frame.contains(MODE) {
             match self.tick {
-                0 => { self.envelope_tick(); },
-                1 => { self.envelope_tick(); self.length_tick(); },
-                2 => { self.envelope_tick(); },
-                3 => { self.envelope_tick(); self.length_tick(); self.raise_irq(); },
-                _ => { self.tick = 0; },
+                0 => { self.tick += 1; self.envelope_tick(); },
+                1 => { self.tick += 1; self.envelope_tick(); self.length_tick(); },
+                2 => { self.tick += 1; self.envelope_tick(); },
+                3 => { self.tick  = 0; self.envelope_tick(); self.length_tick(); return self.raise_irq(); },
+                _ => { self.tick  = 0; },
             }
         }
         else {
             match self.tick % 5 {
-                0 => { self.envelope_tick(); self.length_tick() },
-                1 => { self.envelope_tick(); },
-                2 => { self.envelope_tick(); self.length_tick() },
-                3 => { self.envelope_tick(); },
-                4 => (),
-                _ => { self.tick = 0; },
+                0 => { self.tick += 1; self.envelope_tick(); self.length_tick() },
+                1 => { self.tick += 1; self.envelope_tick(); },
+                2 => { self.tick += 1; self.envelope_tick(); self.length_tick() },
+                3 => { self.tick += 1; self.envelope_tick(); },
+                4 => { self.tick  = 0; }, //4 is the actual last tick in the cycle.
+                _ => { self.tick  = 0; },
             }
         }
-        self.tick += 1;
+        IrqInterrupt::None
     }
     
     fn envelope_tick(&mut self) {
@@ -625,8 +632,12 @@ impl APU {
         self.noise.length_tick();
     }
     
-    fn raise_irq(&mut self) {
-        //TODO
+    fn raise_irq(&mut self) -> IrqInterrupt {
+        if !self.frame.contains( SUPPRESS_IRQ ) {
+            self.irq_requested = true;
+            return IrqInterrupt::IRQ;
+        }
+        return IrqInterrupt::None;
     }
     
     fn play(&mut self, from_cyc: u64, to_cyc: u64) {
@@ -655,8 +666,14 @@ impl APU {
         self.next_transfer_cyc = cpu_cyc + self.pulse1.buffer.clocks_needed() as u64;
     }
     
-    pub fn frame_end(&mut self, cpu_cyc: u64) {
-        self.run_to(cpu_cyc);
+    ///Returns the cycle number representing the next time the CPU should run the APU.
+    ///Min of the next APU IRQ, the next DMC IRQ, and the next tick time. When the CPU cycle reaches
+    ///this number, the CPU must run the APU.
+    pub fn requested_run_cycle(&self) -> u64 {
+        //In practice, the next tick time should cover the APU IRQ as well, since the IRQ happens
+        //on tick boundaries. The DMC IRQ isn't implemented yet.
+        //Using the tick time ensures that the APU will never get too far behind the CPU.
+        self.next_tick_cyc
     }
 }
 
@@ -669,8 +686,10 @@ impl MemSegment for APU {
                 status = status | ( self.pulse2.length.active()   << 1 );
                 status = status | ( self.triangle.length.active() << 2 );
                 status = status | ( self.noise.length.active()    << 3 );
+                status = status | if self.irq_requested { 1 << 6 } else { 0 };
                 //TODO add DMC status
-                //TODO add interrupt flags when I implement the interrupts
+                //TODO add DMC interrupt flag
+                self.irq_requested = false;
                 status
             },
             _ => 0,
@@ -695,6 +714,10 @@ impl MemSegment for APU {
             0x0016 => (),
             0x0017 => {
                 self.frame = Frame::from_bits_truncate(val);
+                if self.frame.contains(SUPPRESS_IRQ) {
+                    self.irq_requested = false;
+                }
+                
                 self.tick = 0;
                 if self.frame.contains( MODE ) {
                     //Trigger a tick immediately
