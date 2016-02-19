@@ -702,15 +702,16 @@ impl APU {
         self.last_frame_cyc = cpu_cyc;
         self.pulse1.buffer.end_frame(cycles_since_last_frame);
         self.pulse2.buffer.end_frame(cycles_since_last_frame);
-        let samples: Vec<Sample> = self.pulse1
-                                       .buffer
-                                       .read()
-                                       .iter()
-                                       .zip(self.pulse2.buffer.read().iter())
+        let samples: Vec<Sample>;
+        {
+            let iter1 = self.pulse1.buffer.read().iter();
+            let iter2 = self.pulse2.buffer.read().iter();
+            samples = iter1.zip( iter2 )
                                        .map(|(p1, p2)| p1 + p2)
                                        .collect();
-        self.device.play(&samples);
+        }
         self.next_transfer_cyc = cpu_cyc + self.pulse1.buffer.clocks_needed() as u64;
+        self.device.play(&samples);
     }
 
     ///Returns the cycle number representing the next time the CPU should run the APU.
