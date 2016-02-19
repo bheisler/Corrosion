@@ -1062,8 +1062,8 @@ impl CPU {
         self.trace();
         self.stack_dump();
         let opcode: u8 = self.load_incr_pc();
-        decode_opcode!(opcode, self);
         self.incr_cycle(CYCLE_TABLE[opcode as usize] as u64);
+        decode_opcode!(opcode, self);
     }
 
     fn run_apu(&mut self) {

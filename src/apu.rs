@@ -8,8 +8,7 @@ pub type Sample = i16;
 
 const NES_CLOCK_RATE: u64 = 1789773;
 const TICK_RATE: u64 = 240;
-const CPU_CYCLES_PER_EVEN_TICK: u64 = NES_CLOCK_RATE / TICK_RATE;
-const CPU_CYCLES_PER_ODD_TICK: u64 = CPU_CYCLES_PER_EVEN_TICK + 1;
+const FRAME_PERIOD: u64 = 7458;
 
 const NES_FPS: usize = 60;
 const FRAMES_PER_BUFFER: usize = 1;
@@ -545,7 +544,7 @@ impl APU {
 
             global_cyc: 0,
             tick: 0,
-            next_tick_cyc: CPU_CYCLES_PER_EVEN_TICK,
+            next_tick_cyc: FRAME_PERIOD,
             next_transfer_cyc: 0,
             last_frame_cyc: 0,
 
@@ -579,11 +578,7 @@ impl APU {
     /// Represents the 240Hz output of the frame sequencer's divider
     #[cfg_attr(rustfmt, rustfmt_skip)]
     fn tick(&mut self) -> IrqInterrupt {
-        self.next_tick_cyc += if self.tick % 2 == 0 {
-            CPU_CYCLES_PER_EVEN_TICK
-        } else {
-            CPU_CYCLES_PER_ODD_TICK
-        };
+        self.next_tick_cyc += FRAME_PERIOD;
 
         if !self.frame.contains(MODE) {
             match self.tick {
@@ -622,6 +617,7 @@ impl APU {
 
     fn raise_irq(&mut self) -> IrqInterrupt {
         if !self.frame.contains(SUPPRESS_IRQ) {
+            println!("Raising IRQ at {}", self.global_cyc);
             self.irq_requested = true;
             return IrqInterrupt::IRQ;
         }
@@ -670,6 +666,7 @@ impl APU {
 impl MemSegment for APU {
     #[cfg_attr(rustfmt, rustfmt_skip)]
     fn read(&mut self, idx: u16) -> u8 {
+        println!("Reading {:04X} at {}", idx, self.global_cyc);
         match idx % 0x20 {
             0x0015 => {
                 let mut status: u8 = 0;
@@ -688,7 +685,7 @@ impl MemSegment for APU {
     }
 
     fn write(&mut self, idx: u16, val: u8) {
-        // println!("Writing {:02X} to {:04X}", val, idx);
+        println!("Writing {:02X} to {:04X} at {}", val, idx, self.global_cyc);
         match idx % 0x20 {
             x @ 0x00...0x03 => self.pulse1.write(x, val),
             x @ 0x04...0x07 => self.pulse2.write(x, val),
@@ -715,7 +712,7 @@ impl MemSegment for APU {
                     self.next_tick_cyc = self.global_cyc
                 } else {
                     // Reset the tick divider
-                    self.next_tick_cyc = self.global_cyc + CPU_CYCLES_PER_EVEN_TICK
+                    self.next_tick_cyc = self.global_cyc + FRAME_PERIOD;
                 }
             }
             _ => (),
