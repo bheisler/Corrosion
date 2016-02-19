@@ -7,9 +7,6 @@ use cpu::IrqInterrupt;
 pub type Sample = i16;
 
 const NES_CLOCK_RATE: u64 = 1789773;
-const TICK_RATE: u64 = 240;
-const FRAME_PERIOD: u64 = 7458;
-
 const NES_FPS: usize = 60;
 const FRAMES_PER_BUFFER: usize = 1;
 
@@ -39,6 +36,9 @@ static LENGTH_TABLE: [u8; 32] = [
     0x20, 0x1E,
 ];
 
+static NTSC_TICK_LENGTH_TABLE: [[u64; 6]; 2] = [[7459, 7456, 7458, 7458, 7458, 0000],
+                                                [0001, 7458, 7456, 7458, 7458, 7452]];
+
 static PULSE_DUTY_CYCLES: [[i16; 8]; 4] = [[0, 1, -1, 0, 0, 0, 0, 0],
                                            [0, 1, 0, -1, 0, 0, 0, 0],
                                            [0, 1, 0, 0, 0, -1, 0, 0],
@@ -48,6 +48,16 @@ bitflags! {
     flags Frame : u8 {
         const MODE = 0b1000_0000, //0 = 4-step, 1 = 5-step
         const SUPPRESS_IRQ  = 0b0100_0000, //0 = disabled, 1 = enabled
+    }
+}
+
+impl Frame {
+    fn mode(&self) -> usize {
+        if self.contains( MODE ) {
+            return 1;
+        } else {
+            return 0;
+        }
     }
 }
 
@@ -544,7 +554,7 @@ impl APU {
 
             global_cyc: 0,
             tick: 0,
-            next_tick_cyc: FRAME_PERIOD,
+            next_tick_cyc: NTSC_TICK_LENGTH_TABLE[0][0],
             next_transfer_cyc: 0,
             last_frame_cyc: 0,
 
@@ -576,28 +586,60 @@ impl APU {
     }
 
     /// Represents the 240Hz output of the frame sequencer's divider
-    #[cfg_attr(rustfmt, rustfmt_skip)]
     fn tick(&mut self) -> IrqInterrupt {
-        self.next_tick_cyc += FRAME_PERIOD;
-
-        if !self.frame.contains(MODE) {
-            match self.tick {
-                0 => { self.tick += 1; self.envelope_tick(); },
-                1 => { self.tick += 1; self.envelope_tick(); self.length_tick(); },
-                2 => { self.tick += 1; self.envelope_tick(); },
-                3 => { self.tick  = 0; self.envelope_tick(); self.length_tick(); return self.raise_irq(); },
-                _ => { self.tick  = 0; },
+        self.tick += 1;
+        let mode = self.frame.mode();
+        self.next_tick_cyc = self.global_cyc + NTSC_TICK_LENGTH_TABLE[mode][self.tick as usize];
+        
+        match mode {
+            0 => {
+                match self.tick {
+                    1 => {
+                        self.envelope_tick();
+                    }
+                    2 => {
+                        self.envelope_tick();
+                        self.length_tick();
+                    }
+                    3 => {
+                        self.envelope_tick();
+                    }
+                    4 => {
+                        self.tick = 0;
+                        self.envelope_tick();
+                        self.length_tick();
+                        return self.raise_irq();
+                    }
+                    _ => {
+                        self.tick = 0;
+                    }
+                }
             }
-        }
-        else {
-            match self.tick % 5 {
-                0 => { self.tick += 1; self.envelope_tick(); self.length_tick() },
-                1 => { self.tick += 1; self.envelope_tick(); },
-                2 => { self.tick += 1; self.envelope_tick(); self.length_tick() },
-                3 => { self.tick += 1; self.envelope_tick(); },
-                4 => { self.tick  = 0; }, //4 is the actual last tick in the cycle.
-                _ => { self.tick  = 0; },
+            1 => {
+                match self.tick {
+                    1 => {
+                        self.envelope_tick();
+                        self.length_tick()
+                    }
+                    2 => {
+                        self.envelope_tick();
+                    }
+                    3 => {
+                        self.envelope_tick();
+                        self.length_tick()
+                    }
+                    4 => {
+                        self.envelope_tick();
+                    }
+                    5 => {
+                        self.tick = 0;
+                    } //4 is the actual last tick in the cycle.
+                    _ => {
+                        self.tick = 0;
+                    }
+                }
             }
+            _ => (),
         }
         IrqInterrupt::None
     }
@@ -617,7 +659,7 @@ impl APU {
 
     fn raise_irq(&mut self) -> IrqInterrupt {
         if !self.frame.contains(SUPPRESS_IRQ) {
-            println!("Raising IRQ at {}", self.global_cyc);
+            //println!("Raising IRQ at {}", self.global_cyc);
             self.irq_requested = true;
             return IrqInterrupt::IRQ;
         }
@@ -666,7 +708,7 @@ impl APU {
 impl MemSegment for APU {
     #[cfg_attr(rustfmt, rustfmt_skip)]
     fn read(&mut self, idx: u16) -> u8 {
-        println!("Reading {:04X} at {}", idx, self.global_cyc);
+        //println!("Reading {:04X} at {}", idx, self.global_cyc);
         match idx % 0x20 {
             0x0015 => {
                 let mut status: u8 = 0;
@@ -685,7 +727,7 @@ impl MemSegment for APU {
     }
 
     fn write(&mut self, idx: u16, val: u8) {
-        println!("Writing {:02X} to {:04X} at {}", val, idx, self.global_cyc);
+        //println!("Writing {:02X} to {:04X} at {}", val, idx, self.global_cyc);
         match idx % 0x20 {
             x @ 0x00...0x03 => self.pulse1.write(x, val),
             x @ 0x04...0x07 => self.pulse2.write(x, val),
@@ -707,13 +749,7 @@ impl MemSegment for APU {
                 }
 
                 self.tick = 0;
-                if self.frame.contains(MODE) {
-                    // Trigger a tick immediately
-                    self.next_tick_cyc = self.global_cyc
-                } else {
-                    // Reset the tick divider
-                    self.next_tick_cyc = self.global_cyc + FRAME_PERIOD;
-                }
+                self.next_tick_cyc = self.global_cyc + NTSC_TICK_LENGTH_TABLE[self.frame.mode()][0];
             }
             _ => (),
         }
