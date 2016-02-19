@@ -49,7 +49,6 @@ impl Mapper for Mapper000 {
         }
     }
 
-    #[allow(unused_variables)]
     fn chr_write(&mut self, idx: u16, val: u8) {
         if self.chr_rom.len() == 0 {
             let len = self.chr_ram.len();

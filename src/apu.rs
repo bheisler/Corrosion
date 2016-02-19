@@ -368,12 +368,14 @@ impl Writable for Pulse {
     }
 }
 
+#[allow(dead_code)] //TODO: Remove this
 struct Triangle {
     counter: u8,
     timer: u8,
     length: Length,
 }
 
+#[allow(unused_variables)] //TODO: Remove this
 impl Triangle {
     fn new() -> Triangle {
         Triangle {
@@ -408,12 +410,14 @@ impl Writable for Triangle {
     }
 }
 
+#[allow(dead_code)] //TODO: Remove this
 struct Noise {
     envelope: Envelope,
     mode: u8,
     length: Length,
 }
 
+#[allow(unused_variables)] //TODO: Remove this
 impl Noise {
     fn new() -> Noise {
         Noise {
@@ -447,6 +451,7 @@ impl Writable for Noise {
     }
 }
 
+#[allow(dead_code)] //TODO: Remove this
 struct DMC {
     freq: u8,
     direct: u8,
@@ -454,6 +459,7 @@ struct DMC {
     sample_length: u8,
 }
 
+#[allow(unused_variables)] //TODO: Remove this
 impl DMC {
     fn new() -> DMC {
         DMC {
@@ -469,6 +475,7 @@ impl DMC {
     }
 }
 
+#[allow(unused_variables)] //TODO: Remove this
 impl Writable for DMC {
     fn write(&mut self, idx: u16, val: u8) {
         
@@ -497,10 +504,6 @@ impl SampleBuffer {
         }
     }
     
-    fn available(&self) -> u32 {
-        self.blip.samples_avail()
-    }
-    
     fn read(&mut self) -> &[Sample] {
         let samples_read = self.blip.read_samples(&mut self.samples, false);
         let slice : &[Sample] = &self.samples;
@@ -517,10 +520,6 @@ impl SampleBuffer {
     
     fn clocks_needed(&self) -> u32 {
         self.blip.clocks_needed(self.transfer_samples)
-    }
-    
-    fn clear(&mut self) {
-        self.blip.clear()
     }
 }
 

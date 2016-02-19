@@ -46,7 +46,7 @@ fn pump_events(pump: &Rc<RefCell<EventPump>>) -> bool {
     false
 }
 
-fn run_frame(cpu: &mut CPU, io: &Rc<RefCell<IO>>, ppu: &Rc<RefCell<PPU>>, apu: &Rc<RefCell<APU>>) {
+fn run_frame(cpu: &mut CPU, io: &Rc<RefCell<IO>>, ppu: &Rc<RefCell<PPU>>) {
     io.borrow_mut().poll();
     loop {
         let cycle = cpu.cycle();
@@ -72,9 +72,8 @@ pub fn start_emulator(cart: Cart) {
     let ppu = PPU::new(cart.clone(), Box::new(screen));
     let ppu = Rc::new(RefCell::new(ppu));
     let apu = APU::new(Box::new(audio_out));
-    let apu = Rc::new(RefCell::new(apu));
     let io : Rc<RefCell<IO>> = Rc::new(RefCell::new(io::sdl::SdlIO::new(event_pump.clone())));
-    let mem = CpuMemory::new(ppu.clone(), apu.clone(), io.clone(), cart);
+    let mem = CpuMemory::new(ppu.clone(), apu, io.clone(), cart);
     let mut cpu = CPU::new(mem);
     cpu.init();
 
@@ -85,7 +84,7 @@ pub fn start_emulator(cart: Cart) {
         if pump_events(&event_pump) || cpu.halted() {
             break;
         }
-        run_frame(&mut cpu, &io, &ppu, &apu);
+        run_frame(&mut cpu, &io, &ppu);
         let current = stopwatch.elapsed().num_nanoseconds().unwrap() as f64;
         avg_frame_time = (avg_frame_time * smoothing) + (current * (1.0 - smoothing));
         println!("Frames per second:{:.*}", 2, 1000000000.0 / avg_frame_time);

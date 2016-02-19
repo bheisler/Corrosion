@@ -907,7 +907,7 @@ impl CPU {
         let return_addr = self.regs.pc;
         self.regs.pc = target;
         self.stack_push_w(return_addr);
-        let mut status = self.regs.p;
+        let status = self.regs.p;
         self.stack_push(status.bits());
         self.regs.p.insert( I );
     }
@@ -1055,7 +1055,7 @@ impl CPU {
             return;
         }
 
-        if self.mem.apu.borrow().requested_run_cycle() <= self.cycle {
+        if self.mem.apu.requested_run_cycle() <= self.cycle {
             self.run_apu();
         }
         
@@ -1067,7 +1067,7 @@ impl CPU {
     }
     
     fn run_apu(&mut self) {
-        let irq = self.mem.apu.borrow_mut().run_to(self.cycle);
+        let irq = self.mem.apu.run_to(self.cycle);
         match irq {
             IrqInterrupt::IRQ => self.irq(),
             _ => (),
