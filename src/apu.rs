@@ -520,6 +520,11 @@ impl SampleBuffer {
     }
 }
 
+enum Jitter {
+    Delay( u64, u8 ),
+    None,
+}
+
 pub struct APU {
     pulse1: Pulse,
     pulse2: Pulse,
@@ -537,6 +542,8 @@ pub struct APU {
     last_frame_cyc: u64,
 
     irq_requested: bool,
+    
+    jitter: Jitter,
 }
 
 impl APU {
@@ -559,6 +566,8 @@ impl APU {
             last_frame_cyc: 0,
 
             irq_requested: false,
+            
+            jitter: Jitter::None,
         };
         apu.next_transfer_cyc = apu.pulse1.buffer.clocks_needed() as u64;
         apu
@@ -570,11 +579,22 @@ impl APU {
         while self.global_cyc < cpu_cycle {
             let current_cycle = self.global_cyc;
 
-            let next_step = cmp::min(cmp::min(cpu_cycle, self.next_tick_cyc),
-                                     self.next_transfer_cyc);
+            let mut next_step = cmp::min(cpu_cycle, self.next_tick_cyc);
+            next_step = cmp::min(next_step, self.next_transfer_cyc);
+            
+            if let Jitter::Delay( time, _ ) = self.jitter {
+                next_step = cmp::min( next_step, time );
+            }
+            
             self.play(current_cycle, next_step);
             self.global_cyc = next_step;
 
+            if let Jitter::Delay( time, val ) = self.jitter {
+                if self.global_cyc == time {
+                    self.set_4017( val );
+                    self.jitter = Jitter::None;
+                }
+            }
             if self.global_cyc == self.next_tick_cyc {
                 interrupt = interrupt.or(self.tick());
             }
@@ -703,6 +723,16 @@ impl APU {
         // CPU.
         self.next_tick_cyc
     }
+    
+    fn set_4017(&mut self, val: u8) {
+        self.frame = Frame::from_bits_truncate(val);
+        if self.frame.contains(SUPPRESS_IRQ) {
+            self.irq_requested = false;
+        }
+
+        self.tick = 0;
+        self.next_tick_cyc = self.global_cyc + NTSC_TICK_LENGTH_TABLE[self.frame.mode()][0];
+    }
 }
 
 impl MemSegment for APU {
@@ -743,13 +773,12 @@ impl MemSegment for APU {
             }
             0x0016 => (),
             0x0017 => {
-                self.frame = Frame::from_bits_truncate(val);
-                if self.frame.contains(SUPPRESS_IRQ) {
-                    self.irq_requested = false;
+                if self.global_cyc % 2 == 0 {
+                    self.set_4017(val);
                 }
-
-                self.tick = 0;
-                self.next_tick_cyc = self.global_cyc + NTSC_TICK_LENGTH_TABLE[self.frame.mode()][0];
+                else {
+                    self.jitter = Jitter::Delay(self.global_cyc + 1, val);
+                }
             }
             _ => (),
         }
