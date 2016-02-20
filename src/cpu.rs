@@ -410,8 +410,11 @@ impl MemSegment for CPU {
         match idx {
             OAMDMA => 0, //No idea what this should return. PPU dynamic latch garbage, maybe?
             0x4015 => {
-                self.run_apu();
-                self.mem.read(idx)
+                let (irq, val) = self.mem.apu.read_status(self.cycle);
+                if let IrqInterrupt::IRQ = irq {
+                    self.irq();
+                }
+                val
             }
             _ => self.mem.read(idx),
         }
@@ -1068,9 +1071,8 @@ impl CPU {
 
     fn run_apu(&mut self) {
         let irq = self.mem.apu.run_to(self.cycle);
-        match irq {
-            IrqInterrupt::IRQ => self.irq(),
-            _ => (),
+        if let IrqInterrupt::IRQ = irq {
+            self.irq();
         }
     }
 

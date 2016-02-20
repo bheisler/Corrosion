@@ -679,7 +679,6 @@ impl APU {
 
     fn raise_irq(&mut self) -> IrqInterrupt {
         if !self.frame.contains(SUPPRESS_IRQ) {
-            //println!("Raising IRQ at {}", self.global_cyc);
             self.irq_requested = true;
             return IrqInterrupt::IRQ;
         }
@@ -702,12 +701,13 @@ impl APU {
         self.last_frame_cyc = cpu_cyc;
         self.pulse1.buffer.end_frame(cycles_since_last_frame);
         self.pulse2.buffer.end_frame(cycles_since_last_frame);
+        self.pulse2.buffer.blip.clear();
         let samples: Vec<Sample>;
         {
             let iter1 = self.pulse1.buffer.read().iter();
-            let iter2 = self.pulse2.buffer.read().iter();
-            samples = iter1.zip( iter2 )
-                                       .map(|(p1, p2)| p1 + p2)
+            //let iter2 = self.pulse2.buffer.read().iter();
+            samples = iter1.cloned()//.zip( iter2 )
+                                       //.map(|(p1, p2)| p1 + p2)
                                        .collect();
         }
         self.next_transfer_cyc = cpu_cyc + self.pulse1.buffer.clocks_needed() as u64;
@@ -734,30 +734,25 @@ impl APU {
         self.tick = 0;
         self.next_tick_cyc = self.global_cyc + NTSC_TICK_LENGTH_TABLE[self.frame.mode()][0];
     }
-}
 
-impl MemSegment for APU {
     #[cfg_attr(rustfmt, rustfmt_skip)]
-    fn read(&mut self, idx: u16) -> u8 {
-        //println!("Reading {:04X} at {}", idx, self.global_cyc);
-        match idx % 0x20 {
-            0x0015 => {
-                let mut status: u8 = 0;
-                status = status | (self.pulse1.length.active() << 0);
-                status = status | (self.pulse2.length.active() << 1);
-                status = status | (self.triangle.length.active() << 2);
-                status = status | (self.noise.length.active() << 3);
-                status = status | if self.irq_requested { 1 << 6 } else { 0 };
-    // TODO add DMC status
-    // TODO add DMC interrupt flag
-                self.irq_requested = false;
-                status
-            }
-            _ => 0,
-        }
+    pub fn read_status(&mut self, cycle: u64) -> (IrqInterrupt, u8) {
+        let interrupt = self.run_to(cycle - 1);
+
+        let mut status: u8 = 0;
+        status = status | (self.pulse1.length.active() << 0);
+        status = status | (self.pulse2.length.active() << 1);
+        status = status | (self.triangle.length.active() << 2);
+        status = status | (self.noise.length.active() << 3);
+        status = status | if self.irq_requested { 1 << 6 } else { 0 };
+// TODO add DMC status
+// TODO add DMC interrupt flag
+        self.irq_requested = false;
+        
+        (interrupt.or(self.run_to(cycle)), status)
     }
 
-    fn write(&mut self, idx: u16, val: u8) {
+    pub fn write(&mut self, idx: u16, val: u8) {
         //println!("Writing {:02X} to {:04X} at {}", val, idx, self.global_cyc);
         match idx % 0x20 {
             x @ 0x00...0x03 => self.pulse1.write(x, val),
