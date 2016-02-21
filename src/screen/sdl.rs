@@ -1,4 +1,4 @@
-use ppu::{Color, SCREEN_BUFFER_SIZE, SCREEN_WIDTH, SCREEN_HEIGHT};
+use ppu::{Color, SCREEN_BUFFER_SIZE, SCREEN_HEIGHT, SCREEN_WIDTH};
 use screen::Screen;
 use sdl2::{Sdl, VideoSubsystem};
 use sdl2::render::{Renderer, Texture};
@@ -18,8 +18,8 @@ impl<'a> SDLScreen<'a> {
     pub fn new(sdl_context: &Sdl) -> SDLScreen<'a> {
         let video_subsystem = sdl_context.video().unwrap();
 
-        let window = video_subsystem.window("Corrosion", 
-                                            (SCREEN_WIDTH * SCALE) as u32, 
+        let window = video_subsystem.window("Corrosion",
+                                            (SCREEN_WIDTH * SCALE) as u32,
                                             (SCREEN_HEIGHT * SCALE) as u32)
                                     .position_centered()
                                     .opengl()
@@ -28,10 +28,10 @@ impl<'a> SDLScreen<'a> {
 
         let mut renderer = window.renderer().present_vsync().build().unwrap();
         renderer.set_logical_size(SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32).unwrap();
-        
 
         let texture = renderer.create_texture_streaming(PixelFormatEnum::RGB24,
-                                                        (SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32))
+                                                        (SCREEN_WIDTH as u32,
+                                                         SCREEN_HEIGHT as u32))
                               .unwrap();
         SDLScreen {
             video: video_subsystem,

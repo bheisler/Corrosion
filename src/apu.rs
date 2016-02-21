@@ -53,7 +53,7 @@ bitflags! {
 
 impl Frame {
     fn mode(&self) -> usize {
-        if self.contains( MODE ) {
+        if self.contains(MODE) {
             return 1;
         } else {
             return 0;
@@ -317,7 +317,7 @@ impl Pulse {
             self.set_amplitude(0, from_cyc);
             return;
         }
-        
+
         let volume = self.envelope.volume();
 
         let mut current_cyc = from_cyc;
@@ -521,7 +521,7 @@ impl SampleBuffer {
 }
 
 enum Jitter {
-    Delay( u64, u8 ),
+    Delay(u64, u8),
     None,
 }
 
@@ -542,7 +542,7 @@ pub struct APU {
     last_frame_cyc: u64,
 
     irq_requested: bool,
-    
+
     jitter: Jitter,
 }
 
@@ -566,7 +566,7 @@ impl APU {
             last_frame_cyc: 0,
 
             irq_requested: false,
-            
+
             jitter: Jitter::None,
         };
         apu.next_transfer_cyc = apu.pulse1.buffer.clocks_needed() as u64;
@@ -581,17 +581,17 @@ impl APU {
 
             let mut next_step = cmp::min(cpu_cycle, self.next_tick_cyc);
             next_step = cmp::min(next_step, self.next_transfer_cyc);
-            
-            if let Jitter::Delay( time, _ ) = self.jitter {
-                next_step = cmp::min( next_step, time );
+
+            if let Jitter::Delay(time, _) = self.jitter {
+                next_step = cmp::min(next_step, time);
             }
-            
+
             self.play(current_cycle, next_step);
             self.global_cyc = next_step;
 
-            if let Jitter::Delay( time, val ) = self.jitter {
+            if let Jitter::Delay(time, val) = self.jitter {
                 if self.global_cyc == time {
-                    self.set_4017( val );
+                    self.set_4017(val);
                     self.jitter = Jitter::None;
                 }
             }
@@ -610,7 +610,7 @@ impl APU {
         self.tick += 1;
         let mode = self.frame.mode();
         self.next_tick_cyc = self.global_cyc + NTSC_TICK_LENGTH_TABLE[mode][self.tick as usize];
-        
+
         match mode {
             0 => {
                 match self.tick {
@@ -705,9 +705,9 @@ impl APU {
         {
             let iter1 = self.pulse1.buffer.read().iter();
             let iter2 = self.pulse2.buffer.read().iter();
-            samples = iter1.zip( iter2 )
-                                       .map(|(p1, p2)| p1 + p2)
-                                       .collect();
+            samples = iter1.zip(iter2)
+                           .map(|(p1, p2)| p1 + p2)
+                           .collect();
         }
         self.next_transfer_cyc = cpu_cyc + self.pulse1.buffer.clocks_needed() as u64;
         self.device.play(&samples);
@@ -723,7 +723,7 @@ impl APU {
         // CPU.
         self.next_tick_cyc
     }
-    
+
     fn set_4017(&mut self, val: u8) {
         self.frame = Frame::from_bits_truncate(val);
         if self.frame.contains(SUPPRESS_IRQ) {
@@ -744,10 +744,10 @@ impl APU {
         status = status | (self.triangle.length.active() << 2);
         status = status | (self.noise.length.active() << 3);
         status = status | if self.irq_requested { 1 << 6 } else { 0 };
-// TODO add DMC status
-// TODO add DMC interrupt flag
+    // TODO add DMC status
+    // TODO add DMC interrupt flag
         self.irq_requested = false;
-        
+
         (interrupt.or(self.run_to(cycle)), status)
     }
 
@@ -769,8 +769,7 @@ impl APU {
             0x0017 => {
                 if self.global_cyc % 2 == 0 {
                     self.set_4017(val);
-                }
-                else {
+                } else {
                     self.jitter = Jitter::Delay(self.global_cyc + 1, val);
                 }
             }
