@@ -1,3 +1,5 @@
+mod components;
+
 use super::memory::MemSegment;
 use audio::AudioOut;
 use std::cmp;
@@ -5,6 +7,7 @@ use blip_buf::BlipBuf;
 use cpu::IrqInterrupt;
 use std::cell::RefCell;
 use std::rc::Rc;
+use apu::components::*;
 
 pub type Sample = i16;
 
@@ -17,26 +20,6 @@ const SAMPLES_PER_FRAME: usize = (SAMPLE_RATE / NES_FPS);
 pub const BUFFER_SIZE: usize = SAMPLES_PER_FRAME * FRAMES_PER_BUFFER;
 
 const VOLUME_MULT: i16 = (32767i16 / 16) / 2;
-
-#[cfg_attr(rustfmt, rustfmt_skip)]
-static LENGTH_TABLE: [u8; 32] = [
-    0x0A, 0xFE,
-    0x14, 0x02,
-    0x28, 0x04,
-    0x50, 0x06,
-    0xA0, 0x08,
-    0x3C, 0x0A,
-    0x0E, 0x0C,
-    0x1A, 0x0E,
-    0x0C, 0x10,
-    0x18, 0x12,
-    0x30, 0x14,
-    0x60, 0x16,
-    0xC0, 0x18,
-    0x48, 0x1A,
-    0x10, 0x1C,
-    0x20, 0x1E,
-];
 
 static NTSC_TICK_LENGTH_TABLE: [[u64; 6]; 2] = [[7459, 7456, 7458, 7458, 7458, 0000],
                                                 [0001, 7458, 7456, 7458, 7458, 7452]];
@@ -65,169 +48,6 @@ impl Frame {
 
 trait Writable {
     fn write(&mut self, idx: u16, val: u8);
-}
-
-#[derive(Debug)]
-struct Length {
-    halt_bit: usize,
-    halted: bool,
-    enabled: bool,
-    remaining: u8,
-}
-
-impl Length {
-    fn write_halt(&mut self, val: u8) {
-        self.halted = (val >> self.halt_bit) & 0x01 != 0;
-    }
-
-    fn write_counter(&mut self, val: u8) {
-        if self.enabled {
-            self.remaining = LENGTH_TABLE[(val >> 3) as usize];
-        }
-    }
-
-    fn tick(&mut self) {
-        if !self.halted {
-            self.remaining = self.remaining.saturating_sub(1);
-        }
-    }
-
-    fn audible(&self) -> bool {
-        self.remaining > 0
-    }
-
-    fn active(&self) -> u8 {
-        if self.audible() {
-            1
-        } else {
-            0
-        }
-    }
-
-    fn set_enable(&mut self, enable: bool) {
-        self.enabled = enable;
-        if !enable {
-            self.remaining = 0;
-        }
-    }
-
-    fn new(halt_bit: usize) -> Length {
-        Length {
-            halt_bit: halt_bit,
-            halted: false,
-            enabled: false,
-            remaining: 0,
-        }
-    }
-}
-
-struct Envelope {
-    should_loop: bool,
-    disable: bool,
-    n: u8,
-
-    divider: u8,
-    counter: u8,
-}
-
-impl Envelope {
-    fn new() -> Envelope {
-        Envelope {
-            should_loop: false,
-            disable: false,
-            n: 0,
-            divider: 0,
-            counter: 0,
-        }
-    }
-
-    fn write(&mut self, val: u8) {
-        self.should_loop = (val >> 5) & 0x01 != 0;
-        self.disable = (val >> 6) & 0x01 != 0;
-        self.n = val & 0x0F;
-        self.divider = self.n;
-        self.counter = 15;
-    }
-
-    fn tick(&mut self) {
-        if self.divider == 0 {
-            self.envelope_tick();
-            self.divider = self.n;
-        } else {
-            self.divider -= 1;
-        }
-    }
-
-    fn envelope_tick(&mut self) {
-        if self.should_loop && self.counter == 0 {
-            self.counter = 15;
-        } else {
-            self.counter = self.counter.saturating_sub(1);
-        }
-    }
-
-    fn volume(&self) -> i16 {
-        if self.disable {
-            self.n as i16
-        } else {
-            self.counter as i16
-        }
-    }
-}
-
-///Represents the CPU-clock timers used by all of the NES channels.
-struct Timer {
-    period: u16,
-    divider: u32,
-    remaining: u32,
-}
-
-enum TimerClock {
-    Clock,
-    NoClock,
-}
-
-impl Timer {
-    fn new(divider: u32) -> Timer {
-        Timer {
-            period: 0,
-            divider: divider,
-            remaining: 0,
-        }
-    }
-
-    fn write_low(&mut self, val: u8) {
-        self.period = (self.period & 0xFF00) | val as u16;
-    }
-
-    fn write_high(&mut self, val: u8) {
-        self.period = (self.period & 0x00FF) | (val as u16 & 0x0007) << 8;
-    }
-
-    fn add_period_shift(&mut self, shift: i16) {
-        let new_period = (self.period as i16).wrapping_add(shift);
-        self.period = new_period as u16;
-    }
-
-    fn wavelen(&self) -> u32 {
-        (self.period as u32 + 1) * self.divider
-    }
-    
-    ///Run the timer until the next clock, or until current_cyc reaches to_cycle.
-    ///Returns either Clock or NoClock depending on if it reached a clock or not.
-    fn run(&mut self, current_cyc: &mut u32, to_cyc: u32) -> TimerClock {
-        let end_wavelen = *current_cyc + self.remaining;
-
-        if end_wavelen < to_cyc {
-            *current_cyc += self.remaining;
-            self.remaining = self.wavelen();
-            TimerClock::Clock
-        } else {
-            self.remaining -= to_cyc - *current_cyc;
-            *current_cyc = to_cyc;
-            TimerClock::NoClock
-        }
-    }
 }
 
 struct Sweep {
@@ -287,7 +107,7 @@ impl Sweep {
     }
 
     fn period_shift(&self, timer: &Timer) -> i16 {
-        let mut shift = timer.period as i16;
+        let mut shift = timer.period() as i16;
         shift = shift >> self.shift;
         if self.negate {
             shift = -shift;
