@@ -22,6 +22,8 @@ pub type Sample = i16;
 static NTSC_TICK_LENGTH_TABLE: [[u64; 6]; 2] = [[7459, 7456, 7458, 7458, 7458, 0000],
                                                 [0001, 7458, 7456, 7458, 7458, 7452]];
 
+const VOLUME_MULT: i32 = ((32767i16 / 16) / 2) as i32;
+
 bitflags! {
     flags Frame : u8 {
         const MODE = 0b1000_0000, //0 = 4-step, 1 = 5-step
@@ -81,9 +83,9 @@ impl APU {
         let clocks_needed = square_buffer.borrow().clocks_needed() as u64;
         
         APU {
-            square1: Square::new(false, Waveform::new(square_buffer.clone())),
-            square2: Square::new(true, Waveform::new(square_buffer.clone())),
-            triangle: Triangle::new(Waveform::new(tnd_buffer.clone())),
+            square1: Square::new(false, Waveform::new(square_buffer.clone(), VOLUME_MULT)),
+            square2: Square::new(true, Waveform::new(square_buffer.clone(), VOLUME_MULT)),
+            triangle: Triangle::new(Waveform::new(tnd_buffer.clone(), VOLUME_MULT)),
             noise: Noise::new(),
             dmc: DMC::new(),
             frame: Frame::empty(),

@@ -9,8 +9,6 @@ const NES_CLOCK_RATE: u64 = 1789773;
 const NES_FPS: usize = 60;
 const FRAMES_PER_BUFFER: usize = 1;
 
-const VOLUME_MULT: i16 = (32767i16 / 16) / 2;
-
 pub struct SampleBuffer {
     blip: BlipBuf,
     samples: Vec<Sample>,
@@ -58,13 +56,15 @@ impl SampleBuffer {
 pub struct Waveform {
     buffer: Rc<RefCell<SampleBuffer>>,
     last_amp: Sample,
+    volume_mult: i32,
 }
 
 impl Waveform {
-    pub fn new(buffer: Rc<RefCell<SampleBuffer>>) -> Waveform {
+    pub fn new(buffer: Rc<RefCell<SampleBuffer>>, volume_mult: i32) -> Waveform {
         Waveform {
             buffer: buffer,
             last_amp: 0,
+            volume_mult: volume_mult,
         }
     }
     
@@ -74,7 +74,7 @@ impl Waveform {
         if delta == 0 {
             return;
         }
-        self.buffer.borrow_mut().add_delta(cycle, delta * VOLUME_MULT as i32);
+        self.buffer.borrow_mut().add_delta(cycle, delta * self.volume_mult);
         self.last_amp = amp;
     }
 }
