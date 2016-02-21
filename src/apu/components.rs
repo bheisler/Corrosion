@@ -21,7 +21,7 @@ static LENGTH_TABLE: [u8; 32] = [
     0x20, 0x1E,
 ];
 
-///Represents the Length counter used by all five NES sound channels.
+///Represents the Length counter used by all NES sound channels except the DMC.
 #[derive(Debug)]
 pub struct Length {
     halt_bit: usize,

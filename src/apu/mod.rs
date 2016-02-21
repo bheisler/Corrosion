@@ -1,5 +1,6 @@
 mod components;
 mod buffer;
+mod square;
 
 use super::memory::MemSegment;
 use audio::AudioOut;
@@ -9,16 +10,12 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use apu::components::*;
 use apu::buffer::*;
+use apu::square::*;
 
 pub type Sample = i16;
 
 static NTSC_TICK_LENGTH_TABLE: [[u64; 6]; 2] = [[7459, 7456, 7458, 7458, 7458, 0000],
                                                 [0001, 7458, 7456, 7458, 7458, 7452]];
-
-static PULSE_DUTY_CYCLES: [[i16; 8]; 4] = [[0, 1, -1, 0, 0, 0, 0, 0],
-                                           [0, 1, 0, -1, 0, 0, 0, 0],
-                                           [0, 1, 0, 0, 0, -1, 0, 0],
-                                           [0, -1, 0, 1, 0, 0, 0, 0]];
 
 bitflags! {
     flags Frame : u8 {
@@ -39,152 +36,6 @@ impl Frame {
 
 trait Writable {
     fn write(&mut self, idx: u16, val: u8);
-}
-
-struct Sweep {
-    enable: bool,
-    period: u8,
-    negate: bool,
-    shift: u8,
-
-    is_pulse2: bool,
-    divider: u8,
-    reload: bool,
-}
-
-impl Sweep {
-    fn new(is_pulse2: bool) -> Sweep {
-        Sweep {
-            enable: false,
-            period: 0,
-            negate: false,
-            shift: 0,
-
-            is_pulse2: is_pulse2,
-            divider: 0,
-            reload: false,
-        }
-    }
-
-    fn write(&mut self, val: u8) {
-        self.enable = (val & 0b1000_0000) != 0;
-        self.period = (val & 0b0111_0000) >> 4;
-        self.negate = (val & 0b0000_1000) != 0;
-        self.shift = val & 0b0000_0111;
-        self.reload = true;
-    }
-
-    fn tick(&mut self, timer: &mut Timer) {
-        if !self.enable {
-            return;
-        }
-
-        self.divider = self.divider.saturating_sub(1);
-        if self.divider == 0 {
-            self.divider = self.period;
-            let period_shift = self.period_shift(timer);
-            timer.add_period_shift(period_shift);
-        }
-
-        if self.reload {
-            self.divider = self.period;
-            self.reload = false;
-        }
-    }
-
-    fn audible(&self) -> bool {
-        // TODO
-        true
-    }
-
-    fn period_shift(&self, timer: &Timer) -> i16 {
-        let mut shift = timer.period() as i16;
-        shift = shift >> self.shift;
-        if self.negate {
-            shift = -shift;
-            if self.is_pulse2 {
-                shift = shift + 1;
-            }
-        }
-        shift
-    }
-}
-
-struct Pulse {
-    duty: usize,
-    duty_index: usize,
-    
-    envelope: Envelope,
-    sweep: Sweep,
-    timer: Timer,
-    length: Length,
-
-	waveform: Waveform,
-}
-
-impl Pulse {
-    fn new(is_pulse2: bool, buffer: Rc<RefCell<SampleBuffer>>) -> Pulse {
-        Pulse {
-            duty: 0,
-            duty_index: 0,
-            
-            envelope: Envelope::new(),
-            sweep: Sweep::new(is_pulse2),
-            timer: Timer::new(2),
-            length: Length::new(5),
-
-            waveform: Waveform::new(buffer),
-        }
-    }
-
-    fn length_tick(&mut self) {
-        self.length.tick();
-        let timer = &mut self.timer;
-        self.sweep.tick(timer)
-    }
-
-    fn envelope_tick(&mut self) {
-        self.envelope.tick();
-    }
-
-    fn play(&mut self, from_cyc: u32, to_cyc: u32) {
-        if !self.sweep.audible() || !self.length.audible() {
-            self.waveform.set_amplitude(0, from_cyc);
-            return;
-        }
-
-        let volume = self.envelope.volume();
-
-        let mut current_cyc = from_cyc;
-        while let TimerClock::Clock = self.timer.run(&mut current_cyc, to_cyc) {
-            self.duty_index = (self.duty_index + 1) % 8;
-            match PULSE_DUTY_CYCLES[self.duty][self.duty_index] {
-                -1 => self.waveform.set_amplitude(0, current_cyc),
-                0 => (),
-                1 => self.waveform.set_amplitude(volume, current_cyc),
-                _ => (),
-            };
-        }
-    }
-}
-
-impl Writable for Pulse {
-    fn write(&mut self, idx: u16, val: u8) {
-        match idx % 4 {
-            0 => {
-                self.duty = (val >> 6) as usize;
-                self.length.write_halt(val);
-                self.envelope.write(val);
-            }
-            1 => self.sweep.write(val),
-            2 => self.timer.write_low(val),
-            3 => {
-                self.length.write_counter(val);
-                self.timer.write_high(val);
-            }
-            _ => (),
-        }
-    }
 }
 
 #[allow(dead_code)] //TODO: Remove this
@@ -299,8 +150,8 @@ enum Jitter {
 }
 
 pub struct APU {
-    pulse1: Pulse,
-    pulse2: Pulse,
+    square1: Square,
+    square2: Square,
     triangle: Triangle,
     noise: Noise,
     dmc: DMC,
@@ -329,8 +180,8 @@ impl APU {
         let clocks_needed = square_buffer.borrow().clocks_needed() as u64;
         
         APU {
-            pulse1: Pulse::new(false, square_buffer.clone()),
-            pulse2: Pulse::new(true, square_buffer.clone()),
+            square1: Square::new(false, Waveform::new(square_buffer.clone())),
+            square2: Square::new(true, Waveform::new(square_buffer.clone())),
             triangle: Triangle::new(),
             noise: Noise::new(),
             dmc: DMC::new(),
@@ -444,14 +295,14 @@ impl APU {
     }
 
     fn envelope_tick(&mut self) {
-        self.pulse1.envelope_tick();
-        self.pulse2.envelope_tick();
+        self.square1.envelope_tick();
+        self.square2.envelope_tick();
         self.noise.envelope_tick();
     }
 
     fn length_tick(&mut self) {
-        self.pulse1.length_tick();
-        self.pulse2.length_tick();
+        self.square1.length_tick();
+        self.square2.length_tick();
         self.triangle.length_tick();
         self.noise.length_tick();
     }
@@ -467,8 +318,8 @@ impl APU {
     fn play(&mut self, from_cyc: u64, to_cyc: u64) {
         let from = (from_cyc - self.last_frame_cyc) as u32;
         let to = (to_cyc - self.last_frame_cyc) as u32;
-        self.pulse1.play(from, to);
-        self.pulse2.play(from, to);
+        self.square1.play(from, to);
+        self.square2.play(from, to);
         self.triangle.play(from, to);
         self.noise.play(from, to);
         self.dmc.play(from, to);
@@ -515,8 +366,8 @@ impl APU {
         let interrupt = self.run_to(cycle - 1);
 
         let mut status: u8 = 0;
-        status = status | (self.pulse1.length.active() << 0);
-        status = status | (self.pulse2.length.active() << 1);
+        status = status | (self.square1.length.active() << 0);
+        status = status | (self.square2.length.active() << 1);
         status = status | (self.triangle.length.active() << 2);
         status = status | (self.noise.length.active() << 3);
         status = status | if self.irq_requested { 1 << 6 } else { 0 };
@@ -529,8 +380,8 @@ impl APU {
 
     pub fn write(&mut self, idx: u16, val: u8) {
         match idx % 0x20 {
-            x @ 0x00...0x03 => self.pulse1.write(x, val),
-            x @ 0x04...0x07 => self.pulse2.write(x, val),
+            x @ 0x00...0x03 => self.square1.write(x, val),
+            x @ 0x04...0x07 => self.square2.write(x, val),
             x @ 0x08...0x0B => self.triangle.write(x, val),
             x @ 0x0C...0x0F => self.noise.write(x, val),
             x @ 0x10...0x13 => self.dmc.write(x, val),
@@ -538,8 +389,8 @@ impl APU {
             0x0015 => {
                 self.noise.length.set_enable(val & 0b0000_1000 != 0);
                 self.triangle.length.set_enable(val & 0b0000_0100 != 0);
-                self.pulse2.length.set_enable(val & 0b0000_0010 != 0);
-                self.pulse1.length.set_enable(val & 0b0000_0001 != 0);
+                self.square2.length.set_enable(val & 0b0000_0010 != 0);
+                self.square1.length.set_enable(val & 0b0000_0001 != 0);
             }
             0x0016 => (),
             0x0017 => {
