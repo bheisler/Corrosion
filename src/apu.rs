@@ -314,10 +314,10 @@ impl Pulse {
 
     fn play(&mut self, from_cyc: u32, to_cyc: u32) {
         if !self.sweep.audible() || !self.length.audible() {
-
             self.set_amplitude(0, from_cyc);
             return;
         }
+        
         let volume = self.envelope.volume();
 
         let mut current_cyc = from_cyc;
@@ -337,7 +337,7 @@ impl Pulse {
                     _ => (),
                 };
             } else {
-                self.timer.current_step = to_cyc - current_cyc;
+                self.timer.current_step += to_cyc - current_cyc;
                 current_cyc = to_cyc;
             }
         }
@@ -752,7 +752,6 @@ impl APU {
     }
 
     pub fn write(&mut self, idx: u16, val: u8) {
-        //println!("Writing {:02X} to {:04X} at {}", val, idx, self.global_cyc);
         match idx % 0x20 {
             x @ 0x00...0x03 => self.pulse1.write(x, val),
             x @ 0x04...0x07 => self.pulse2.write(x, val),
