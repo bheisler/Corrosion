@@ -701,13 +701,12 @@ impl APU {
         self.last_frame_cyc = cpu_cyc;
         self.pulse1.buffer.end_frame(cycles_since_last_frame);
         self.pulse2.buffer.end_frame(cycles_since_last_frame);
-        self.pulse2.buffer.blip.clear();
         let samples: Vec<Sample>;
         {
             let iter1 = self.pulse1.buffer.read().iter();
-            //let iter2 = self.pulse2.buffer.read().iter();
-            samples = iter1.cloned()//.zip( iter2 )
-                                       //.map(|(p1, p2)| p1 + p2)
+            let iter2 = self.pulse2.buffer.read().iter();
+            samples = iter1.zip( iter2 )
+                                       .map(|(p1, p2)| p1 + p2)
                                        .collect();
         }
         self.next_transfer_cyc = cpu_cyc + self.pulse1.buffer.clocks_needed() as u64;
