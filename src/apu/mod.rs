@@ -1,25 +1,16 @@
 mod components;
+mod buffer;
 
 use super::memory::MemSegment;
 use audio::AudioOut;
 use std::cmp;
-use blip_buf::BlipBuf;
 use cpu::IrqInterrupt;
 use std::cell::RefCell;
 use std::rc::Rc;
 use apu::components::*;
+use apu::buffer::*;
 
 pub type Sample = i16;
-
-const NES_CLOCK_RATE: u64 = 1789773;
-const NES_FPS: usize = 60;
-const FRAMES_PER_BUFFER: usize = 1;
-
-const SAMPLE_RATE: usize = 44100;
-const SAMPLES_PER_FRAME: usize = (SAMPLE_RATE / NES_FPS);
-pub const BUFFER_SIZE: usize = SAMPLES_PER_FRAME * FRAMES_PER_BUFFER;
-
-const VOLUME_MULT: i16 = (32767i16 / 16) / 2;
 
 static NTSC_TICK_LENGTH_TABLE: [[u64; 6]; 2] = [[7459, 7456, 7458, 7458, 7458, 0000],
                                                 [0001, 7458, 7456, 7458, 7458, 7452]];
@@ -300,71 +291,6 @@ impl DMC {
 #[allow(unused_variables)] //TODO: Remove this
 impl Writable for DMC {
     fn write(&mut self, idx: u16, val: u8) {}
-}
-
-struct SampleBuffer {
-    blip: BlipBuf,
-    samples: Vec<Sample>,
-    transfer_samples: u32,
-}
-
-impl SampleBuffer {
-    fn new(out_rate: f64) -> SampleBuffer {
-        let samples_per_frame = out_rate as u32 / NES_FPS as u32;
-        let transfer_samples = samples_per_frame * FRAMES_PER_BUFFER as u32;
-
-        let mut buf = BlipBuf::new(transfer_samples);
-        buf.set_rates(NES_CLOCK_RATE as f64, out_rate);
-        let samples = vec![0; (transfer_samples) as usize];
-
-        SampleBuffer {
-            blip: buf,
-            samples: samples,
-            transfer_samples: transfer_samples,
-        }
-    }
-
-    fn read(&mut self) -> &[Sample] {
-        let samples_read = self.blip.read_samples(&mut self.samples, false);
-        let slice: &[Sample] = &self.samples;
-        &slice[0..samples_read]
-    }
-
-    fn add_delta(&mut self, clock_time: u32, delta: i32) {
-        self.blip.add_delta(clock_time, delta)
-    }
-
-    fn end_frame(&mut self, clock_duration: u32) {
-        self.blip.end_frame(clock_duration)
-    }
-
-    fn clocks_needed(&self) -> u32 {
-        self.blip.clocks_needed(self.transfer_samples)
-    }
-}
-
-struct Waveform {
-    buffer: Rc<RefCell<SampleBuffer>>,
-    last_amp: Sample,
-}
-
-impl Waveform {
-    fn new(buffer: Rc<RefCell<SampleBuffer>>) -> Waveform {
-        Waveform {
-            buffer: buffer,
-            last_amp: 0,
-        }
-    }
-    
-    fn set_amplitude(&mut self, amp: Sample, cycle: u32) {
-        let last_amp = self.last_amp;
-        let delta = (amp - last_amp) as i32;
-        if delta == 0 {
-            return;
-        }
-        self.buffer.borrow_mut().add_delta(cycle, delta * VOLUME_MULT as i32);
-        self.last_amp = amp;
-    }
 }
 
 enum Jitter {
