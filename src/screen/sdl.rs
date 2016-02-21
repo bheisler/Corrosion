@@ -1,4 +1,4 @@
-use ppu::{Color, SCREEN_BUFFER_SIZE};
+use ppu::{Color, SCREEN_BUFFER_SIZE, SCREEN_WIDTH, SCREEN_HEIGHT};
 use screen::Screen;
 use sdl2::{Sdl, VideoSubsystem};
 use sdl2::render::{Renderer, Texture};
@@ -14,23 +14,24 @@ pub struct SDLScreen<'a> {
 
 const SCALE: usize = 3;
 
-const SCREEN_WIDTH: u32 = (::ppu::SCREEN_WIDTH * SCALE) as u32;
-const SCREEN_HEIGHT: u32 = (::ppu::SCREEN_HEIGHT * SCALE) as u32;
-
 impl<'a> SDLScreen<'a> {
     pub fn new(sdl_context: &Sdl) -> SDLScreen<'a> {
         let video_subsystem = sdl_context.video().unwrap();
 
-        let window = video_subsystem.window("Corrosion", SCREEN_WIDTH, SCREEN_HEIGHT)
+        let window = video_subsystem.window("Corrosion", 
+                                            (SCREEN_WIDTH * SCALE) as u32, 
+                                            (SCREEN_HEIGHT * SCALE) as u32)
                                     .position_centered()
                                     .opengl()
                                     .build()
                                     .unwrap();
 
-        let renderer = window.renderer().present_vsync().build().unwrap();
+        let mut renderer = window.renderer().present_vsync().build().unwrap();
+        renderer.set_logical_size(SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32).unwrap();
+        
 
         let texture = renderer.create_texture_streaming(PixelFormatEnum::RGB24,
-                                                        (SCREEN_WIDTH, SCREEN_HEIGHT))
+                                                        (SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32))
                               .unwrap();
         SDLScreen {
             video: video_subsystem,
@@ -56,11 +57,7 @@ impl<'a> Screen for SDLScreen<'a> {
             .with_lock(None, |buffer: &mut [u8], pitch: usize| {
                 for y in 0..SCREEN_HEIGHT {
                     for x in 0..SCREEN_HEIGHT {
-                        let y = y as usize;
-                        let x = x as usize;
-                        let nes_x = x / SCALE;
-                        let nes_y = y / SCALE;
-                        let nes_idx = nes_y * ::ppu::SCREEN_WIDTH + nes_x;
+                        let nes_idx = y * SCREEN_WIDTH + x;
                         let color = buf[nes_idx];
                         let pal_idx = color.bits() as usize * 3;
                         let offset = y * pitch + x * 3;
@@ -74,7 +71,7 @@ impl<'a> Screen for SDLScreen<'a> {
 
         self.renderer.copy(&self.texture,
                            None,
-                           Some(Rect::new_unwrap(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)));
+                           Some(Rect::new_unwrap(0, 0, SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32)));
         self.renderer.present();
     }
 }
