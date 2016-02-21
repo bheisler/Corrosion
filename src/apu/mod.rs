@@ -196,6 +196,7 @@ impl APU {
     fn envelope_tick(&mut self) {
         self.square1.envelope_tick();
         self.square2.envelope_tick();
+        self.triangle.envelope_tick();
         self.noise.envelope_tick();
     }
 
