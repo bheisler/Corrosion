@@ -57,6 +57,7 @@ pub struct APU {
     frame: Frame,
     
     square_buffer: Rc<RefCell<SampleBuffer>>,
+    tnd_buffer: Rc<RefCell<SampleBuffer>>,
     
     device: Box<AudioOut>,
 
@@ -76,17 +77,19 @@ impl APU {
         let sample_rate = device.sample_rate();
         
         let square_buffer = Rc::new(RefCell::new(SampleBuffer::new(sample_rate)));
+        let tnd_buffer = Rc::new(RefCell::new(SampleBuffer::new(sample_rate)));
         let clocks_needed = square_buffer.borrow().clocks_needed() as u64;
         
         APU {
             square1: Square::new(false, Waveform::new(square_buffer.clone())),
             square2: Square::new(true, Waveform::new(square_buffer.clone())),
-            triangle: Triangle::new(),
+            triangle: Triangle::new(Waveform::new(tnd_buffer.clone())),
             noise: Noise::new(),
             dmc: DMC::new(),
             frame: Frame::empty(),
 
             square_buffer: square_buffer,
+            tnd_buffer: tnd_buffer,
 
             device: device,
 
@@ -230,11 +233,16 @@ impl APU {
         let cycles_since_last_frame = (cpu_cyc - self.last_frame_cyc) as u32;
         self.last_frame_cyc = cpu_cyc;
         
-        let mut square_buf = self.square_buffer.borrow_mut(); 
+        let mut square_buf = self.square_buffer.borrow_mut();
+        let mut tnd_buf = self.tnd_buffer.borrow_mut();
         square_buf.end_frame(cycles_since_last_frame);
+        tnd_buf.end_frame(cycles_since_last_frame);
         let samples: Vec<Sample> = {
-            let iter1 = square_buf.read().iter();
-            iter1.cloned().collect()
+            let iter1 = square_buf.read().iter().cloned();
+            let iter2 = tnd_buf.read().iter().cloned();
+            iter1.zip(iter2)
+                .map(|(s, t)| s + t) //TODO: Add proper nonlinear mixing.
+                .collect()
         };
         self.next_transfer_cyc = cpu_cyc + square_buf.clocks_needed() as u64;
         self.device.play(&samples);

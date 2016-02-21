@@ -2,6 +2,11 @@
 
 use apu::Writable;
 use apu::components::*;
+use apu::buffer::Waveform;
+
+static TRIANGLE_VOLUME: [i16; 32] = [
+    0xF, 0xE, 0xD, 0xC, 0xB, 0xA, 0x9, 0x8, 0x7, 0x6, 0x5, 0x4, 0x3, 0x2, 0x1, 0x0,
+    0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF];
 
 struct LinearCounter {
     control: bool,
@@ -37,21 +42,30 @@ impl LinearCounter {
             self.reload = false;
         }
     }
+    
+    fn audible(&self) -> bool {
+        self.counter > 0
+    }
 }
 
 pub struct Triangle {
     counter: LinearCounter,
     timer: Timer,
     pub length: Length,
+    
+    waveform: Waveform,
+    volume_index: usize,
 }
 
-#[allow(unused_variables)] //TODO: Remove this
 impl Triangle {
-    pub fn new() -> Triangle {
+    pub fn new(waveform: Waveform) -> Triangle {
         Triangle {
             counter: LinearCounter::new(),
             timer: Timer::new(1),
             length: Length::new(7),
+            
+            waveform: waveform,
+            volume_index: 0,
         }
     }
 
@@ -63,7 +77,19 @@ impl Triangle {
         self.counter.tick();
     }
 
-    pub fn play(&mut self, from_cyc: u32, to_cyc: u32) {}
+    pub fn play(&mut self, from_cyc: u32, to_cyc: u32) {
+        if !self.counter.audible() || !self.length.audible() {
+            self.waveform.set_amplitude(0, from_cyc);
+            return;
+        }
+        
+        let mut current_cycle = from_cyc;
+        while let TimerClock::Clock = self.timer.run(&mut current_cycle, to_cyc) {
+            self.volume_index = (self.volume_index + 1) % 32;
+            let volume = TRIANGLE_VOLUME[self.volume_index];
+            self.waveform.set_amplitude(volume, current_cycle);
+        }
+    }
 }
 
 impl Writable for Triangle {
