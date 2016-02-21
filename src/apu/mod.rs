@@ -22,7 +22,7 @@ pub type Sample = i16;
 static NTSC_TICK_LENGTH_TABLE: [[u64; 6]; 2] = [[7459, 7456, 7458, 7458, 7458, 0000],
                                                 [0001, 7458, 7456, 7458, 7458, 7452]];
 
-const VOLUME_MULT: i32 = ((32767i16 / 16) / 2) as i32;
+const VOLUME_MULT: i32 = ((32767i16 / 16) / 3) as i32;
 
 bitflags! {
     flags Frame : u8 {
