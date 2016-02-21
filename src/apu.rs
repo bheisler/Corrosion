@@ -3,6 +3,8 @@ use audio::AudioOut;
 use std::cmp;
 use blip_buf::BlipBuf;
 use cpu::IrqInterrupt;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub type Sample = i16;
 
@@ -300,27 +302,27 @@ impl Sweep {
 struct Pulse {
     duty: usize,
     duty_index: usize,
+    
     envelope: Envelope,
     sweep: Sweep,
     timer: Timer,
     length: Length,
 
-    last_amp: Sample,
-    buffer: SampleBuffer,
+	waveform: Waveform,
 }
 
 impl Pulse {
-    fn new(is_pulse2: bool, buffer: SampleBuffer) -> Pulse {
+    fn new(is_pulse2: bool, buffer: Rc<RefCell<SampleBuffer>>) -> Pulse {
         Pulse {
             duty: 0,
             duty_index: 0,
+            
             envelope: Envelope::new(),
             sweep: Sweep::new(is_pulse2),
             timer: Timer::new(2),
             length: Length::new(5),
 
-            last_amp: 0,
-            buffer: buffer,
+            waveform: Waveform::new(buffer),
         }
     }
 
@@ -336,7 +338,7 @@ impl Pulse {
 
     fn play(&mut self, from_cyc: u32, to_cyc: u32) {
         if !self.sweep.audible() || !self.length.audible() {
-            self.set_amplitude(0, from_cyc);
+            self.waveform.set_amplitude(0, from_cyc);
             return;
         }
 
@@ -346,22 +348,12 @@ impl Pulse {
         while let TimerClock::Clock = self.timer.run(&mut current_cyc, to_cyc) {
             self.duty_index = (self.duty_index + 1) % 8;
             match PULSE_DUTY_CYCLES[self.duty][self.duty_index] {
-                -1 => self.set_amplitude(0, current_cyc),
+                -1 => self.waveform.set_amplitude(0, current_cyc),
                 0 => (),
-                1 => self.set_amplitude(volume, current_cyc),
+                1 => self.waveform.set_amplitude(volume, current_cyc),
                 _ => (),
             };
         }
-    }
-
-    fn set_amplitude(&mut self, amp: Sample, cycle: u32) {
-        let last_amp = self.last_amp;
-        let delta = (amp - last_amp) as i32;
-        if delta == 0 {
-            return;
-        }
-        self.buffer.add_delta(cycle, delta * VOLUME_MULT as i32);
-        self.last_amp = amp;
     }
 }
 
@@ -531,6 +523,30 @@ impl SampleBuffer {
     }
 }
 
+struct Waveform {
+    buffer: Rc<RefCell<SampleBuffer>>,
+    last_amp: Sample,
+}
+
+impl Waveform {
+    fn new(buffer: Rc<RefCell<SampleBuffer>>) -> Waveform {
+        Waveform {
+            buffer: buffer,
+            last_amp: 0,
+        }
+    }
+    
+    fn set_amplitude(&mut self, amp: Sample, cycle: u32) {
+        let last_amp = self.last_amp;
+        let delta = (amp - last_amp) as i32;
+        if delta == 0 {
+            return;
+        }
+        self.buffer.borrow_mut().add_delta(cycle, delta * VOLUME_MULT as i32);
+        self.last_amp = amp;
+    }
+}
+
 enum Jitter {
     Delay(u64, u8),
     None,
@@ -543,7 +559,9 @@ pub struct APU {
     noise: Noise,
     dmc: DMC,
     frame: Frame,
-
+    
+    square_buffer: Rc<RefCell<SampleBuffer>>,
+    
     device: Box<AudioOut>,
 
     global_cyc: u64,
@@ -560,28 +578,32 @@ pub struct APU {
 impl APU {
     pub fn new(device: Box<AudioOut>) -> APU {
         let sample_rate = device.sample_rate();
-        let mut apu = APU {
-            pulse1: Pulse::new(false, SampleBuffer::new(sample_rate)),
-            pulse2: Pulse::new(true, SampleBuffer::new(sample_rate)),
+        
+        let square_buffer = Rc::new(RefCell::new(SampleBuffer::new(sample_rate)));
+        let clocks_needed = square_buffer.borrow().clocks_needed() as u64;
+        
+        APU {
+            pulse1: Pulse::new(false, square_buffer.clone()),
+            pulse2: Pulse::new(true, square_buffer.clone()),
             triangle: Triangle::new(),
             noise: Noise::new(),
             dmc: DMC::new(),
             frame: Frame::empty(),
+
+            square_buffer: square_buffer,
 
             device: device,
 
             global_cyc: 0,
             tick: 0,
             next_tick_cyc: NTSC_TICK_LENGTH_TABLE[0][0],
-            next_transfer_cyc: 0,
+            next_transfer_cyc: clocks_needed,
             last_frame_cyc: 0,
 
             irq_requested: false,
 
             jitter: Jitter::None,
-        };
-        apu.next_transfer_cyc = apu.pulse1.buffer.clocks_needed() as u64;
-        apu
+        }
     }
 
     pub fn run_to(&mut self, cpu_cycle: u64) -> IrqInterrupt {
@@ -710,17 +732,14 @@ impl APU {
         let cpu_cyc = self.global_cyc;
         let cycles_since_last_frame = (cpu_cyc - self.last_frame_cyc) as u32;
         self.last_frame_cyc = cpu_cyc;
-        self.pulse1.buffer.end_frame(cycles_since_last_frame);
-        self.pulse2.buffer.end_frame(cycles_since_last_frame);
-        let samples: Vec<Sample>;
-        {
-            let iter1 = self.pulse1.buffer.read().iter();
-            let iter2 = self.pulse2.buffer.read().iter();
-            samples = iter1.zip(iter2)
-                           .map(|(p1, p2)| p1 + p2)
-                           .collect();
-        }
-        self.next_transfer_cyc = cpu_cyc + self.pulse1.buffer.clocks_needed() as u64;
+        
+        let mut square_buf = self.square_buffer.borrow_mut(); 
+        square_buf.end_frame(cycles_since_last_frame);
+        let samples: Vec<Sample> = {
+            let iter1 = square_buf.read().iter();
+            iter1.cloned().collect()
+        };
+        self.next_transfer_cyc = cpu_cyc + square_buf.clocks_needed() as u64;
         self.device.play(&samples);
     }
 
