@@ -173,20 +173,24 @@ impl Envelope {
     }
 }
 
-// The timer is clocked for every sample, so the period logic is in the
-// Pulse.play function
+///Represents the CPU-clock timers used by all of the NES channels.
 struct Timer {
     period: u16,
-    current_step: u32,
-    duty_index: usize,
+    divider: u32,
+    remaining: u32,
+}
+
+enum TimerClock {
+    Clock,
+    NoClock,
 }
 
 impl Timer {
-    fn new() -> Timer {
+    fn new(divider: u32) -> Timer {
         Timer {
             period: 0,
-            current_step: 0,
-            duty_index: 0,
+            divider: divider,
+            remaining: 0,
         }
     }
 
@@ -204,7 +208,23 @@ impl Timer {
     }
 
     fn wavelen(&self) -> u32 {
-        (self.period as u32 + 1) * 2
+        (self.period as u32 + 1) * self.divider
+    }
+    
+    ///Run the timer until the next clock, or until current_cyc reaches to_cycle.
+    ///Returns either Clock or NoClock depending on if it reached a clock or not.
+    fn run(&mut self, current_cyc: &mut u32, to_cyc: u32) -> TimerClock {
+        let end_wavelen = *current_cyc + self.remaining;
+
+        if end_wavelen < to_cyc {
+            *current_cyc += self.remaining;
+            self.remaining = self.wavelen();
+            TimerClock::Clock
+        } else {
+            self.remaining -= to_cyc - *current_cyc;
+            *current_cyc = to_cyc;
+            TimerClock::NoClock
+        }
     }
 }
 
@@ -279,6 +299,7 @@ impl Sweep {
 
 struct Pulse {
     duty: usize,
+    duty_index: usize,
     envelope: Envelope,
     sweep: Sweep,
     timer: Timer,
@@ -292,9 +313,10 @@ impl Pulse {
     fn new(is_pulse2: bool, buffer: SampleBuffer) -> Pulse {
         Pulse {
             duty: 0,
+            duty_index: 0,
             envelope: Envelope::new(),
             sweep: Sweep::new(is_pulse2),
-            timer: Timer::new(),
+            timer: Timer::new(2),
             length: Length::new(5),
 
             last_amp: 0,
@@ -321,25 +343,14 @@ impl Pulse {
         let volume = self.envelope.volume();
 
         let mut current_cyc = from_cyc;
-        while current_cyc < to_cyc {
-            let wavelen = self.timer.wavelen();
-            let remaining = wavelen - self.timer.current_step;
-            let end_wavelen = current_cyc + remaining;
-
-            if end_wavelen < to_cyc {
-                self.timer.current_step = 0;
-                current_cyc += remaining;
-                self.timer.duty_index = (self.timer.duty_index + 1) % 8;
-                match PULSE_DUTY_CYCLES[self.duty][self.timer.duty_index] {
-                    -1 => self.set_amplitude(0, current_cyc),
-                    0 => (),
-                    1 => self.set_amplitude(volume, current_cyc),
-                    _ => (),
-                };
-            } else {
-                self.timer.current_step += to_cyc - current_cyc;
-                current_cyc = to_cyc;
-            }
+        while let TimerClock::Clock = self.timer.run(&mut current_cyc, to_cyc) {
+            self.duty_index = (self.duty_index + 1) % 8;
+            match PULSE_DUTY_CYCLES[self.duty][self.duty_index] {
+                -1 => self.set_amplitude(0, current_cyc),
+                0 => (),
+                1 => self.set_amplitude(volume, current_cyc),
+                _ => (),
+            };
         }
     }
 
@@ -394,10 +405,6 @@ impl Triangle {
         self.length.tick();
     }
 
-    fn envelope_tick(&mut self) {
-        // Nothing yet
-    }
-
     fn play(&mut self, from_cyc: u32, to_cyc: u32) {}
 }
 
@@ -432,6 +439,10 @@ impl Noise {
 
     fn length_tick(&mut self) {
         self.length.tick();
+    }
+    
+    fn envelope_tick(&mut self) {
+        self.envelope.tick();
     }
 
     fn play(&mut self, from_cyc: u32, to_cyc: u32) {}
@@ -667,7 +678,7 @@ impl APU {
     fn envelope_tick(&mut self) {
         self.pulse1.envelope_tick();
         self.pulse2.envelope_tick();
-        self.triangle.envelope_tick();
+        self.noise.envelope_tick();
     }
 
     fn length_tick(&mut self) {
