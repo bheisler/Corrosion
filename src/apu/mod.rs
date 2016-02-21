@@ -1,6 +1,9 @@
 mod components;
 mod buffer;
 mod square;
+mod triangle;
+mod noise;
+mod dmc;
 
 use super::memory::MemSegment;
 use audio::AudioOut;
@@ -8,9 +11,11 @@ use std::cmp;
 use cpu::IrqInterrupt;
 use std::cell::RefCell;
 use std::rc::Rc;
-use apu::components::*;
 use apu::buffer::*;
 use apu::square::*;
+use apu::triangle::*;
+use apu::noise::*;
+use apu::dmc::*;
 
 pub type Sample = i16;
 
@@ -36,112 +41,6 @@ impl Frame {
 
 trait Writable {
     fn write(&mut self, idx: u16, val: u8);
-}
-
-#[allow(dead_code)] //TODO: Remove this
-struct Triangle {
-    counter: u8,
-    timer: u8,
-    length: Length,
-}
-
-#[allow(unused_variables)] //TODO: Remove this
-impl Triangle {
-    fn new() -> Triangle {
-        Triangle {
-            counter: 0,
-            timer: 0,
-            length: Length::new(7),
-        }
-    }
-
-    fn length_tick(&mut self) {
-        self.length.tick();
-    }
-
-    fn play(&mut self, from_cyc: u32, to_cyc: u32) {}
-}
-
-impl Writable for Triangle {
-    fn write(&mut self, idx: u16, val: u8) {
-        match idx % 4 {
-            0 => self.length.write_halt(val),
-            1 => (),
-            2 => (),
-            3 => self.length.write_counter(val),
-            _ => (),
-        }
-    }
-}
-
-#[allow(dead_code)] //TODO: Remove this
-struct Noise {
-    envelope: Envelope,
-    mode: u8,
-    length: Length,
-}
-
-#[allow(unused_variables)] //TODO: Remove this
-impl Noise {
-    fn new() -> Noise {
-        Noise {
-            envelope: Envelope::new(),
-            mode: 0,
-            length: Length::new(5),
-        }
-    }
-
-    fn length_tick(&mut self) {
-        self.length.tick();
-    }
-    
-    fn envelope_tick(&mut self) {
-        self.envelope.tick();
-    }
-
-    fn play(&mut self, from_cyc: u32, to_cyc: u32) {}
-}
-
-impl Writable for Noise {
-    fn write(&mut self, idx: u16, val: u8) {
-        match idx % 4 {
-            0 => {
-                self.length.write_halt(val);
-                self.envelope.write(val);
-            }
-            1 => (),
-            2 => (),
-            3 => self.length.write_counter(val),
-            _ => (),
-        }
-    }
-}
-
-#[allow(dead_code)] //TODO: Remove this
-struct DMC {
-    freq: u8,
-    direct: u8,
-    sample_addr: u8,
-    sample_length: u8,
-}
-
-#[allow(unused_variables)] //TODO: Remove this
-impl DMC {
-    fn new() -> DMC {
-        DMC {
-            freq: 0,
-            direct: 0,
-            sample_addr: 0,
-            sample_length: 0,
-        }
-    }
-
-    fn play(&mut self, from_cyc: u32, to_cyc: u32) {}
-}
-
-#[allow(unused_variables)] //TODO: Remove this
-impl Writable for DMC {
-    fn write(&mut self, idx: u16, val: u8) {}
 }
 
 enum Jitter {
