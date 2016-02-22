@@ -1084,7 +1084,7 @@ impl CPU {
         self.incr_cycle(512);
 
         let page = (page as u16) << 8;
-        for x in 0x0000..0x00FF {
+        for x in 0x0000..0x0100 {
             let addr = page | x as u16;
             let byte = self.read(addr);
             self.mem.ppu.borrow_mut().write(0x2004, byte);
