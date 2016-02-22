@@ -5,9 +5,9 @@ use apu::components::*;
 use apu::buffer::*;
 
 static SQUARE_DUTY_CYCLES: [[i16; 8]; 4] = [[0, 1, -1, 0, 0, 0, 0, 0],
-                                           [0, 1, 0, -1, 0, 0, 0, 0],
-                                           [0, 1, 0, 0, 0, -1, 0, 0],
-                                           [0, -1, 0, 1, 0, 0, 0, 0]];
+                                            [0, 1, 0, -1, 0, 0, 0, 0],
+                                            [0, 1, 0, 0, 0, -1, 0, 0],
+                                            [0, -1, 0, 1, 0, 0, 0, 0]];
 
 ///Represents the frequency-sweep units used by the two square channels.
 struct Sweep {
@@ -81,13 +81,13 @@ impl Sweep {
 pub struct Square {
     duty: usize,
     duty_index: usize,
-    
+
     envelope: Envelope,
     sweep: Sweep,
     timer: Timer,
     pub length: Length,
 
-	waveform: Waveform,
+    waveform: Waveform,
 }
 
 impl Square {
@@ -95,7 +95,7 @@ impl Square {
         Square {
             duty: 0,
             duty_index: 0,
-            
+
             envelope: Envelope::new(),
             sweep: Sweep::new(is_square2),
             timer: Timer::new(2),

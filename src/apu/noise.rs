@@ -23,7 +23,7 @@ impl Noise {
     pub fn length_tick(&mut self) {
         self.length.tick();
     }
-    
+
     pub fn envelope_tick(&mut self) {
         self.envelope.tick();
     }

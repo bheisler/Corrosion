@@ -1,5 +1,5 @@
-//! This module contains implementations of the common components used by the various NES sound
-//! channels.
+//! This module contains implementations of the common components used by the
+//! various NES sound channels.
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
 static LENGTH_TABLE: [u8; 32] = [
@@ -175,7 +175,7 @@ impl Timer {
     fn wavelen(&self) -> u32 {
         (self.period as u32 + 1) * self.divider
     }
-    
+
     ///Run the timer until the next clock, or until current_cyc reaches to_cycle.
     ///Returns either Clock or NoClock depending on if it reached a clock or not.
     pub fn run(&mut self, current_cyc: &mut u32, to_cyc: u32) -> TimerClock {

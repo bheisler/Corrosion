@@ -1,4 +1,4 @@
-//!Thin layer over BlipBuf which provides a slightly more convenient interface.
+//! Thin layer over BlipBuf which provides a slightly more convenient interface.
 
 use blip_buf::BlipBuf;
 use apu::Sample;
@@ -67,7 +67,7 @@ impl Waveform {
             volume_mult: volume_mult,
         }
     }
-    
+
     pub fn set_amplitude(&mut self, amp: Sample, cycle: u32) {
         let last_amp = self.last_amp;
         let delta = (amp - last_amp) as i32;
