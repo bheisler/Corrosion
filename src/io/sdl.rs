@@ -6,12 +6,9 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use io::IO;
+use io::OPEN_BUS;
 use memory::MemSegment;
 use util::ShiftRegister8;
-
-///Some bits of the controller reads return open bus garbage. Since the last byte on the bus is
-///almost always 0x40, we can just use that as a constant for now.
-const OPEN_BUS: u8 = 0x40;
 
 const A: u8 = 1 << 0;
 const B: u8 = 1 << 1;
