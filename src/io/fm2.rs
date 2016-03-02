@@ -32,12 +32,9 @@ impl FM2IO {
 }
 
 fn parse(string: &str) -> u8 {
-    let mut accumulator: u8 = 0;
-    for (idx, _) in string.char_indices()
-        .filter(|&(_, c)| c != '.') {
-        accumulator |= 1 << (7 - idx);
-    }
-    accumulator
+    string.char_indices()
+        .filter(|&(_, c)| c != '.')
+        .fold(0u8, |acc, (idx, _)| acc | 1u8 << (7 - idx) )
 }
 
 impl MemSegment for FM2IO {
