@@ -46,22 +46,6 @@ fn pump_events(pump: &Rc<RefCell<EventPump>>) -> bool {
     false
 }
 
-fn run_frame(cpu: &mut CPU, io: &Rc<RefCell<IO>>, ppu: &Rc<RefCell<PPU>>) {
-    loop {
-        io.borrow_mut().poll();
-        let cycle = cpu.cycle();
-        let nmi = ppu.borrow_mut().run_to(cycle);
-        let frame_end = nmi == ::ppu::StepResult::NMI;
-        if frame_end {
-            cpu.nmi();
-        }
-        cpu.step();
-        if frame_end {
-            break;
-        }
-    }
-}
-
 fn get_movie_file() -> Option<String> {
     return std::env::args()
         .skip_while(|arg| arg != "--movie")
@@ -96,10 +80,10 @@ pub fn start_emulator(cart: Cart) {
         if pump_events(&event_pump) || cpu.halted() {
             break;
         }
-        run_frame(&mut cpu, &io, &ppu);
+        cpu.run_frame();
         let current = stopwatch.elapsed().num_nanoseconds().unwrap() as f64;
         avg_frame_time = (avg_frame_time * smoothing) + (current * (1.0 - smoothing));
-        //println!("Frames per second:{:.*}", 2, 1000000000.0 / avg_frame_time);
+        println!("Frames per second:{:.*}", 2, 1000000000.0 / avg_frame_time);
         stopwatch.restart();
     }
 }

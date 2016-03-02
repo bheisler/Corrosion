@@ -285,6 +285,7 @@ macro_rules! decode_opcode {
 
 use memory::CpuMemory;
 use memory::MemSegment;
+use ppu::StepResult;
 
 #[cfg(feature="cputrace")]
 use disasm::Disassembler;
@@ -408,6 +409,10 @@ pub struct CPU {
 impl MemSegment for CPU {
     fn read(&mut self, idx: u16) -> u8 {
         match idx {
+            0x2000...0x2008 => {
+                self.run_ppu();
+                self.mem.read(idx)
+            }
             OAMDMA => 0, //No idea what this should return. PPU dynamic latch garbage, maybe?
             0x4015 => {
                 let (irq, val) = self.mem.apu.read_status(self.cycle);
@@ -423,7 +428,14 @@ impl MemSegment for CPU {
 
     fn write(&mut self, idx: u16, val: u8) {
         match idx {
-            OAMDMA => self.dma_transfer(val),
+            0x2000...0x2008 => {
+                self.run_ppu();
+                self.mem.write(idx, val);
+            }
+            OAMDMA => {
+                self.run_ppu();
+                self.dma_transfer(val);
+            },
             0x4000...0x4013 | 0x4015 | 0x4017 => {
                 self.run_apu();
                 self.mem.write(idx, val);
@@ -438,21 +450,22 @@ impl CPU {
     fn trace(&mut self) {
         let opcode = Disassembler::new(self).decode();
         println!(
-            "{:04X} {:9} {}{:30}  A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:3} SL:{:3}. VRAM:{:04X}",
+            "${:04X}:{:9} {}{:30}  A:{:02X} X:{:02X} Y:{:02X} S:{:02X}",
             self.regs.pc,
             opcode.bytes.iter()
                 .map(|byte| format!("{:02X}", byte))
-                .fold("".to_string(), |left, right| left + " " + &right ),
+                .fold(None as Option<String>, |opt, right| {
+                    match opt {
+                        Some(left) => Some(left + " " + &right),
+                        None => Some(right),
+                    }
+                } ).unwrap(),
             if opcode.unofficial { "*" } else { " " },
             opcode.str,
             self.regs.a,
             self.regs.x,
             self.regs.y,
-            self.regs.p.bits(),
             self.regs.sp,
-            self.mem.ppu.borrow().cycle(),
-            self.mem.ppu.borrow().scanline(),
-            self.mem.ppu.borrow().vram_addr(),
         );
     }
 
@@ -892,7 +905,7 @@ impl CPU {
         self.regs.pc = self.read_w(RESET_VECTOR);
     }
 
-    pub fn nmi(&mut self) {
+    fn nmi(&mut self) {
         let target = self.read_w(NMI_VECTOR);
         let return_addr = self.regs.pc;
         self.regs.pc = target;
@@ -901,7 +914,7 @@ impl CPU {
         self.stack_push(status.bits());
     }
 
-    pub fn irq(&mut self) {
+    fn irq(&mut self) {
         if self.regs.p.contains(I) {
             return;
         }
@@ -1053,13 +1066,26 @@ impl CPU {
 
     fn unofficial(&self) {}
 
+    pub fn run_frame(&mut self) {
+        let frame = self.mem.ppu.borrow().frame();
+        while frame == self.mem.ppu.borrow().frame() {
+            self.step();
+        }
+    }
+
     pub fn step(&mut self) {
         if self.halted {
             return;
         }
+        
+        self.mem.io.borrow_mut().poll();
 
         if self.mem.apu.requested_run_cycle() <= self.cycle {
             self.run_apu();
+        }
+        
+        if self.mem.ppu.borrow().requested_run_cycle() <= self.cycle {
+            self.run_ppu();
         }
 
         self.trace();
@@ -1073,6 +1099,13 @@ impl CPU {
         let irq = self.mem.apu.run_to(self.cycle);
         if let IrqInterrupt::IRQ = irq {
             self.irq();
+        }
+    }
+    
+    fn run_ppu(&mut self) {
+        let nmi = self.mem.ppu.borrow_mut().run_to(self.cycle);
+        if let StepResult::NMI = nmi {
+            self.nmi();
         }
     }
 

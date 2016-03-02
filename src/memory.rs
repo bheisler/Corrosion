@@ -70,7 +70,7 @@ pub struct CpuMemory {
     ram: RAM,
     pub ppu: Rc<RefCell<PPU>>,
     pub apu: APU,
-    io: Rc<RefCell<IO>>,
+    pub io: Rc<RefCell<IO>>,
     cart: Rc<RefCell<Cart>>,
 }
 

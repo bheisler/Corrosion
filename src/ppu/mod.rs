@@ -21,6 +21,10 @@ pub const SCREEN_WIDTH: usize = 256;
 pub const SCREEN_HEIGHT: usize = 240;
 pub const SCREEN_BUFFER_SIZE: usize = SCREEN_WIDTH * SCREEN_HEIGHT;
 
+const CYCLES_PER_SCANLINE: u64 = 341;
+const SCANLINES_PER_FRAME: u64 = 262; 
+const CYCLES_PER_FRAME: u64 = CYCLES_PER_SCANLINE * SCANLINES_PER_FRAME;
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(C)]
 pub struct Color(u8);
@@ -98,12 +102,30 @@ pub struct PPU {
     cyc: u16,
     sl: i16,
     frame: u32,
+    
+    next_vblank_ppu_cyc: u64,
+    next_vblank_cpu_cyc: u64,
 }
 
 #[derive(Copy, Debug, PartialEq, Clone)]
 pub enum StepResult {
     NMI,
     Continue,
+}
+
+fn ppu_to_cpu_cyc(ppu_cyc: u64) -> u64 {
+    let div = ppu_cyc / 3;
+    let rem = ppu_cyc / 3;
+    if rem == 0 {
+        div
+    }
+    else {
+        div + 1
+    }
+}
+
+fn cpu_to_ppu_cyc(cpu_cyc: u64) -> u64 {
+    cpu_cyc * 3
 }
 
 impl PPU {
@@ -122,12 +144,17 @@ impl PPU {
             cyc: 0,
             sl: 241,
             frame: 0,
+            
+            next_vblank_ppu_cyc: 1,
+            next_vblank_cpu_cyc: ppu_to_cpu_cyc(1),
         }
     }
 
     pub fn run_to(&mut self, cpu_cycle: u64) -> StepResult {
+        let stop_cyc = cpu_to_ppu_cyc( cpu_cycle );
+        
         let mut hit_nmi = false;
-        while self.global_cyc < (cpu_cycle * 3) {
+        while self.global_cyc < stop_cyc {
             self.tick_cycle();
             hit_nmi |= self.run_cycle();
         }
@@ -137,6 +164,12 @@ impl PPU {
         } else {
             StepResult::Continue
         }
+    }
+    
+    ///Returns the CPU cycle number representing the next time the CPU should run the PPU.
+    ///When the CPU cycle reaches this number, the CPU must run the PPU.
+    pub fn requested_run_cycle(&self) -> u64 {
+        self.next_vblank_cpu_cyc
     }
 
     fn tick_cycle(&mut self) {
@@ -198,6 +231,9 @@ impl PPU {
     }
 
     fn start_vblank(&mut self) -> bool {
+        self.next_vblank_ppu_cyc += CYCLES_PER_FRAME;
+        self.next_vblank_cpu_cyc = ppu_to_cpu_cyc( self.next_vblank_ppu_cyc );
+        
         let buf = &self.screen_buffer;
         self.screen.draw(buf);
         if self.frame > 0 {
