@@ -68,16 +68,16 @@ impl MemSegment for RAM {
 
 pub struct CpuMemory {
     ram: RAM,
-    pub ppu: Rc<RefCell<PPU>>,
+    pub ppu: PPU,
     pub apu: APU,
-    pub io: Rc<RefCell<IO>>,
+    pub io: Box<IO>,
     cart: Rc<RefCell<Cart>>,
 }
 
 impl CpuMemory {
-    pub fn new(ppu: Rc<RefCell<PPU>>,
+    pub fn new(ppu: PPU,
                apu: APU,
-               io: Rc<RefCell<IO>>,
+               io: Box<IO>,
                cart: Rc<RefCell<Cart>>)
                -> CpuMemory {
         CpuMemory {
@@ -94,9 +94,9 @@ impl MemSegment for CpuMemory {
     fn read(&mut self, idx: u16) -> u8 {
         match idx {
             0x0000...0x1FFF => self.ram.read(idx),
-            0x2000...0x3FFF => self.ppu.borrow_mut().read(idx),
+            0x2000...0x3FFF => self.ppu.read(idx),
             0x4000...0x4015 => 0,
-            0x4016...0x4017 => self.io.borrow_mut().read(idx),
+            0x4016...0x4017 => self.io.read(idx),
             0x4018...0x4019 => 0,
             0x4020...0xFFFF => self.cart.borrow().prg_read(idx),
             x => invalid_address!(x),
@@ -106,9 +106,9 @@ impl MemSegment for CpuMemory {
     fn write(&mut self, idx: u16, val: u8) {
         match idx {
             0x0000...0x1FFF => self.ram.write(idx, val),
-            0x2000...0x3FFF => self.ppu.borrow_mut().write(idx, val),
+            0x2000...0x3FFF => self.ppu.write(idx, val),
             0x4000...0x4015 => self.apu.write(idx, val),
-            0x4016 => self.io.borrow_mut().write(idx, val),
+            0x4016 => self.io.write(idx, val),
             0x4017...0x4019 => self.apu.write(idx, val),
             0x4020...0xFFFF => self.cart.borrow_mut().prg_write(idx, val),
             x => invalid_address!(x),
@@ -132,11 +132,9 @@ mod tests {
         let cart = ::cart::Cart::new(nrom);
         let cart = Rc::new(RefCell::new(cart));
         let ppu = ::ppu::PPU::new(cart.clone(), Box::new(DummyScreen::new()));
-        let ppu = Rc::new(RefCell::new(ppu));
         let apu = ::apu::APU::new(Box::new(DummyAudioOut));
         let io = DummyIO::new();
-        let io = Rc::new(RefCell::new(io));
-        CpuMemory::new(ppu, apu, io, cart)
+        CpuMemory::new(ppu, apu, Box::new(io), cart)
     }
 
     #[test]
@@ -178,7 +176,7 @@ mod tests {
 
         // We're relying on the PPU dynamic latch effect to get the right answers
         mem.write(0x2000, 0x45);
-        assert_eq!(mem.ppu.borrow_mut().read(0x2000), 0x45);
+        assert_eq!(mem.ppu.read(0x2000), 0x45);
 
         mem.write(0x2000, 0x48);
         assert_eq!(mem.read(0x2000), 0x48);

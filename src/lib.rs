@@ -61,15 +61,14 @@ pub fn start_emulator(cart: Cart) {
 
     let cart: Rc<RefCell<Cart>> = Rc::new(RefCell::new(cart));
     let ppu = PPU::new(cart.clone(), Box::new(screen));
-    let ppu = Rc::new(RefCell::new(ppu));
     let apu = APU::new(Box::new(audio_out));
-    let io: Rc<RefCell<IO>> = if let Some(file) = get_movie_file() {
+    let io: Box<IO> = if let Some(file) = get_movie_file() {
         let fm2io = io::fm2::FM2IO::read(file).unwrap(); //TODO: Handle errors
-        Rc::new(RefCell::new(fm2io))
+        Box::new(fm2io)
     } else {
-        Rc::new(RefCell::new(io::sdl::SdlIO::new(event_pump.clone())))
+        Box::new(io::sdl::SdlIO::new(event_pump.clone()))
     };
-    let mem = CpuMemory::new(ppu.clone(), apu, io.clone(), cart);
+    let mem = CpuMemory::new(ppu, apu, io, cart);
     let mut cpu = CPU::new(mem);
     cpu.init();
 

@@ -1067,8 +1067,8 @@ impl CPU {
     fn unofficial(&self) {}
 
     pub fn run_frame(&mut self) {
-        let frame = self.mem.ppu.borrow().frame();
-        while frame == self.mem.ppu.borrow().frame() {
+        let frame = self.mem.ppu.frame();
+        while frame == self.mem.ppu.frame() {
             self.step();
         }
     }
@@ -1078,13 +1078,13 @@ impl CPU {
             return;
         }
         
-        self.mem.io.borrow_mut().poll();
+        self.mem.io.poll();
 
         if self.mem.apu.requested_run_cycle() <= self.cycle {
             self.run_apu();
         }
         
-        if self.mem.ppu.borrow().requested_run_cycle() <= self.cycle {
+        if self.mem.ppu.requested_run_cycle() <= self.cycle {
             self.run_ppu();
         }
 
@@ -1103,7 +1103,7 @@ impl CPU {
     }
     
     fn run_ppu(&mut self) {
-        let nmi = self.mem.ppu.borrow_mut().run_to(self.cycle);
+        let nmi = self.mem.ppu.run_to(self.cycle);
         if let StepResult::NMI = nmi {
             self.nmi();
         }
@@ -1120,7 +1120,7 @@ impl CPU {
         for x in 0x0000..0x0100 {
             let addr = page | x as u16;
             let byte = self.read(addr);
-            self.mem.ppu.borrow_mut().write(0x2004, byte);
+            self.mem.ppu.write(0x2004, byte);
         }
     }
 
