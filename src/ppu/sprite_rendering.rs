@@ -106,6 +106,16 @@ impl Default for SpriteRenderer {
     }
 }
 
+impl SpriteRenderer {
+    pub fn run(&mut self, start: u64, stop: u64) {
+        //TODO: Not implemented yet.
+    }
+    
+    pub fn render(&mut self, start: usize, stop: usize) {
+        //TODO: Not implemented yet.
+    }
+}
+
 #[derive(Debug, Copy, Clone)]
 pub enum SpritePriority {
     Foreground,

@@ -4,6 +4,7 @@ use cart::Cart;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
+use std::cmp;
 
 mod ppu_reg;
 use ppu::ppu_reg::*;
@@ -151,19 +152,42 @@ impl PPU {
     }
 
     pub fn run_to(&mut self, cpu_cycle: u64) -> StepResult {
-        let stop_cyc = cpu_to_ppu_cyc( cpu_cycle );
+        let start = self.global_cyc;
+        let stop = cpu_to_ppu_cyc( cpu_cycle );
+        
+        self.background_data.run(start, stop);
+        self.sprite_data.run(start, stop);
+        
+        let start_px = self.current_pixel();
         
         let mut hit_nmi = false;
-        while self.global_cyc < stop_cyc {
+        while self.global_cyc < stop {
             self.tick_cycle();
             hit_nmi |= self.run_cycle();
         }
-
+        
+        let stop_px = self.current_pixel();
+        
+        self.background_data.render(start_px, stop_px);
+        self.sprite_data.render(start_px, stop_px);
+        self.mix(start_px, stop_px);
+        
         if hit_nmi {
             StepResult::NMI
         } else {
             StepResult::Continue
         }
+    }
+    
+    fn current_pixel(&self) -> usize {
+        if self.sl <= -1  {
+            return 0;
+        }
+        if self.sl >= 240 {
+            return SCREEN_BUFFER_SIZE;
+        }
+        let cyc = cmp::min(256, self.cyc) as usize;
+        self.sl as usize * SCREEN_WIDTH + cyc
     }
     
     ///Returns the CPU cycle number representing the next time the CPU should run the PPU.
@@ -278,6 +302,10 @@ impl PPU {
         let color_id_lo = lo.wrapping_shr(shift) & 0x01;
         let color_id_hi = (hi.wrapping_shr(shift) & 0x01) << 1;
         color_id_lo | color_id_hi
+    }
+    
+    fn mix(&mut self, start: usize, stop: usize) {
+        //TODO: Not implemented yet.
     }
 
     #[cfg(feature="cputrace")]

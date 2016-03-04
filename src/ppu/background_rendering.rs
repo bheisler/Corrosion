@@ -11,6 +11,16 @@ pub struct BackgroundRenderer {
     attr: u8,
 }
 
+impl BackgroundRenderer {
+    pub fn run(&mut self, start: u64, stop: u64) {
+        //TODO: Not implemented yet.
+    }
+    
+    pub fn render(&mut self, start: usize, stop: usize) {
+        //TODO: Not implemented yet.
+    }
+}
+
 impl Default for BackgroundRenderer {
     fn default() -> BackgroundRenderer {
         BackgroundRenderer {
