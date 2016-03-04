@@ -2,6 +2,8 @@ use super::PPU;
 use super::PaletteIndex;
 use super::PaletteSet;
 use super::TilePattern;
+use super::SCREEN_BUFFER_SIZE;
+use super::SCREEN_WIDTH;
 use memory::MemSegment;
 
 const NAMETABLE_WIDTH: usize = 32;
@@ -9,6 +11,8 @@ const NAMETABLE_WIDTH: usize = 32;
 pub struct BackgroundRenderer {
     tile: TilePattern,
     attr: u8,
+    
+    background_buffer: Box<[PaletteIndex]>,
 }
 
 impl BackgroundRenderer {
@@ -19,6 +23,10 @@ impl BackgroundRenderer {
     pub fn render(&mut self, start: usize, stop: usize) {
         //TODO: Not implemented yet.
     }
+    
+    pub fn buffer(&self) -> &[PaletteIndex] {
+        &self.background_buffer
+    }
 }
 
 impl Default for BackgroundRenderer {
@@ -26,6 +34,8 @@ impl Default for BackgroundRenderer {
         BackgroundRenderer {
             tile: Default::default(),
             attr: 0,
+            
+            background_buffer: vec![Default::default(); SCREEN_BUFFER_SIZE].into_boxed_slice(),
         }
     }
 }
@@ -39,21 +49,22 @@ impl PPU {
             let tile_idx = self.ppu_mem.read(nametable_addr);
 
             let tile_table = self.reg.ppuctrl.background_table();
-            self.background_data.tile = self.read_tile_pattern(tile_idx, y & 0x07, tile_table);
+            self.background_data.tile = self.ppu_mem.read_tile_pattern(tile_idx, y & 0x07, tile_table);
 
             let attribute_addr = self.get_attribute_addr(x, y);
             self.background_data.attr = self.ppu_mem.read(attribute_addr);
         }
     }
 
-    pub fn get_background_pixel(&mut self, screen_x: u16, screen_y: u16) -> PaletteIndex {
+    pub fn draw_background_pixel(&mut self, screen_x: u16, screen_y: u16) {
         let x = screen_x + self.reg.scroll_x() as u16;
         let y = screen_y + self.reg.scroll_y() as u16;
 
         let color_id = self.get_color_id(x);
         let palette_id = self.get_palette_id(x, y);
 
-        PaletteIndex {
+        let pixel = y as usize * SCREEN_WIDTH + x as usize;
+        self.background_data.background_buffer[pixel] = PaletteIndex {
             set: PaletteSet::Background,
             palette_id: palette_id,
             color_id: color_id,
@@ -63,7 +74,7 @@ impl PPU {
     fn get_color_id(&mut self, x: u16) -> u8 {
         let pattern = self.background_data.tile;
         let fine_x = x as u32 & 0x07;
-        self.get_color_in_pattern(pattern, fine_x)
+        pattern.get_color_in_pattern(fine_x)
     }
 
     pub fn get_nametable_addr(&self, px_x: u16, px_y: u16) -> u16 {

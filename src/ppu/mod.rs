@@ -75,6 +75,15 @@ impl PaletteIndex {
     }
 }
 
+impl Default for PaletteIndex {
+    fn default() -> PaletteIndex {
+        PaletteIndex {
+            set: PaletteSet::Background,
+            palette_id: 0,
+            color_id: 0,
+        }
+    }
+}
 
 #[derive(Debug, Copy, Clone)]
 pub struct TilePattern {
@@ -85,6 +94,17 @@ pub struct TilePattern {
 impl Default for TilePattern {
     fn default() -> TilePattern {
         TilePattern { lo: 0, hi: 0 }
+    }
+}
+
+impl TilePattern {
+    fn get_color_in_pattern(&self, fine_x: u32) -> u8 {
+        let lo = self.lo;
+        let hi = self.hi;
+        let shift = 0x07 - fine_x;
+        let color_id_lo = lo.wrapping_shr(shift) & 0x01;
+        let color_id_hi = (hi.wrapping_shr(shift) & 0x01) << 1;
+        color_id_lo | color_id_hi
     }
 }
 
@@ -233,25 +253,12 @@ impl PPU {
     fn visible_scanline(&mut self, pixel: u16, scanline: u16) {
         self.visible_scanline_sprite(pixel, scanline);
         self.visible_scanline_background(pixel, scanline);
+        
         if pixel >= 256 {
             return;
         }
-        let x = pixel as usize;
-        let y = scanline as usize;
-        self.screen_buffer[y * SCREEN_WIDTH + x] = self.get_pixel(pixel, scanline as u16);
-    }
-
-    fn get_pixel(&mut self, px: u16, sl: u16) -> Color {
-        let (priority, sprite_pal_idx) = self.get_sprite_pixel(px);
-        let background_pal_idx = self.get_background_pixel(px, sl);
-
-        let pal_idx = match (background_pal_idx, priority, sprite_pal_idx) {
-            (bck, _, spr) if spr.is_transparent() => bck,
-            (bck, _, spr) if bck.is_transparent() => spr,
-            (_, SpritePriority::Foreground, spr) => spr,
-            (bck, SpritePriority::Background, _) => bck, 
-        };
-        self.read_palette(pal_idx)
+        self.draw_background_pixel(pixel, scanline);
+        self.draw_sprite_pixel(pixel, scanline);
     }
 
     fn start_vblank(&mut self) -> bool {
@@ -268,46 +275,25 @@ impl PPU {
         }
     }
 
-    fn read_palette(&mut self, idx: PaletteIndex) -> Color {
-        let bits = self.ppu_mem.read(idx.to_addr());
-        Color::from_bits_truncate(bits)
-    }
-
-    fn read_tile_pattern(&mut self,
-                         tile_id: u8,
-                         fine_y_scroll: u16,
-                         tile_table: u16)
-                         -> TilePattern {
-        let lo_addr = self.get_tile_addr(tile_id, 0, fine_y_scroll, tile_table);
-        let hi_addr = self.get_tile_addr(tile_id, 8, fine_y_scroll, tile_table);
-        TilePattern {
-            lo: self.ppu_mem.read(lo_addr),
-            hi: self.ppu_mem.read(hi_addr),
+    //TODO: Maybe try to vectorize this?
+    fn mix(&mut self, start: usize, stop: usize) {
+        let background = self.background_data.buffer();
+        let (sprite, priority) = self.sprite_data.buffers();
+        
+        for px in start..stop {
+            let (priority_px, sprite_px) = (priority[px], sprite[px]);
+            let background_px = background[px];
+    
+            let pal_idx = match (background_px, priority_px, sprite_px) {
+                (bck, _, spr) if spr.is_transparent() => bck,
+                (bck, _, spr) if bck.is_transparent() => spr,
+                (_, SpritePriority::Foreground, spr) => spr,
+                (bck, SpritePriority::Background, _) => bck, 
+            };
+            self.screen_buffer[px] = self.ppu_mem.read_palette(pal_idx);
         }
     }
-
-    fn get_tile_addr(&self, tile_id: u8, plane: u8, fine_y_scroll: u16, tile_table: u16) -> u16 {
-        let mut tile_addr = 0u16;
-        tile_addr |= fine_y_scroll;
-        tile_addr |= plane as u16; //Plane must be 0 for low or 8 for high
-        tile_addr |= (tile_id as u16) << 4;
-        tile_addr |= tile_table; //Table must be 0x0000 or 0x1000
-        tile_addr
-    }
-
-    fn get_color_in_pattern(&self, pattern: TilePattern, fine_x: u32) -> u8 {
-        let lo = pattern.lo;
-        let hi = pattern.hi;
-        let shift = 0x07 - fine_x;
-        let color_id_lo = lo.wrapping_shr(shift) & 0x01;
-        let color_id_hi = (hi.wrapping_shr(shift) & 0x01) << 1;
-        color_id_lo | color_id_hi
-    }
     
-    fn mix(&mut self, start: usize, stop: usize) {
-        //TODO: Not implemented yet.
-    }
-
     #[cfg(feature="cputrace")]
     pub fn cycle(&self) -> u16 {
         self.cyc

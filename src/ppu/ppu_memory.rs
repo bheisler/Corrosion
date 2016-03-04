@@ -3,6 +3,8 @@ use cart::Cart;
 use std::rc::Rc;
 use std::cell::RefCell;
 use super::Color;
+use super::PaletteIndex;
+use super::TilePattern;
 
 ///Represents the PPU's memory map.
 pub struct PPUMemory {
@@ -21,9 +23,36 @@ impl PPUMemory {
     }
 }
 
+fn get_tile_addr(tile_id: u8, plane: u8, fine_y_scroll: u16, tile_table: u16) -> u16 {
+    let mut tile_addr = 0u16;
+    tile_addr |= fine_y_scroll;
+    tile_addr |= plane as u16; //Plane must be 0 for low or 8 for high
+    tile_addr |= (tile_id as u16) << 4;
+    tile_addr |= tile_table; //Table must be 0x0000 or 0x1000
+    tile_addr
+}
+
 impl PPUMemory {
     pub fn read_bypass_palette(&mut self, idx: u16) -> u8 {
         self.vram[(idx % 0x800) as usize]
+    }
+    
+    pub fn read_palette(&mut self, idx: PaletteIndex) -> Color {
+        let bits = self.read(idx.to_addr());
+        Color::from_bits_truncate(bits)
+    }
+    
+    pub fn read_tile_pattern(&mut self,
+                         tile_id: u8,
+                         fine_y_scroll: u16,
+                         tile_table: u16)
+                         -> TilePattern {
+        let lo_addr = get_tile_addr(tile_id, 0, fine_y_scroll, tile_table);
+        let hi_addr = get_tile_addr(tile_id, 8, fine_y_scroll, tile_table);
+        TilePattern {
+            lo: self.read(lo_addr),
+            hi: self.read(hi_addr),
+        }
     }
 }
 

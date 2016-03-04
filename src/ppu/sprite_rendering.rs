@@ -3,6 +3,8 @@ use super::PPU;
 use super::PaletteIndex;
 use super::PaletteSet;
 use super::TilePattern;
+use super::SCREEN_BUFFER_SIZE;
+use super::SCREEN_WIDTH;
 
 const TRANSPARENT: PaletteIndex = PaletteIndex {
     set: PaletteSet::Sprite,
@@ -95,6 +97,9 @@ impl Default for SpriteDetails {
 pub struct SpriteRenderer {
     primary_oam: [OAMEntry; 64],
     secondary_oam: [SpriteDetails; 8],
+    
+    pixel_buffer: Box<[PaletteIndex]>,
+    priority_buffer: Box<[SpritePriority]>,
 }
 
 impl Default for SpriteRenderer {
@@ -102,6 +107,9 @@ impl Default for SpriteRenderer {
         SpriteRenderer {
             primary_oam: [Default::default(); 64],
             secondary_oam: [Default::default(); 8],
+            
+            pixel_buffer: vec![Default::default(); SCREEN_BUFFER_SIZE].into_boxed_slice(),
+            priority_buffer: vec![SpritePriority::Background; SCREEN_BUFFER_SIZE].into_boxed_slice(),
         }
     }
 }
@@ -113,6 +121,10 @@ impl SpriteRenderer {
     
     pub fn render(&mut self, start: usize, stop: usize) {
         //TODO: Not implemented yet.
+    }
+    
+    pub fn buffers(&self) -> (&[PaletteIndex], &[SpritePriority]) {
+        (&self.pixel_buffer, &self.priority_buffer)
     }
 }
 
@@ -170,7 +182,7 @@ impl PPU {
         let tile_id = oam.tile;
         let fine_y_scroll = PPU::get_fine_scroll(sl, oam.y as u16, oam.attr.contains(FLIP_VERT));
         let tile_table = self.reg.ppuctrl.sprite_table();
-        let tile = self.read_tile_pattern(tile_id, fine_y_scroll, tile_table);
+        let tile = self.ppu_mem.read_tile_pattern(tile_id, fine_y_scroll, tile_table);
         SpriteDetails {
             x: oam.x,
             attr: oam.attr,
@@ -178,17 +190,21 @@ impl PPU {
         }
     }
 
-    pub fn get_sprite_pixel(&mut self, x: u16) -> (SpritePriority, PaletteIndex) {
+    pub fn draw_sprite_pixel(&mut self, x: u16, y: u16) {
+        let pixel_idx = y as usize * SCREEN_WIDTH + x as usize;
+        
         for n in 0..8 {
             let det_x = self.sprite_data.secondary_oam[n];
             if self.is_active(det_x, x) {
                 let pixel = self.do_get_pixel(det_x, x);
                 if !pixel.1.is_transparent() {
-                    return pixel;
+                    self.sprite_data.pixel_buffer[pixel_idx] = pixel.1;
+                    self.sprite_data.priority_buffer[pixel_idx] = pixel.0;
                 }
             }
         }
-        return (SpritePriority::Background, TRANSPARENT);
+        self.sprite_data.pixel_buffer[pixel_idx] = TRANSPARENT;
+        self.sprite_data.priority_buffer[pixel_idx] = SpritePriority::Background;
     }
 
     fn is_active(&self, details: SpriteDetails, x: u16) -> bool {
@@ -207,7 +223,7 @@ impl PPU {
     fn do_get_pixel(&mut self, details: SpriteDetails, x: u16) -> (SpritePriority, PaletteIndex) {
         let fine_x = PPU::get_fine_scroll(x, details.x as u16, details.attr.contains(FLIP_HORZ));
         let attr = details.attr;
-        let color_id = self.get_color_in_pattern(details.tile, fine_x as u32);
+        let color_id = details.tile.get_color_in_pattern(fine_x as u32);
         let idx = PaletteIndex {
             set: PaletteSet::Sprite,
             palette_id: attr.palette(),
