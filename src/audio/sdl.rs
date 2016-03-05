@@ -110,7 +110,7 @@ impl SDLAudioOut {
             samples: None,
         };
 
-        let device = audio_subsystem.open_playback(None, desired_spec, |_| {
+        let device = audio_subsystem.open_playback(None, &desired_spec, |_| {
                                         BufferOut {
                                             samples: [0; BUFFER_SIZE],
                                             input_counter: 0,

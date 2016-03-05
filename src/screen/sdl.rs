@@ -30,8 +30,8 @@ impl<'a> SDLScreen<'a> {
         renderer.set_logical_size(SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32).unwrap();
 
         let texture = renderer.create_texture_streaming(PixelFormatEnum::RGB24,
-                                                        (SCREEN_WIDTH as u32,
-                                                         SCREEN_HEIGHT as u32))
+                                                        SCREEN_WIDTH as u32,
+                                                         SCREEN_HEIGHT as u32)
                               .unwrap();
         SDLScreen {
             video: video_subsystem,
@@ -71,7 +71,7 @@ impl<'a> Screen for SDLScreen<'a> {
 
         self.renderer.copy(&self.texture,
                            None,
-                           Some(Rect::new_unwrap(0, 0, SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32)));
+                           Some(Rect::new(0, 0, SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32)));
         self.renderer.present();
     }
 }
