@@ -274,7 +274,6 @@ impl PPU {
             return;
         }
         self.draw_background_pixel(pixel, scanline);
-        self.draw_sprite_pixel(pixel, scanline);
     }
 
     fn start_vblank(&mut self) -> bool {

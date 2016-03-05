@@ -1,5 +1,4 @@
 use memory::MemSegment;
-use super::PPU;
 use super::PaletteIndex;
 use super::PaletteSet;
 use super::TilePattern;
@@ -55,7 +54,7 @@ impl OAMEntry {
     
     fn build_details(&self, sl: u16, reg: &PPUReg, mem: &mut PPUMemory) -> SpriteDetails {
         let tile_id = self.tile;
-        let fine_y_scroll = PPU::get_fine_scroll(sl, self.y as u16, self.attr.contains(FLIP_VERT));
+        let fine_y_scroll = get_fine_scroll(sl, self.y as u16, self.attr.contains(FLIP_VERT));
         let tile_table = reg.ppuctrl.sprite_table();
         let tile = mem.read_tile_pattern(tile_id, fine_y_scroll, tile_table);
         SpriteDetails {
@@ -106,6 +105,24 @@ struct SpriteDetails {
     tile: TilePattern,
 }
 
+impl SpriteDetails {
+    fn is_active(&self, x: u16) -> bool {
+        x.wrapping_sub(self.x as u16) < 8
+    }
+    
+    fn do_get_pixel(&self, x: u16) -> (SpritePriority, PaletteIndex) {
+        let fine_x = get_fine_scroll(x, self.x as u16, self.attr.contains(FLIP_HORZ));
+        let attr = self.attr;
+        let color_id = self.tile.get_color_in_pattern(fine_x as u32);
+        let idx = PaletteIndex {
+            set: PaletteSet::Sprite,
+            palette_id: attr.palette(),
+            color_id: color_id,
+        };
+        return (attr.priority(), idx);
+    }
+}
+
 impl Default for SpriteDetails {
     fn default() -> SpriteDetails {
         SpriteDetails {
@@ -141,6 +158,15 @@ fn pixel_to_scanline( px: usize ) -> usize {
     ( px + SCREEN_WIDTH - 1 ) / SCREEN_WIDTH
 }
 
+fn get_fine_scroll(screen_dist: u16, sprite_dist: u16, flip: bool) -> u16 {
+    let scroll = screen_dist - sprite_dist;
+    if flip {
+        7 - scroll
+    } else {
+        scroll
+    }
+}
+
 impl SpriteRenderer {
     pub fn render(&mut self, start: usize, stop: usize, reg: &PPUReg, mem: &mut PPUMemory) {
         let start_sl = pixel_to_scanline( start );
@@ -149,6 +175,8 @@ impl SpriteRenderer {
         for sl in start_sl..stop_sl {
             self.sprite_eval(sl as u16, reg, mem)
         }
+        
+        self.draw( start, stop )
     }
     
     //TODO: Optimize this.
@@ -167,6 +195,31 @@ impl SpriteRenderer {
                 if n == 8 {
                     return;
                 }
+            }
+        }
+    }
+    
+    fn draw(&mut self, start: usize, stop: usize) {
+        let mut next_scanline = (start / SCREEN_WIDTH) + 1;
+        let mut scanline_boundary = next_scanline * SCREEN_WIDTH;
+        let mut line = &self.secondary_oam[next_scanline - 1];
+        
+        for pixel in start..stop {
+            let x = (pixel % SCREEN_WIDTH) as u16; 
+            
+            let (pri, pal) = line.iter()
+                .filter(|sprite| sprite.is_active(x))
+                .map(|sprite| sprite.do_get_pixel(x))
+                .filter(|pixel| !pixel.1.is_transparent())
+                .next()
+                .unwrap_or( (SpritePriority::Background, TRANSPARENT) );
+            self.pixel_buffer[pixel] = pal;
+            self.priority_buffer[pixel] = pri;
+            
+            if pixel == scanline_boundary {
+                next_scanline = (pixel / SCREEN_WIDTH) + 1;
+                scanline_boundary = next_scanline * SCREEN_WIDTH;
+                line = &self.secondary_oam[next_scanline - 1];
             }
         }
     }
@@ -196,51 +249,6 @@ impl MemSegment for SpriteRenderer {
             invalid_address!(idx);
         }
         self.primary_oam[idx as usize / 4].write(idx % 4, val)
-    }
-}
-
-impl PPU {
-    pub fn draw_sprite_pixel(&mut self, x: u16, y: u16) {
-        let pixel_idx = y as usize * SCREEN_WIDTH + x as usize;
-        
-        for n in 0..8 {
-            let det_x = self.sprite_data.secondary_oam[y as usize][n];
-            if self.is_active(det_x, x) {
-                let pixel = self.do_get_pixel(det_x, x);
-                if !pixel.1.is_transparent() {
-                    self.sprite_data.pixel_buffer[pixel_idx] = pixel.1;
-                    self.sprite_data.priority_buffer[pixel_idx] = pixel.0;
-                    return;
-                }
-            }
-        }
-        self.sprite_data.pixel_buffer[pixel_idx] = TRANSPARENT;
-        self.sprite_data.priority_buffer[pixel_idx] = SpritePriority::Background;
-    }
-
-    fn is_active(&self, details: SpriteDetails, x: u16) -> bool {
-        x.wrapping_sub(details.x as u16) < 8
-    }
-
-    fn get_fine_scroll(screen_dist: u16, sprite_dist: u16, flip: bool) -> u16 {
-        let scroll = screen_dist - sprite_dist;
-        if flip {
-            7 - scroll
-        } else {
-            scroll
-        }
-    }
-
-    fn do_get_pixel(&mut self, details: SpriteDetails, x: u16) -> (SpritePriority, PaletteIndex) {
-        let fine_x = PPU::get_fine_scroll(x, details.x as u16, details.attr.contains(FLIP_HORZ));
-        let attr = details.attr;
-        let color_id = details.tile.get_color_in_pattern(fine_x as u32);
-        let idx = PaletteIndex {
-            set: PaletteSet::Sprite,
-            palette_id: attr.palette(),
-            color_id: color_id,
-        };
-        return (attr.priority(), idx);
     }
 }
 
