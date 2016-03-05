@@ -5,6 +5,7 @@ use super::PaletteSet;
 use super::TilePattern;
 use super::SCREEN_BUFFER_SIZE;
 use super::SCREEN_WIDTH;
+use super::SCREEN_HEIGHT;
 
 const TRANSPARENT: PaletteIndex = PaletteIndex {
     set: PaletteSet::Sprite,
@@ -200,6 +201,7 @@ impl PPU {
                 if !pixel.1.is_transparent() {
                     self.sprite_data.pixel_buffer[pixel_idx] = pixel.1;
                     self.sprite_data.priority_buffer[pixel_idx] = pixel.0;
+                    return;
                 }
             }
         }

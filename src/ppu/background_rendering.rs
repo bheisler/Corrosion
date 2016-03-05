@@ -63,7 +63,7 @@ impl PPU {
         let color_id = self.get_color_id(x);
         let palette_id = self.get_palette_id(x, y);
 
-        let pixel = y as usize * SCREEN_WIDTH + x as usize;
+        let pixel = screen_y as usize * SCREEN_WIDTH + screen_x as usize;
         self.background_data.background_buffer[pixel] = PaletteIndex {
             set: PaletteSet::Background,
             palette_id: palette_id,

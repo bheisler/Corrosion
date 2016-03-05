@@ -134,9 +134,12 @@ pub enum StepResult {
     Continue,
 }
 
+fn div_rem(num: u64, den: u64) -> (u64, u64) {
+    (num / den, num % den)
+}
+
 fn ppu_to_cpu_cyc(ppu_cyc: u64) -> u64 {
-    let div = ppu_cyc / 3;
-    let rem = ppu_cyc / 3;
+    let (div, rem) = div_rem(ppu_cyc, 3);
     if rem == 0 {
         div
     }
@@ -147,6 +150,30 @@ fn ppu_to_cpu_cyc(ppu_cyc: u64) -> u64 {
 
 fn cpu_to_ppu_cyc(cpu_cyc: u64) -> u64 {
     cpu_cyc * 3
+}
+
+fn cyc_to_px(ppu_cyc: u64) -> usize {
+    let mut pixel : usize = 0;
+    let mut rem = ppu_cyc;
+    
+    rem += 241 * CYCLES_PER_SCANLINE;//Skip to the position at power-on.
+    
+    let (frames, rem_t) = div_rem( rem, CYCLES_PER_FRAME);
+    rem = rem_t;
+    pixel += frames as usize * SCREEN_BUFFER_SIZE;
+    
+    rem = rem.saturating_sub( CYCLES_PER_SCANLINE );//Skip the pre-render scanline.
+    rem = cmp::min( rem, SCREEN_HEIGHT as u64 * CYCLES_PER_SCANLINE );//Cut off the VBLANK scanlines.
+    
+    let (scanlines, rem_t) = div_rem( rem, CYCLES_PER_SCANLINE );
+    rem = rem_t;
+    pixel += scanlines as usize * SCREEN_WIDTH;
+    
+    rem = rem.saturating_sub(1);//Skip idle cycle
+    rem = cmp::min(rem, SCREEN_WIDTH as u64);//Cut off HBLANK
+    
+    pixel += rem as usize;
+    pixel
 }
 
 impl PPU {
@@ -170,7 +197,7 @@ impl PPU {
             next_vblank_cpu_cyc: ppu_to_cpu_cyc(1),
         }
     }
-
+    
     pub fn run_to(&mut self, cpu_cycle: u64) -> StepResult {
         let start = self.global_cyc;
         let stop = cpu_to_ppu_cyc( cpu_cycle );
@@ -178,7 +205,13 @@ impl PPU {
         self.background_data.run(start, stop);
         self.sprite_data.run(start, stop);
         
-        let start_px = self.current_pixel();
+        let start_px = cyc_to_px(start);
+        let delta_px = cyc_to_px(stop) - start_px;
+        let start_px = start_px % SCREEN_BUFFER_SIZE;
+        let stop_px = start_px + delta_px;
+        
+        self.background_data.render(start_px, stop_px);
+        self.sprite_data.render(start_px, stop_px);
         
         let mut hit_nmi = false;
         while self.global_cyc < stop {
@@ -186,10 +219,6 @@ impl PPU {
             hit_nmi |= self.run_cycle();
         }
         
-        let stop_px = self.current_pixel();
-        
-        self.background_data.render(start_px, stop_px);
-        self.sprite_data.render(start_px, stop_px);
         self.mix(start_px, stop_px);
         
         if hit_nmi {
@@ -197,17 +226,6 @@ impl PPU {
         } else {
             StepResult::Continue
         }
-    }
-    
-    fn current_pixel(&self) -> usize {
-        if self.sl <= -1  {
-            return 0;
-        }
-        if self.sl >= 240 {
-            return SCREEN_BUFFER_SIZE;
-        }
-        let cyc = cmp::min(256, self.cyc) as usize;
-        self.sl as usize * SCREEN_WIDTH + cyc
     }
     
     ///Returns the CPU cycle number representing the next time the CPU should run the PPU.
@@ -283,13 +301,14 @@ impl PPU {
         for px in start..stop {
             let (priority_px, sprite_px) = (priority[px], sprite[px]);
             let background_px = background[px];
-    
+            
             let pal_idx = match (background_px, priority_px, sprite_px) {
                 (bck, _, spr) if spr.is_transparent() => bck,
                 (bck, _, spr) if bck.is_transparent() => spr,
                 (_, SpritePriority::Foreground, spr) => spr,
                 (bck, SpritePriority::Background, _) => bck, 
             };
+            
             self.screen_buffer[px] = self.ppu_mem.read_palette(pal_idx);
         }
     }

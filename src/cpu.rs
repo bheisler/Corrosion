@@ -279,7 +279,7 @@ macro_rules! decode_opcode {
         0x02 | 0x12 | 0x22 | 0x32 | 0x42 | 0x52 | 0x62 | 0x72 | 0x82 | 0x92 | 0xB2 | 0xD2 | 0xF2 => $this.kil(),
 
 // Else
-        x => panic!( "Unknown or unsupported opcode: {:02X}", x ),
+        x => panic!( "Unknown or unsupported opcode: 0x{:02X}", x ),
     } }
 }
 
