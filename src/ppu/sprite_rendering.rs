@@ -6,6 +6,8 @@ use super::TilePattern;
 use super::SCREEN_BUFFER_SIZE;
 use super::SCREEN_WIDTH;
 use super::SCREEN_HEIGHT;
+use super::ppu_reg::PPUReg;
+use super::ppu_memory::PPUMemory;
 
 const TRANSPARENT: PaletteIndex = PaletteIndex {
     set: PaletteSet::Sprite,
@@ -43,6 +45,25 @@ struct OAMEntry {
     tile: u8,
     attr: OAMAttr,
     x: u8,
+}
+
+impl OAMEntry {
+    fn is_on_scanline(&self, scanline: u16) -> bool {
+        let y = self.y as u16;
+        y <= scanline && scanline < y + 8
+    }
+    
+    fn build_details(&self, sl: u16, reg: &PPUReg, mem: &mut PPUMemory) -> SpriteDetails {
+        let tile_id = self.tile;
+        let fine_y_scroll = PPU::get_fine_scroll(sl, self.y as u16, self.attr.contains(FLIP_VERT));
+        let tile_table = reg.ppuctrl.sprite_table();
+        let tile = mem.read_tile_pattern(tile_id, fine_y_scroll, tile_table);
+        SpriteDetails {
+            x: self.x,
+            attr: self.attr,
+            tile: tile,
+        }
+    }
 }
 
 impl Default for OAMEntry {
@@ -97,7 +118,7 @@ impl Default for SpriteDetails {
 
 pub struct SpriteRenderer {
     primary_oam: [OAMEntry; 64],
-    secondary_oam: [SpriteDetails; 8],
+    secondary_oam: [[SpriteDetails; 8]; SCREEN_HEIGHT],
     
     pixel_buffer: Box<[PaletteIndex]>,
     priority_buffer: Box<[SpritePriority]>,
@@ -107,7 +128,7 @@ impl Default for SpriteRenderer {
     fn default() -> SpriteRenderer {
         SpriteRenderer {
             primary_oam: [Default::default(); 64],
-            secondary_oam: [Default::default(); 8],
+            secondary_oam: [[Default::default(); 8]; SCREEN_HEIGHT],
             
             pixel_buffer: vec![Default::default(); SCREEN_BUFFER_SIZE].into_boxed_slice(),
             priority_buffer: vec![SpritePriority::Background; SCREEN_BUFFER_SIZE].into_boxed_slice(),
@@ -115,13 +136,39 @@ impl Default for SpriteRenderer {
     }
 }
 
+///Computes the next scanline boundary after the given pixel.
+fn pixel_to_scanline( px: usize ) -> usize {
+    ( px + SCREEN_WIDTH - 1 ) / SCREEN_WIDTH
+}
+
 impl SpriteRenderer {
-    pub fn run(&mut self, start: u64, stop: u64) {
-        //TODO: Not implemented yet.
+    pub fn render(&mut self, start: usize, stop: usize, reg: &PPUReg, mem: &mut PPUMemory) {
+        let start_sl = pixel_to_scanline( start );
+        let stop_sl = pixel_to_scanline( stop );
+        
+        for sl in start_sl..stop_sl {
+            self.sprite_eval(sl as u16, reg, mem)
+        }
     }
     
-    pub fn render(&mut self, start: usize, stop: usize) {
-        //TODO: Not implemented yet.
+    //TODO: Optimize this.
+    fn sprite_eval(&mut self, scanline: u16, reg: &PPUReg, mem: &mut PPUMemory) {
+        if scanline + 1 >= SCREEN_HEIGHT as u16 {
+            return
+        }
+        let mut n = 0;
+        let secondary_oam_line = &mut self.secondary_oam[scanline as usize + 1];
+        *secondary_oam_line = [Default::default(); 8];
+        for x in 0..64 {
+            let oam = &self.primary_oam[x];
+            if oam.is_on_scanline(scanline) {
+                secondary_oam_line[n] = oam.build_details(scanline, reg, mem);
+                n += 1;
+                if n == 8 {
+                    return;
+                }
+            }
+        }
     }
     
     pub fn buffers(&self) -> (&[PaletteIndex], &[SpritePriority]) {
@@ -153,49 +200,11 @@ impl MemSegment for SpriteRenderer {
 }
 
 impl PPU {
-    pub fn visible_scanline_sprite(&mut self, pixel: u16, scanline: u16) {
-        if pixel == 0 {
-            self.sprite_eval(scanline);
-        }
-    }
-
-    fn sprite_eval(&mut self, scanline: u16) {
-        let mut n = 0;
-        self.sprite_data.secondary_oam = [Default::default(); 8];
-        for x in 0..64 {
-            let oam = self.sprite_data.primary_oam[x];
-            if self.is_on_scanline(oam, scanline) {
-                self.sprite_data.secondary_oam[n] = self.convert_oam_entry(oam, scanline);
-                n += 1;
-                if n == 8 {
-                    return;
-                }
-            }
-        }
-    }
-
-    fn is_on_scanline(&self, oam: OAMEntry, scanline: u16) -> bool {
-        let y = oam.y as u16;
-        y <= scanline && scanline < y + 8
-    }
-
-    fn convert_oam_entry(&mut self, oam: OAMEntry, sl: u16) -> SpriteDetails {
-        let tile_id = oam.tile;
-        let fine_y_scroll = PPU::get_fine_scroll(sl, oam.y as u16, oam.attr.contains(FLIP_VERT));
-        let tile_table = self.reg.ppuctrl.sprite_table();
-        let tile = self.ppu_mem.read_tile_pattern(tile_id, fine_y_scroll, tile_table);
-        SpriteDetails {
-            x: oam.x,
-            attr: oam.attr,
-            tile: tile,
-        }
-    }
-
     pub fn draw_sprite_pixel(&mut self, x: u16, y: u16) {
         let pixel_idx = y as usize * SCREEN_WIDTH + x as usize;
         
         for n in 0..8 {
-            let det_x = self.sprite_data.secondary_oam[n];
+            let det_x = self.sprite_data.secondary_oam[y as usize][n];
             if self.is_active(det_x, x) {
                 let pixel = self.do_get_pixel(det_x, x);
                 if !pixel.1.is_transparent() {
