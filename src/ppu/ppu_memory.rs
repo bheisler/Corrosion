@@ -36,17 +36,17 @@ impl PPUMemory {
     pub fn read_bypass_palette(&mut self, idx: u16) -> u8 {
         self.vram[(idx % 0x800) as usize]
     }
-    
+
     pub fn read_palette(&mut self, idx: PaletteIndex) -> Color {
         let bits = self.read(idx.to_addr());
         Color::from_bits_truncate(bits)
     }
-    
+
     pub fn read_tile_pattern(&mut self,
-                         tile_id: u8,
-                         fine_y_scroll: u16,
-                         tile_table: u16)
-                         -> TilePattern {
+                             tile_id: u8,
+                             fine_y_scroll: u16,
+                             tile_table: u16)
+                             -> TilePattern {
         let lo_addr = get_tile_addr(tile_id, 0, fine_y_scroll, tile_table);
         let hi_addr = get_tile_addr(tile_id, 8, fine_y_scroll, tile_table);
         TilePattern {

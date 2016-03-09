@@ -11,19 +11,19 @@ const NAMETABLE_WIDTH: usize = 32;
 pub struct BackgroundRenderer {
     tile: TilePattern,
     attr: u8,
-    
+
     background_buffer: Box<[PaletteIndex]>,
 }
 
 impl BackgroundRenderer {
     pub fn run(&mut self, start: u64, stop: u64) {
-        //TODO: Not implemented yet.
+        // TODO: Not implemented yet.
     }
-    
+
     pub fn render(&mut self, start: usize, stop: usize) {
-        //TODO: Not implemented yet.
+        // TODO: Not implemented yet.
     }
-    
+
     pub fn buffer(&self) -> &[PaletteIndex] {
         &self.background_buffer
     }
@@ -34,7 +34,7 @@ impl Default for BackgroundRenderer {
         BackgroundRenderer {
             tile: Default::default(),
             attr: 0,
-            
+
             background_buffer: vec![Default::default(); SCREEN_BUFFER_SIZE].into_boxed_slice(),
         }
     }
@@ -49,7 +49,8 @@ impl PPU {
             let tile_idx = self.ppu_mem.read(nametable_addr);
 
             let tile_table = self.reg.ppuctrl.background_table();
-            self.background_data.tile = self.ppu_mem.read_tile_pattern(tile_idx, y & 0x07, tile_table);
+            self.background_data.tile = self.ppu_mem
+                                            .read_tile_pattern(tile_idx, y & 0x07, tile_table);
 
             let attribute_addr = self.get_attribute_addr(x, y);
             self.background_data.attr = self.ppu_mem.read(attribute_addr);

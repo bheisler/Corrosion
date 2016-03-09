@@ -48,9 +48,9 @@ fn pump_events(pump: &Rc<RefCell<EventPump>>) -> bool {
 
 fn get_movie_file() -> Option<String> {
     return std::env::args()
-        .skip_while(|arg| arg != "--movie")
-        .skip(1)
-        .next();
+               .skip_while(|arg| arg != "--movie")
+               .skip(1)
+               .next();
 }
 
 pub fn start_emulator(cart: Cart) {

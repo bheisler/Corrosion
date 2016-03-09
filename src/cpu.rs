@@ -435,7 +435,7 @@ impl MemSegment for CPU {
             OAMDMA => {
                 self.run_ppu();
                 self.dma_transfer(val);
-            },
+            }
             0x4000...0x4013 | 0x4015 | 0x4017 => {
                 self.run_apu();
                 self.mem.write(idx, val);
@@ -1077,13 +1077,13 @@ impl CPU {
         if self.halted {
             return;
         }
-        
+
         self.mem.io.poll();
 
         if self.mem.apu.requested_run_cycle() <= self.cycle {
             self.run_apu();
         }
-        
+
         if self.mem.ppu.requested_run_cycle() <= self.cycle {
             self.run_ppu();
         }
@@ -1101,7 +1101,7 @@ impl CPU {
             self.irq();
         }
     }
-    
+
     fn run_ppu(&mut self) {
         let nmi = self.mem.ppu.run_to(self.cycle);
         if let StepResult::NMI = nmi {

@@ -23,7 +23,7 @@ pub const SCREEN_HEIGHT: usize = 240;
 pub const SCREEN_BUFFER_SIZE: usize = SCREEN_WIDTH * SCREEN_HEIGHT;
 
 const CYCLES_PER_SCANLINE: u64 = 341;
-const SCANLINES_PER_FRAME: u64 = 262; 
+const SCANLINES_PER_FRAME: u64 = 262;
 const CYCLES_PER_FRAME: u64 = CYCLES_PER_SCANLINE * SCANLINES_PER_FRAME;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -123,7 +123,7 @@ pub struct PPU {
     cyc: u16,
     sl: i16,
     frame: u32,
-    
+
     next_vblank_ppu_cyc: u64,
     next_vblank_cpu_cyc: u64,
 }
@@ -142,8 +142,7 @@ fn ppu_to_cpu_cyc(ppu_cyc: u64) -> u64 {
     let (div, rem) = div_rem(ppu_cyc, 3);
     if rem == 0 {
         div
-    }
-    else {
+    } else {
         div + 1
     }
 }
@@ -153,25 +152,25 @@ fn cpu_to_ppu_cyc(cpu_cyc: u64) -> u64 {
 }
 
 fn cyc_to_px(ppu_cyc: u64) -> usize {
-    let mut pixel : usize = 0;
+    let mut pixel: usize = 0;
     let mut rem = ppu_cyc;
-    
+
     rem += 241 * CYCLES_PER_SCANLINE;//Skip to the position at power-on.
-    
-    let (frames, rem_t) = div_rem( rem, CYCLES_PER_FRAME);
+
+    let (frames, rem_t) = div_rem(rem, CYCLES_PER_FRAME);
     rem = rem_t;
     pixel += frames as usize * SCREEN_BUFFER_SIZE;
-    
-    rem = rem.saturating_sub( CYCLES_PER_SCANLINE );//Skip the pre-render scanline.
-    rem = cmp::min( rem, SCREEN_HEIGHT as u64 * CYCLES_PER_SCANLINE );//Cut off the VBLANK scanlines.
-    
-    let (scanlines, rem_t) = div_rem( rem, CYCLES_PER_SCANLINE );
+
+    rem = rem.saturating_sub(CYCLES_PER_SCANLINE);//Skip the pre-render scanline.
+    rem = cmp::min(rem, SCREEN_HEIGHT as u64 * CYCLES_PER_SCANLINE);//Cut off the VBLANK scanlines.
+
+    let (scanlines, rem_t) = div_rem(rem, CYCLES_PER_SCANLINE);
     rem = rem_t;
     pixel += scanlines as usize * SCREEN_WIDTH;
-    
+
     rem = rem.saturating_sub(1);//Skip idle cycle
     rem = cmp::min(rem, SCREEN_WIDTH as u64);//Cut off HBLANK
-    
+
     pixel += rem as usize;
     pixel
 }
@@ -192,41 +191,41 @@ impl PPU {
             cyc: 0,
             sl: 241,
             frame: 0,
-            
+
             next_vblank_ppu_cyc: 1,
             next_vblank_cpu_cyc: ppu_to_cpu_cyc(1),
         }
     }
-    
+
     pub fn run_to(&mut self, cpu_cycle: u64) -> StepResult {
         let start = self.global_cyc;
-        let stop = cpu_to_ppu_cyc( cpu_cycle );
-        
+        let stop = cpu_to_ppu_cyc(cpu_cycle);
+
         self.background_data.run(start, stop);
-        
+
         let start_px = cyc_to_px(start);
         let delta_px = cyc_to_px(stop) - start_px;
         let start_px = start_px % SCREEN_BUFFER_SIZE;
         let stop_px = start_px + delta_px;
-        
+
         self.background_data.render(start_px, stop_px);
         self.sprite_data.render(start_px, stop_px, &self.reg, &mut self.ppu_mem);
-        
+
         let mut hit_nmi = false;
         while self.global_cyc < stop {
             self.tick_cycle();
             hit_nmi |= self.run_cycle();
         }
-        
+
         self.mix(start_px, stop_px);
-        
+
         if hit_nmi {
             StepResult::NMI
         } else {
             StepResult::Continue
         }
     }
-    
+
     ///Returns the CPU cycle number representing the next time the CPU should run the PPU.
     ///When the CPU cycle reaches this number, the CPU must run the PPU.
     pub fn requested_run_cycle(&self) -> u64 {
@@ -269,7 +268,7 @@ impl PPU {
 
     fn visible_scanline(&mut self, pixel: u16, scanline: u16) {
         self.visible_scanline_background(pixel, scanline);
-        
+
         if pixel >= 256 {
             return;
         }
@@ -278,8 +277,8 @@ impl PPU {
 
     fn start_vblank(&mut self) -> bool {
         self.next_vblank_ppu_cyc += CYCLES_PER_FRAME;
-        self.next_vblank_cpu_cyc = ppu_to_cpu_cyc( self.next_vblank_ppu_cyc );
-        
+        self.next_vblank_cpu_cyc = ppu_to_cpu_cyc(self.next_vblank_ppu_cyc);
+
         let buf = &self.screen_buffer;
         self.screen.draw(buf);
         if self.frame > 0 {
@@ -290,26 +289,26 @@ impl PPU {
         }
     }
 
-    //TODO: Maybe try to vectorize this?
+    // TODO: Maybe try to vectorize this?
     fn mix(&mut self, start: usize, stop: usize) {
         let background = self.background_data.buffer();
         let (sprite, priority) = self.sprite_data.buffers();
-        
+
         for px in start..stop {
             let (priority_px, sprite_px) = (priority[px], sprite[px]);
             let background_px = background[px];
-            
+
             let pal_idx = match (background_px, priority_px, sprite_px) {
                 (bck, _, spr) if spr.is_transparent() => bck,
                 (bck, _, spr) if bck.is_transparent() => spr,
                 (_, SpritePriority::Foreground, spr) => spr,
                 (bck, SpritePriority::Background, _) => bck, 
             };
-            
+
             self.screen_buffer[px] = self.ppu_mem.read_palette(pal_idx);
         }
     }
-    
+
     #[cfg(feature="cputrace")]
     pub fn cycle(&self) -> u16 {
         self.cyc

@@ -51,7 +51,7 @@ impl OAMEntry {
         let y = self.y as u16;
         y <= scanline && scanline < y + 8
     }
-    
+
     fn build_details(&self, sl: u16, reg: &PPUReg, mem: &mut PPUMemory) -> SpriteDetails {
         let tile_id = self.tile;
         let fine_y_scroll = get_fine_scroll(sl, self.y as u16, self.attr.contains(FLIP_VERT));
@@ -109,7 +109,7 @@ impl SpriteDetails {
     fn is_active(&self, x: u16) -> bool {
         x.wrapping_sub(self.x as u16) < 8
     }
-    
+
     fn do_get_pixel(&self, x: u16) -> (SpritePriority, PaletteIndex) {
         let fine_x = get_fine_scroll(x, self.x as u16, self.attr.contains(FLIP_HORZ));
         let attr = self.attr;
@@ -136,7 +136,7 @@ impl Default for SpriteDetails {
 pub struct SpriteRenderer {
     primary_oam: [OAMEntry; 64],
     secondary_oam: [[SpriteDetails; 8]; SCREEN_HEIGHT],
-    
+
     pixel_buffer: Box<[PaletteIndex]>,
     priority_buffer: Box<[SpritePriority]>,
 }
@@ -146,16 +146,17 @@ impl Default for SpriteRenderer {
         SpriteRenderer {
             primary_oam: [Default::default(); 64],
             secondary_oam: [[Default::default(); 8]; SCREEN_HEIGHT],
-            
+
             pixel_buffer: vec![Default::default(); SCREEN_BUFFER_SIZE].into_boxed_slice(),
-            priority_buffer: vec![SpritePriority::Background; SCREEN_BUFFER_SIZE].into_boxed_slice(),
+            priority_buffer: vec![SpritePriority::Background; SCREEN_BUFFER_SIZE]
+                                 .into_boxed_slice(),
         }
     }
 }
 
 ///Computes the next scanline boundary after the given pixel.
-fn pixel_to_scanline( px: usize ) -> usize {
-    ( px + SCREEN_WIDTH - 1 ) / SCREEN_WIDTH
+fn pixel_to_scanline(px: usize) -> usize {
+    (px + SCREEN_WIDTH - 1) / SCREEN_WIDTH
 }
 
 fn get_fine_scroll(screen_dist: u16, sprite_dist: u16, flip: bool) -> u16 {
@@ -169,20 +170,20 @@ fn get_fine_scroll(screen_dist: u16, sprite_dist: u16, flip: bool) -> u16 {
 
 impl SpriteRenderer {
     pub fn render(&mut self, start: usize, stop: usize, reg: &PPUReg, mem: &mut PPUMemory) {
-        let start_sl = pixel_to_scanline( start );
-        let stop_sl = pixel_to_scanline( stop );
-        
+        let start_sl = pixel_to_scanline(start);
+        let stop_sl = pixel_to_scanline(stop);
+
         for sl in start_sl..stop_sl {
             self.sprite_eval(sl as u16, reg, mem)
         }
-        
-        self.draw( start, stop )
+
+        self.draw(start, stop)
     }
-    
-    //TODO: Optimize this.
+
+    // TODO: Optimize this.
     fn sprite_eval(&mut self, scanline: u16, reg: &PPUReg, mem: &mut PPUMemory) {
         if scanline + 1 >= SCREEN_HEIGHT as u16 {
-            return
+            return;
         }
         let mut n = 0;
         let secondary_oam_line = &mut self.secondary_oam[scanline as usize + 1];
@@ -198,24 +199,24 @@ impl SpriteRenderer {
             }
         }
     }
-    
+
     fn draw(&mut self, start: usize, stop: usize) {
         let mut next_scanline = (start / SCREEN_WIDTH) + 1;
         let mut scanline_boundary = next_scanline * SCREEN_WIDTH;
         let mut line = &self.secondary_oam[next_scanline - 1];
-        
+
         for pixel in start..stop {
-            let x = (pixel % SCREEN_WIDTH) as u16; 
-            
+            let x = (pixel % SCREEN_WIDTH) as u16;
+
             let (pri, pal) = line.iter()
-                .filter(|sprite| sprite.is_active(x))
-                .map(|sprite| sprite.do_get_pixel(x))
-                .filter(|pixel| !pixel.1.is_transparent())
-                .next()
-                .unwrap_or( (SpritePriority::Background, TRANSPARENT) );
+                                 .filter(|sprite| sprite.is_active(x))
+                                 .map(|sprite| sprite.do_get_pixel(x))
+                                 .filter(|pixel| !pixel.1.is_transparent())
+                                 .next()
+                                 .unwrap_or((SpritePriority::Background, TRANSPARENT));
             self.pixel_buffer[pixel] = pal;
             self.priority_buffer[pixel] = pri;
-            
+
             if pixel == scanline_boundary {
                 next_scanline = (pixel / SCREEN_WIDTH) + 1;
                 scanline_boundary = next_scanline * SCREEN_WIDTH;
@@ -223,7 +224,7 @@ impl SpriteRenderer {
             }
         }
     }
-    
+
     pub fn buffers(&self) -> (&[PaletteIndex], &[SpritePriority]) {
         (&self.pixel_buffer, &self.priority_buffer)
     }

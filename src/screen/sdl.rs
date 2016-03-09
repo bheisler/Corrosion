@@ -31,7 +31,7 @@ impl<'a> SDLScreen<'a> {
 
         let texture = renderer.create_texture_streaming(PixelFormatEnum::RGB24,
                                                         SCREEN_WIDTH as u32,
-                                                         SCREEN_HEIGHT as u32)
+                                                        SCREEN_HEIGHT as u32)
                               .unwrap();
         SDLScreen {
             video: video_subsystem,
