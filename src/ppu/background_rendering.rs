@@ -4,23 +4,26 @@ use super::PaletteSet;
 use super::TilePattern;
 use super::SCREEN_BUFFER_SIZE;
 use super::SCREEN_WIDTH;
+use super::SCREEN_HEIGHT;
 use memory::MemSegment;
 
 const NAMETABLE_WIDTH: usize = 32;
+const TILES_PER_LINE: usize = NAMETABLE_WIDTH + 1; //To allow for x scrolling
+const TILE_BUFFER_SIZE: usize = TILES_PER_LINE * SCREEN_HEIGHT as usize;
 
 pub struct BackgroundRenderer {
-    tile: TilePattern,
-    attr: u8,
+    tile: Box<[TilePattern]>,
+    attr: Box<[u8]>, // TODO: Add a proper type for this.
 
     background_buffer: Box<[PaletteIndex]>,
 }
 
 impl BackgroundRenderer {
-    pub fn run(&mut self, start: u64, stop: u64) {
+    pub fn run(&mut self, _: u64, _: u64) {
         // TODO: Not implemented yet.
     }
 
-    pub fn render(&mut self, start: usize, stop: usize) {
+    pub fn render(&mut self, _: usize, _: usize) {
         // TODO: Not implemented yet.
     }
 
@@ -32,8 +35,8 @@ impl BackgroundRenderer {
 impl Default for BackgroundRenderer {
     fn default() -> BackgroundRenderer {
         BackgroundRenderer {
-            tile: Default::default(),
-            attr: 0,
+            tile: vec![Default::default(); TILE_BUFFER_SIZE].into_boxed_slice(),
+            attr: vec![0; TILE_BUFFER_SIZE].into_boxed_slice(),
 
             background_buffer: vec![Default::default(); SCREEN_BUFFER_SIZE].into_boxed_slice(),
         }
@@ -44,16 +47,22 @@ impl PPU {
     pub fn visible_scanline_background(&mut self, pixel: u16, scanline: u16) {
         let x = pixel + self.reg.scroll_x() as u16;
         let y = scanline + self.reg.scroll_y() as u16;
+
+        let idx = y as usize * TILES_PER_LINE + (pixel as usize / 8);
+        if pixel > 256 {
+            return;
+        }
+
         if x % 8 == 0 {
             let nametable_addr = self.get_nametable_addr(x, y);
             let tile_idx = self.ppu_mem.read(nametable_addr);
 
             let tile_table = self.reg.ppuctrl.background_table();
-            self.background_data.tile = self.ppu_mem
-                                            .read_tile_pattern(tile_idx, y & 0x07, tile_table);
+            self.background_data.tile[idx] = self.ppu_mem
+                                                 .read_tile_pattern(tile_idx, y & 0x07, tile_table);
 
             let attribute_addr = self.get_attribute_addr(x, y);
-            self.background_data.attr = self.ppu_mem.read(attribute_addr);
+            self.background_data.attr[idx] = self.ppu_mem.read(attribute_addr);
         }
     }
 
@@ -61,8 +70,10 @@ impl PPU {
         let x = screen_x + self.reg.scroll_x() as u16;
         let y = screen_y + self.reg.scroll_y() as u16;
 
-        let color_id = self.get_color_id(x);
-        let palette_id = self.get_palette_id(x, y);
+        let idx = y as usize * TILES_PER_LINE + (screen_x as usize / 8);
+
+        let color_id = self.get_color_id(idx, x);
+        let palette_id = self.get_palette_id(idx, x, y);
 
         let pixel = screen_y as usize * SCREEN_WIDTH + screen_x as usize;
         self.background_data.background_buffer[pixel] = PaletteIndex {
@@ -72,8 +83,8 @@ impl PPU {
         }
     }
 
-    fn get_color_id(&mut self, x: u16) -> u8 {
-        let pattern = self.background_data.tile;
+    fn get_color_id(&mut self, idx: usize, x: u16) -> u8 {
+        let pattern = self.background_data.tile[idx];
         let fine_x = x as u32 & 0x07;
         pattern.get_color_in_pattern(fine_x)
     }
@@ -85,8 +96,8 @@ impl PPU {
         result
     }
 
-    fn get_palette_id(&mut self, x: u16, y: u16) -> u8 {
-        let attr = self.background_data.attr;
+    fn get_palette_id(&mut self, idx: usize, x: u16, y: u16) -> u8 {
+        let attr = self.background_data.attr[idx];
         self.get_palette_from_attribute(attr, x, y)
     }
 
