@@ -11,9 +11,37 @@ const NAMETABLE_WIDTH: usize = 32;
 const TILES_PER_LINE: usize = NAMETABLE_WIDTH + 1; //To allow for x scrolling
 const TILE_BUFFER_SIZE: usize = TILES_PER_LINE * SCREEN_HEIGHT as usize;
 
+#[derive(Debug, Copy, Clone, PartialEq)]
+struct TileAttribute {
+    bits: u8,
+}
+
+impl TileAttribute {
+    fn new(bits: u8) -> TileAttribute {
+        TileAttribute { bits: bits }
+    }
+
+    fn get_palette(&self, x: u16, y: u16) -> u8 {
+        let mut at = self.bits;
+        if y & 0x10 != 0 {
+            at >>= 4
+        }
+        if x & 0x10 != 0 {
+            at >>= 2
+        }
+        at & 0x03
+    }
+}
+
+impl Default for TileAttribute {
+    fn default() -> TileAttribute {
+        TileAttribute { bits: 0 }
+    }
+}
+
 pub struct BackgroundRenderer {
     tile: Box<[TilePattern]>,
-    attr: Box<[u8]>, // TODO: Add a proper type for this.
+    attr: Box<[TileAttribute]>,
 
     background_buffer: Box<[PaletteIndex]>,
 }
@@ -36,7 +64,7 @@ impl Default for BackgroundRenderer {
     fn default() -> BackgroundRenderer {
         BackgroundRenderer {
             tile: vec![Default::default(); TILE_BUFFER_SIZE].into_boxed_slice(),
-            attr: vec![0; TILE_BUFFER_SIZE].into_boxed_slice(),
+            attr: vec![Default::default(); TILE_BUFFER_SIZE].into_boxed_slice(),
 
             background_buffer: vec![Default::default(); SCREEN_BUFFER_SIZE].into_boxed_slice(),
         }
@@ -62,7 +90,7 @@ impl PPU {
                                                  .read_tile_pattern(tile_idx, y & 0x07, tile_table);
 
             let attribute_addr = self.get_attribute_addr(x, y);
-            self.background_data.attr[idx] = self.ppu_mem.read(attribute_addr);
+            self.background_data.attr[idx] = TileAttribute::new(self.ppu_mem.read(attribute_addr));
         }
     }
 
@@ -98,7 +126,7 @@ impl PPU {
 
     fn get_palette_id(&mut self, idx: usize, x: u16, y: u16) -> u8 {
         let attr = self.background_data.attr[idx];
-        self.get_palette_from_attribute(attr, x, y)
+        attr.get_palette(x, y)
     }
 
     fn get_attribute_addr(&self, x: u16, y: u16) -> u16 {
@@ -106,16 +134,5 @@ impl PPU {
         let y = y / 32;
         let attr_table = self.reg.ppuctrl.nametable_addr() + 0x03C0;
         attr_table + (y * 8) + x
-    }
-
-    fn get_palette_from_attribute(&self, attr: u8, x: u16, y: u16) -> u8 {
-        let mut at = attr;
-        if y & 0x10 != 0 {
-            at >>= 4
-        }
-        if x & 0x10 != 0 {
-            at >>= 2
-        }
-        at & 0x03
     }
 }
