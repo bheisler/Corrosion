@@ -246,7 +246,7 @@ impl PPU {
     fn run_cycle(&mut self) -> bool {
         match (self.cyc, self.sl) {
             (c, -1) => self.prerender_scanline(c),
-            (c, sl @ 0...239) => self.visible_scanline(c, sl as u16),
+            (_, 0...239) => (),
             (_, 240) => (), //Post-render idle scanline
             (1, 241) => return self.start_vblank(),
             (_, 241...260) => (), //VBlank lines
@@ -262,13 +262,6 @@ impl PPU {
         if cycle == 339 && self.frame % 2 == 1 {
             self.tick_cycle()
         }
-    }
-
-    fn visible_scanline(&mut self, pixel: u16, scanline: u16) {
-        if pixel >= 256 {
-            return;
-        }
-        self.draw_background_pixel(pixel, scanline);
     }
 
     fn start_vblank(&mut self) -> bool {

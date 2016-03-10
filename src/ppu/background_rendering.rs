@@ -1,4 +1,3 @@
-use super::PPU;
 use super::PaletteIndex;
 use super::PaletteSet;
 use super::TilePattern;
@@ -58,14 +57,18 @@ impl BackgroundRenderer {
             let (y, x) = div_rem(pixel, SCREEN_WIDTH);
             self.visible_scanline_background(x as u16, y as u16, reg, mem);
         }
+        for pixel in start_px..stop_px {
+            let (y, x) = div_rem(pixel, SCREEN_WIDTH);
+            self.draw_background_pixel(reg, x as u16, y as u16);
+        }
     }
 
     // TODO: Optimize this
-    pub fn visible_scanline_background(&mut self,
-                                       pixel: u16,
-                                       scanline: u16,
-                                       reg: &PPUReg,
-                                       mem: &mut PPUMemory) {
+    fn visible_scanline_background(&mut self,
+                                   pixel: u16,
+                                   scanline: u16,
+                                   reg: &PPUReg,
+                                   mem: &mut PPUMemory) {
         let x = pixel + reg.scroll_x() as u16;
         let y = scanline + reg.scroll_y() as u16;
 
@@ -86,7 +89,7 @@ impl BackgroundRenderer {
         }
     }
 
-    pub fn get_nametable_addr(&self, reg: &PPUReg, px_x: u16, px_y: u16) -> u16 {
+    fn get_nametable_addr(&self, reg: &PPUReg, px_x: u16, px_y: u16) -> u16 {
         let x = px_x / 8;
         let y = px_y / 8;
         let result = reg.ppuctrl.nametable_addr() + y * NAMETABLE_WIDTH as u16 + x;
@@ -98,6 +101,35 @@ impl BackgroundRenderer {
         let y = y / 32;
         let attr_table = reg.ppuctrl.nametable_addr() + 0x03C0;
         attr_table + (y * 8) + x
+    }
+
+    // TODO Optimize this.
+    fn draw_background_pixel(&mut self, reg: &PPUReg, screen_x: u16, screen_y: u16) {
+        let x = screen_x + reg.scroll_x() as u16;
+        let y = screen_y + reg.scroll_y() as u16;
+
+        let idx = y as usize * TILES_PER_LINE + (screen_x as usize / 8);
+
+        let color_id = self.get_color_id(idx, x);
+        let palette_id = self.get_palette_id(idx, x, y);
+
+        let pixel = screen_y as usize * SCREEN_WIDTH + screen_x as usize;
+        self.background_buffer[pixel] = PaletteIndex {
+            set: PaletteSet::Background,
+            palette_id: palette_id,
+            color_id: color_id,
+        }
+    }
+
+    fn get_color_id(&mut self, idx: usize, x: u16) -> u8 {
+        let pattern = self.tile[idx];
+        let fine_x = x as u32 & 0x07;
+        pattern.get_color_in_pattern(fine_x)
+    }
+
+    fn get_palette_id(&mut self, idx: usize, x: u16, y: u16) -> u8 {
+        let attr = self.attr[idx];
+        attr.get_palette(x, y)
     }
 
     pub fn buffer(&self) -> &[PaletteIndex] {
@@ -113,35 +145,5 @@ impl Default for BackgroundRenderer {
 
             background_buffer: vec![Default::default(); SCREEN_BUFFER_SIZE].into_boxed_slice(),
         }
-    }
-}
-
-impl PPU {
-    pub fn draw_background_pixel(&mut self, screen_x: u16, screen_y: u16) {
-        let x = screen_x + self.reg.scroll_x() as u16;
-        let y = screen_y + self.reg.scroll_y() as u16;
-
-        let idx = y as usize * TILES_PER_LINE + (screen_x as usize / 8);
-
-        let color_id = self.get_color_id(idx, x);
-        let palette_id = self.get_palette_id(idx, x, y);
-
-        let pixel = screen_y as usize * SCREEN_WIDTH + screen_x as usize;
-        self.background_data.background_buffer[pixel] = PaletteIndex {
-            set: PaletteSet::Background,
-            palette_id: palette_id,
-            color_id: color_id,
-        }
-    }
-
-    fn get_color_id(&mut self, idx: usize, x: u16) -> u8 {
-        let pattern = self.background_data.tile[idx];
-        let fine_x = x as u32 & 0x07;
-        pattern.get_color_in_pattern(fine_x)
-    }
-
-    fn get_palette_id(&mut self, idx: usize, x: u16, y: u16) -> u8 {
-        let attr = self.background_data.attr[idx];
-        attr.get_palette(x, y)
     }
 }
