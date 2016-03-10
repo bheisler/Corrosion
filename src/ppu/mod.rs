@@ -201,14 +201,12 @@ impl PPU {
         let start = self.global_cyc;
         let stop = cpu_to_ppu_cyc(cpu_cycle);
 
-        self.background_data.run(start, stop);
-
         let start_px = cyc_to_px(start);
         let delta_px = cyc_to_px(stop) - start_px;
         let start_px = start_px % SCREEN_BUFFER_SIZE;
         let stop_px = start_px + delta_px;
 
-        self.background_data.render(start_px, stop_px);
+        self.background_data.render(start_px, stop_px, &self.reg, &mut self.ppu_mem);
         self.sprite_data.render(start_px, stop_px, &self.reg, &mut self.ppu_mem);
 
         let mut hit_nmi = false;
@@ -267,8 +265,6 @@ impl PPU {
     }
 
     fn visible_scanline(&mut self, pixel: u16, scanline: u16) {
-        self.visible_scanline_background(pixel, scanline);
-
         if pixel >= 256 {
             return;
         }
@@ -302,7 +298,7 @@ impl PPU {
                 (bck, _, spr) if spr.is_transparent() => bck,
                 (bck, _, spr) if bck.is_transparent() => spr,
                 (_, SpritePriority::Foreground, spr) => spr,
-                (bck, SpritePriority::Background, _) => bck, 
+                (bck, SpritePriority::Background, _) => bck,
             };
 
             self.screen_buffer[px] = self.ppu_mem.read_palette(pal_idx);
