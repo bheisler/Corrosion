@@ -51,21 +51,25 @@ static PALETTE: [u8; 192] = [
     236, 238, 236,    168, 204, 236,    188, 188, 236,    212, 178, 236,    236, 174, 236,    236, 174, 212,    236, 180, 176,    228, 196, 144,    204, 210, 120,    180, 222, 120,    168, 226, 144,    152, 226, 180,    160, 214, 228,    160, 162, 160,    0, 0, 0,    0, 0, 0,
 ];
 
+fn copy_to_texture(buf: &[Color; SCREEN_BUFFER_SIZE], buffer: &mut [u8], pitch: usize) {
+    for y in 0..SCREEN_HEIGHT {
+        for x in 0..SCREEN_HEIGHT {
+            let nes_idx = y * SCREEN_WIDTH + x;
+            let color = buf[nes_idx];
+            let pal_idx = color.bits() as usize * 3;
+            let offset = y * pitch + x * 3;
+            buffer[offset + 0] = PALETTE[pal_idx + 0];
+            buffer[offset + 1] = PALETTE[pal_idx + 1];
+            buffer[offset + 2] = PALETTE[pal_idx + 2];
+        }
+    }
+}
+
 impl<'a> Screen for SDLScreen<'a> {
     fn draw(&mut self, buf: &[Color; SCREEN_BUFFER_SIZE]) {
         self.texture
             .with_lock(None, |buffer: &mut [u8], pitch: usize| {
-                for y in 0..SCREEN_HEIGHT {
-                    for x in 0..SCREEN_HEIGHT {
-                        let nes_idx = y * SCREEN_WIDTH + x;
-                        let color = buf[nes_idx];
-                        let pal_idx = color.bits() as usize * 3;
-                        let offset = y * pitch + x * 3;
-                        buffer[offset + 0] = PALETTE[pal_idx + 0];
-                        buffer[offset + 1] = PALETTE[pal_idx + 1];
-                        buffer[offset + 2] = PALETTE[pal_idx + 2];
-                    }
-                }
+                copy_to_texture(buf, buffer, pitch);
             })
             .unwrap();
 
