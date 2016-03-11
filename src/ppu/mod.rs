@@ -112,7 +112,7 @@ pub struct PPU {
     reg: PPUReg,
     ppudata_read_buffer: u8,
     ppu_mem: PPUMemory,
-
+ 
     screen: Box<Screen>,
     screen_buffer: [Color; SCREEN_BUFFER_SIZE],
 
