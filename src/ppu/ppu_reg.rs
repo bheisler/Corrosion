@@ -93,6 +93,10 @@ impl PPUReg {
         (self.ppuscroll & 0xFF00) >> 8
     }
 
+    pub fn scroll_x_fine(&self) -> u16 {
+        self.scroll_x() & 0x07
+    }
+
     pub fn scroll_x_coarse(&self) -> u16 {
         self.scroll_x() >> 3
     }

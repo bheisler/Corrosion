@@ -65,7 +65,7 @@ fn get_attribute_addr(reg: &PPUReg, tile_x: u16, tile_y: u16) -> u16 {
 impl BackgroundRenderer {
     pub fn render(&mut self, start_px: usize, stop_px: usize, reg: &PPUReg, mem: &mut PPUMemory) {
         self.evaluate(reg, mem, start_px, stop_px);
-        self.draw(start_px, stop_px);
+        self.draw(reg, start_px, stop_px);
     }
 
     fn evaluate(&mut self, reg: &PPUReg, mem: &mut PPUMemory, start: usize, stop: usize) {
@@ -114,7 +114,7 @@ impl BackgroundRenderer {
         }
     }
 
-    fn draw(&mut self, start: usize, stop: usize) {
+    fn draw(&mut self, reg: &PPUReg, start: usize, stop: usize) {
         let mut current_scanline = start / SCREEN_WIDTH;
         let mut last_scanline_boundary = current_scanline * SCREEN_WIDTH;
         let next_scanline = current_scanline + 1;
@@ -125,7 +125,8 @@ impl BackgroundRenderer {
             let segment_start = current - last_scanline_boundary;
             let segment_end = cmp::min(next_scanline_boundary, stop) - last_scanline_boundary;
 
-            self.draw_segment(current_scanline,
+            self.draw_segment(reg,
+                              current_scanline,
                               last_scanline_boundary,
                               next_scanline_boundary,
                               segment_start,
@@ -138,6 +139,7 @@ impl BackgroundRenderer {
     }
 
     fn draw_segment(&mut self,
+                    reg: &PPUReg,
                     scanline: usize,
                     line_start: usize,
                     line_stop: usize,
@@ -147,10 +149,13 @@ impl BackgroundRenderer {
         let attr_line = &self.attr[scanline];
         let pixel_line = &mut self.background_buffer[line_start..line_stop];
 
+        println!("Fine X Scroll: {}", reg.scroll_x_fine());
+
         for pixel in start..stop {
-            let tile_idx = pixel / 8;
+            let displayed_pixel = pixel + reg.scroll_x_fine() as usize;
+            let tile_idx = displayed_pixel / 8;
             let pattern = pattern_line[tile_idx];
-            let fine_x = pixel as u32 & 0x07;
+            let fine_x = displayed_pixel as u32 & 0x07;
             let color_id = pattern.get_color_in_pattern(fine_x);
 
             let attr = attr_line[tile_idx];
