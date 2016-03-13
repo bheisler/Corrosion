@@ -29,13 +29,17 @@ pub trait MemSegment {
     }
 
     fn print(&mut self, range: Range<u16>) {
-        let lower = range.start / 16;
-        let upper = range.end / 16 + 1;
+        self.print_columns(range, 16)
+    }
+
+    fn print_columns(&mut self, range: Range<u16>, columns: u16) {
+        let lower = range.start / columns;
+        let upper = (range.end + columns - 1) / columns;
 
         for y in lower..upper {
-            print!("{:04X}: ", y * 16);
-            for x in 0..16 {
-                let addr = (y * 16) + x;
+            print!("{:04X}: ", y * columns);
+            for x in 0..columns {
+                let addr = (y * columns) + x;
                 print!("{:02X} ", self.read(addr));
                 if x % 4 == 3 {
                     print!(" ");

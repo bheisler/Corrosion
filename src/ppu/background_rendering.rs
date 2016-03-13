@@ -146,6 +146,40 @@ impl BackgroundRenderer {
     pub fn buffer(&self) -> &[PaletteIndex] {
         &self.background_buffer
     }
+
+    #[allow(dead_code)]
+    pub fn dump_background_pixels(&self) {
+        for y in 0..SCREEN_HEIGHT {
+            for x in 0..SCREEN_WIDTH {
+                let idx = y * SCREEN_WIDTH + x;
+                let pix = self.background_buffer[idx];
+                if pix.is_transparent() {
+                    print!(" ");
+                } else {
+                    print!("{}", pix.color_id);
+                }
+            }
+            println!("");
+        }
+        println!("");
+    }
+
+    #[allow(dead_code)]
+    pub fn dump_background_palettes(&self) {
+        for y in 0..SCREEN_HEIGHT {
+            for x in 0..SCREEN_WIDTH {
+                let idx = y * SCREEN_WIDTH + x;
+                let pix = self.background_buffer[idx];
+                if pix.is_transparent() {
+                    print!(" ");
+                } else {
+                    print!("{}", pix.palette_id);
+                }
+            }
+            println!("");
+        }
+        println!("");
+    }
 }
 
 impl Default for BackgroundRenderer {

@@ -308,7 +308,7 @@ impl<'a> Disassembler<'a> {
         "TYA".to_string()
     }
     fn cli(&mut self) -> String {
-        "CLI".to_string();
+        "CLI".to_string()
     }
 
     // Unofficial instructions

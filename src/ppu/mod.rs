@@ -63,11 +63,15 @@ pub struct PaletteIndex {
 
 impl PaletteIndex {
     fn to_addr(self) -> u16 {
-        let mut addr: u16 = 0x3F00;
-        addr = addr | self.set.table();
-        addr = addr | (self.palette_id as u16 & 0x03) << 2;
-        addr = addr | self.color_id as u16 & 0x03;
-        addr
+        if self.is_transparent() {
+            0x3F00
+        } else {
+            let mut addr: u16 = 0x3F00;
+            addr = addr | self.set.table();
+            addr = addr | (self.palette_id as u16 & 0x03) << 2;
+            addr = addr | self.color_id as u16 & 0x03;
+            addr
+        }
     }
 
     fn is_transparent(&self) -> bool {

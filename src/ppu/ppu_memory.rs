@@ -54,6 +54,20 @@ impl PPUMemory {
             hi: self.read(hi_addr),
         }
     }
+
+    #[allow(dead_code)]
+    pub fn dump_nametable(&mut self, idx: u16) {
+        let start_idx = 0x2000 + (idx * 0x400);
+        println!("Nametable {}:", idx);
+        self.print_columns(start_idx..(start_idx + 0x3C0), 32)
+    }
+
+    #[allow(dead_code)]
+    pub fn dump_attribute_table(&mut self, idx: u16) {
+        let start_idx = 0x2000 + (idx * 0x400);
+        println!("Attribute table {}:", idx);
+        self.print_columns((start_idx + 0x3C0)..(start_idx + 0x400), 32);
+    }
 }
 
 impl MemSegment for PPUMemory {
