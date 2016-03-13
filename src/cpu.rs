@@ -205,13 +205,14 @@ macro_rules! decode_opcode {
         0x8A => $this.txa(),
         0x9A => $this.txs(),
         0x98 => $this.tya(),
+        0x58 => $this.cli(),
 
 // Unofficial NOPs
         0x04 | 0x44 | 0x64 => { $this.unofficial( ); let mode = $this.zero_page(); $this.u_nop(mode) }
         0x0C => { $this.unofficial( ); let mode = $this.absolute(); $this.u_nop(mode) }
         0x14 | 0x34 | 0x54 | 0x74 | 0xD4 | 0xF4 => { $this.unofficial( ); let mode = $this.zero_page_x(); $this.u_nop(mode) }
         0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xFA => { $this.unofficial( ); $this.nop() }
-        0x80 => { $this.unofficial( ); let mode = $this.immediate(); $this.u_nop(mode) }
+        0x80 | 0x89 | 0xC2 | 0xE2 => { $this.unofficial( ); let mode = $this.immediate(); $this.u_nop(mode) }
         0x1C | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC => { $this.unofficial( ); let mode = $this.absolute_x(); $this.u_nop(mode) }
 
         0xA3 => { $this.unofficial(); let mode = $this.indirect_x();  $this.lax(mode) }
@@ -279,6 +280,20 @@ macro_rules! decode_opcode {
         0x02 | 0x12 | 0x22 | 0x32 | 0x42 | 0x52 | 0x62 | 0x72 | 0x82 | 0x92 | 0xB2 | 0xD2 | 0xF2 => $this.kil(),
 
 // Else
+// Unsupported opcodes (reason)
+// 0x0B -> ANC (not tested by nestest)
+// 0x2B -> ANC (not tested by nestest)
+// 0x4B -> ALR (not tested by nestest)
+// 0x6B -> ARR (not tested by nestest)
+// 0x8B -> XMM (broken on actual hardware)
+// 0x93 -> AHX (unstable on actual hardware)
+// 0x9B -> TAS (unstable on actual hardware)
+// 0x9C -> SHY (unstable on actual hardware)
+// 0x9E -> SHX (unstable on actual hardware)
+// 0x9F -> AHX (unstable on actual hardware)
+// 0xAB -> LAX (broken on actual hardware)
+// 0xBB -> LAS (unstable on actual hardware)
+// 0xCB -> AXS (not tested by nestest)
         x => panic!( "Unknown or unsupported opcode: 0x{:02X}", x ),
     } }
 }
@@ -834,6 +849,9 @@ impl CPU {
     fn tya(&mut self) {
         let res = self.regs.y;
         self.regs.a = self.set_sign_zero(res);
+    }
+    fn cli(&mut self) {
+        self.regs.p.remove(I);
     }
 
     // Unofficial opcodes
