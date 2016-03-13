@@ -89,14 +89,6 @@ pub struct PPUReg {
 }
 
 impl PPUReg {
-    pub fn scroll_x(&self) -> u8 {
-        ((self.ppuscroll & 0xFF00) > 8) as u8
-    }
-
-    pub fn scroll_y(&self) -> u8 {
-        ((self.ppuscroll & 0x00FF) > 0) as u8
-    }
-
     pub fn incr_ppuaddr(&mut self) {
         let incr_size = self.ppuctrl.vram_addr_step();
         self.ppuaddr = self.ppuaddr.wrapping_add(incr_size);

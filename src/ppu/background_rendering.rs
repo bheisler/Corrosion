@@ -7,10 +7,10 @@ use super::SCREEN_HEIGHT;
 use super::ppu_reg::PPUReg;
 use super::ppu_memory::PPUMemory;
 use memory::MemSegment;
+use std::cmp;
 
 const NAMETABLE_WIDTH: usize = 32;
 const TILES_PER_LINE: usize = 34;
-const TILE_BUFFER_SIZE: usize = TILES_PER_LINE * SCREEN_HEIGHT as usize;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 struct TileAttribute {
@@ -41,8 +41,8 @@ impl Default for TileAttribute {
 }
 
 pub struct BackgroundRenderer {
-    tile: Box<[TilePattern]>,
-    attr: Box<[TileAttribute]>,
+    tile: Box<[[TilePattern; TILES_PER_LINE]]>,
+    attr: Box<[[TileAttribute; TILES_PER_LINE]]>,
 
     background_buffer: Box<[PaletteIndex]>,
 }
@@ -57,35 +57,26 @@ impl BackgroundRenderer {
             let (y, x) = div_rem(pixel, SCREEN_WIDTH);
             self.visible_scanline_background(x as u16, y as u16, reg, mem);
         }
-        for pixel in start_px..stop_px {
-            let (y, x) = div_rem(pixel, SCREEN_WIDTH);
-            self.draw_background_pixel(reg, x as u16, y as u16);
-        }
+        self.draw(start_px, stop_px);
     }
 
     // TODO: Optimize this
-    fn visible_scanline_background(&mut self,
-                                   pixel: u16,
-                                   scanline: u16,
-                                   reg: &PPUReg,
-                                   mem: &mut PPUMemory) {
-        let x = pixel + reg.scroll_x() as u16;
-        let y = scanline + reg.scroll_y() as u16;
-
-        let idx = y as usize * TILES_PER_LINE + (pixel as usize / 8);
-        if pixel > 256 {
+    fn visible_scanline_background(&mut self, x: u16, y: u16, reg: &PPUReg, mem: &mut PPUMemory) {
+        if x > 256 {
             return;
         }
+        let sl = y as usize;
+        let px = x as usize / 8;
 
         if x % 8 == 0 {
             let nametable_addr = self.get_nametable_addr(reg, x, y);
             let tile_idx = mem.read(nametable_addr);
 
             let tile_table = reg.ppuctrl.background_table();
-            self.tile[idx] = mem.read_tile_pattern(tile_idx, y & 0x07, tile_table);
+            self.tile[sl][px] = mem.read_tile_pattern(tile_idx, y & 0x07, tile_table);
 
             let attribute_addr = self.get_attribute_addr(reg, x, y);
-            self.attr[idx] = TileAttribute::new(mem.read(attribute_addr));
+            self.attr[sl][px] = TileAttribute::new(mem.read(attribute_addr));
         }
     }
 
@@ -103,33 +94,54 @@ impl BackgroundRenderer {
         attr_table + (y * 8) + x
     }
 
-    // TODO Optimize this.
-    fn draw_background_pixel(&mut self, reg: &PPUReg, screen_x: u16, screen_y: u16) {
-        let x = screen_x + reg.scroll_x() as u16;
-        let y = screen_y + reg.scroll_y() as u16;
+    fn draw(&mut self, start: usize, stop: usize) {
+        let mut current_scanline = start / SCREEN_WIDTH;
+        let mut last_scanline_boundary = current_scanline * SCREEN_WIDTH;
+        let next_scanline = current_scanline + 1;
+        let mut next_scanline_boundary = next_scanline * SCREEN_WIDTH;
 
-        let idx = y as usize * TILES_PER_LINE + (screen_x as usize / 8);
+        let mut current = start;
+        while current < stop {
+            let segment_start = current - last_scanline_boundary;
+            let segment_end = cmp::min(next_scanline_boundary, stop) - last_scanline_boundary;
 
-        let color_id = self.get_color_id(idx, x);
-        let palette_id = self.get_palette_id(idx, x, y);
-
-        let pixel = screen_y as usize * SCREEN_WIDTH + screen_x as usize;
-        self.background_buffer[pixel] = PaletteIndex {
-            set: PaletteSet::Background,
-            palette_id: palette_id,
-            color_id: color_id,
+            self.draw_segment(current_scanline,
+                              last_scanline_boundary,
+                              next_scanline_boundary,
+                              segment_start,
+                              segment_end);
+            current_scanline += 1;
+            last_scanline_boundary = next_scanline_boundary;
+            current = next_scanline_boundary;
+            next_scanline_boundary += SCREEN_WIDTH;
         }
     }
 
-    fn get_color_id(&mut self, idx: usize, x: u16) -> u8 {
-        let pattern = self.tile[idx];
-        let fine_x = x as u32 & 0x07;
-        pattern.get_color_in_pattern(fine_x)
-    }
+    fn draw_segment(&mut self,
+                    scanline: usize,
+                    line_start: usize,
+                    line_stop: usize,
+                    start: usize,
+                    stop: usize) {
+        let pattern_line = &self.tile[scanline];
+        let attr_line = &self.attr[scanline];
+        let pixel_line = &mut self.background_buffer[line_start..line_stop];
 
-    fn get_palette_id(&mut self, idx: usize, x: u16, y: u16) -> u8 {
-        let attr = self.attr[idx];
-        attr.get_palette(x, y)
+        for pixel in start..stop {
+            let tile_idx = pixel / 8;
+            let pattern = pattern_line[tile_idx];
+            let fine_x = pixel as u32 & 0x07;
+            let color_id = pattern.get_color_in_pattern(fine_x);
+
+            let attr = attr_line[tile_idx];
+            let palette_id = attr.get_palette(pixel as u16, scanline as u16);
+
+            pixel_line[pixel] = PaletteIndex {
+                set: PaletteSet::Background,
+                palette_id: palette_id,
+                color_id: color_id,
+            }
+        }
     }
 
     pub fn buffer(&self) -> &[PaletteIndex] {
@@ -139,9 +151,30 @@ impl BackgroundRenderer {
 
 impl Default for BackgroundRenderer {
     fn default() -> BackgroundRenderer {
+        // Work around the 32-element array limitation
+        let (tiles, attrs) = unsafe {
+            use std::ptr;
+            use std::mem;
+
+            let mut tiles: [[TilePattern; TILES_PER_LINE]; SCREEN_HEIGHT] = mem::uninitialized();
+            let mut attrs: [[TileAttribute; TILES_PER_LINE]; SCREEN_HEIGHT] = mem::uninitialized();
+
+            for element in tiles.iter_mut() {
+                let tile_line: [TilePattern; TILES_PER_LINE] = [Default::default(); TILES_PER_LINE];
+                ptr::write(element, tile_line);
+            }
+            for element in attrs.iter_mut() {
+                let attr_line: [TileAttribute; TILES_PER_LINE] =
+                    [Default::default(); TILES_PER_LINE];
+                ptr::write(element, attr_line);
+            }
+
+            (tiles, attrs)
+        };
+
         BackgroundRenderer {
-            tile: vec![Default::default(); TILE_BUFFER_SIZE].into_boxed_slice(),
-            attr: vec![Default::default(); TILE_BUFFER_SIZE].into_boxed_slice(),
+            tile: Box::new(tiles),
+            attr: Box::new(attrs),
 
             background_buffer: vec![Default::default(); SCREEN_BUFFER_SIZE].into_boxed_slice(),
         }
