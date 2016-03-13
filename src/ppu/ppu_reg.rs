@@ -18,8 +18,8 @@ impl PPUCtrl {
         PPUCtrl { bits: bits }
     }
 
-    pub fn nametable_addr(&self) -> u16 {
-        (self.bits & 0b0000_0011) as u16 * 0x0400 | 0x2000
+    pub fn nametable_num(&self) -> u16 {
+        (self.bits & 0b0000_0011) as u16
     }
 
     pub fn vram_addr_step(&self) -> u16 {
@@ -89,6 +89,22 @@ pub struct PPUReg {
 }
 
 impl PPUReg {
+    pub fn scroll_x(&self) -> u16 {
+        (self.ppuscroll & 0xFF00) >> 8
+    }
+
+    pub fn scroll_x_coarse(&self) -> u16 {
+        self.scroll_x() >> 3
+    }
+
+    pub fn scroll_y(&self) -> u16 {
+        (self.ppuscroll & 0x00FF) >> 0
+    }
+
+    pub fn scroll_y_coarse(&self) -> u16 {
+        self.scroll_y() >> 3
+    }
+
     pub fn incr_ppuaddr(&mut self) {
         let incr_size = self.ppuctrl.vram_addr_step();
         self.ppuaddr = self.ppuaddr.wrapping_add(incr_size);

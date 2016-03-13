@@ -9,7 +9,6 @@ use super::ppu_memory::PPUMemory;
 use memory::MemSegment;
 use std::cmp;
 
-const NAMETABLE_WIDTH: usize = 32;
 const TILES_PER_LINE: usize = 34;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -48,14 +47,19 @@ pub struct BackgroundRenderer {
 }
 
 fn get_nametable_addr(reg: &PPUReg, tile_x: u16, tile_y: u16) -> u16 {
-    reg.ppuctrl.nametable_addr() + tile_y * NAMETABLE_WIDTH as u16 + tile_x
+    let mut addr = 0x2000;
+    addr |= ((tile_x + reg.scroll_x_coarse()) & 0b0001_1111) << 0;
+    addr |= ((tile_y + reg.scroll_y_coarse()) & 0b0001_1111) << 5;
+    addr |= reg.ppuctrl.nametable_num() << 10;
+    addr
 }
 
 fn get_attribute_addr(reg: &PPUReg, tile_x: u16, tile_y: u16) -> u16 {
-    let x = tile_x / 4;
-    let y = tile_y / 4;
-    let attr_table = reg.ppuctrl.nametable_addr() + 0x03C0;
-    attr_table + (y * 8) + x
+    let mut addr = 0x23C0;
+    addr |= ((tile_x + reg.scroll_x_coarse()) & 0b0001_1100) >> 2 << 0;
+    addr |= ((tile_y + reg.scroll_y_coarse()) & 0b0001_1100) >> 2 << 3;
+    addr |= reg.ppuctrl.nametable_num() << 10;
+    addr
 }
 
 impl BackgroundRenderer {
@@ -94,14 +98,16 @@ impl BackgroundRenderer {
         let tile_start = start / 8;
         let tile_stop = (stop + 8 - 1) / 8;
 
+        let displayed_scanline = scanline as u16 + reg.scroll_y();
+
         for x in tile_start..tile_stop {
             let tile_x = x as u16;
-            let tile_y = scanline as u16 / 8;
+            let tile_y = displayed_scanline / 8;
 
             let nametable_addr = get_nametable_addr(reg, tile_x, tile_y);
             let tile_table = reg.ppuctrl.background_table();
             let tile_idx = mem.read(nametable_addr);
-            tile_line[x] = mem.read_tile_pattern(tile_idx, scanline as u16 & 0x07, tile_table);
+            tile_line[x] = mem.read_tile_pattern(tile_idx, displayed_scanline & 0x07, tile_table);
 
             let attr_addr = get_attribute_addr(reg, tile_x, tile_y);
             attr_line[x] = TileAttribute::new(mem.read(attr_addr));
