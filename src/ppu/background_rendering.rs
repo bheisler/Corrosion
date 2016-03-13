@@ -47,50 +47,65 @@ pub struct BackgroundRenderer {
     background_buffer: Box<[PaletteIndex]>,
 }
 
-fn div_rem(num: usize, den: usize) -> (usize, usize) {
-    (num / den, num % den)
+fn get_nametable_addr(reg: &PPUReg, tile_x: u16, tile_y: u16) -> u16 {
+    reg.ppuctrl.nametable_addr() + tile_y * NAMETABLE_WIDTH as u16 + tile_x
+}
+
+fn get_attribute_addr(reg: &PPUReg, tile_x: u16, tile_y: u16) -> u16 {
+    let x = tile_x / 4;
+    let y = tile_y / 4;
+    let attr_table = reg.ppuctrl.nametable_addr() + 0x03C0;
+    attr_table + (y * 8) + x
 }
 
 impl BackgroundRenderer {
     pub fn render(&mut self, start_px: usize, stop_px: usize, reg: &PPUReg, mem: &mut PPUMemory) {
-        for pixel in start_px..stop_px {
-            let (y, x) = div_rem(pixel, SCREEN_WIDTH);
-            self.visible_scanline_background(x as u16, y as u16, reg, mem);
-        }
+        self.evaluate(reg, mem, start_px, stop_px);
         self.draw(start_px, stop_px);
     }
 
-    fn visible_scanline_background(&mut self, x: u16, y: u16, reg: &PPUReg, mem: &mut PPUMemory) {
-        if x > 256 {
-            return;
+    fn evaluate(&mut self, reg: &PPUReg, mem: &mut PPUMemory, start: usize, stop: usize) {
+        let mut current_scanline = start / SCREEN_WIDTH;
+        let mut last_scanline_boundary = current_scanline * SCREEN_WIDTH;
+        let mut next_scanline_boundary = last_scanline_boundary + SCREEN_WIDTH;
+
+        let mut current = start;
+        while current < stop {
+            let segment_start = current - last_scanline_boundary;
+            let segment_end = cmp::min(next_scanline_boundary, stop) - last_scanline_boundary;
+
+            self.evaluate_segment(reg, mem, current_scanline, segment_start, segment_end);
+            current_scanline += 1;
+            last_scanline_boundary = next_scanline_boundary;
+            current = next_scanline_boundary;
+            next_scanline_boundary += SCREEN_WIDTH;
         }
-        let sl = y as usize;
-        let px = x as usize / 8;
+    }
 
-        if x % 8 == 0 {
-            let nametable_addr = self.get_nametable_addr(reg, x, y);
-            let tile_idx = mem.read(nametable_addr);
+    fn evaluate_segment(&mut self,
+                        reg: &PPUReg,
+                        mem: &mut PPUMemory,
+                        scanline: usize,
+                        start: usize,
+                        stop: usize) {
+        let tile_line = &mut self.tile[scanline];
+        let attr_line = &mut self.attr[scanline];
 
+        let tile_start = start / 8;
+        let tile_stop = (stop + 8 - 1) / 8;
+
+        for x in tile_start..tile_stop {
+            let tile_x = x as u16;
+            let tile_y = scanline as u16 / 8;
+
+            let nametable_addr = get_nametable_addr(reg, tile_x, tile_y);
             let tile_table = reg.ppuctrl.background_table();
-            self.tile[sl][px] = mem.read_tile_pattern(tile_idx, y & 0x07, tile_table);
+            let tile_idx = mem.read(nametable_addr);
+            tile_line[x] = mem.read_tile_pattern(tile_idx, scanline as u16 & 0x07, tile_table);
 
-            let attribute_addr = self.get_attribute_addr(reg, x, y);
-            self.attr[sl][px] = TileAttribute::new(mem.read(attribute_addr));
+            let attr_addr = get_attribute_addr(reg, tile_x, tile_y);
+            attr_line[x] = TileAttribute::new(mem.read(attr_addr));
         }
-    }
-
-    fn get_nametable_addr(&self, reg: &PPUReg, px_x: u16, px_y: u16) -> u16 {
-        let x = px_x / 8;
-        let y = px_y / 8;
-        let result = reg.ppuctrl.nametable_addr() + y * NAMETABLE_WIDTH as u16 + x;
-        result
-    }
-
-    fn get_attribute_addr(&self, reg: &PPUReg, x: u16, y: u16) -> u16 {
-        let x = x / 32;
-        let y = y / 32;
-        let attr_table = reg.ppuctrl.nametable_addr() + 0x03C0;
-        attr_table + (y * 8) + x
     }
 
     fn draw(&mut self, start: usize, stop: usize) {
