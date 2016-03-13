@@ -53,12 +53,18 @@ impl OAMEntry {
         y <= scanline && scanline < y + 8
     }
 
-    fn build_details(&self, sl: u16, reg: &PPUReg, mem: &mut PPUMemory) -> SpriteDetails {
+    fn build_details(&self,
+                     idx: usize,
+                     sl: u16,
+                     reg: &PPUReg,
+                     mem: &mut PPUMemory)
+                     -> SpriteDetails {
         let tile_id = self.tile;
         let fine_y_scroll = get_fine_scroll(sl, self.y as u16, self.attr.contains(FLIP_VERT));
         let tile_table = reg.ppuctrl.sprite_table();
         let tile = mem.read_tile_pattern(tile_id, fine_y_scroll, tile_table);
         SpriteDetails {
+            idx: idx,
             x: self.x,
             attr: self.attr,
             tile: tile,
@@ -101,6 +107,7 @@ impl MemSegment for OAMEntry {
 
 #[derive(Debug, Copy, Clone)]
 struct SpriteDetails {
+    idx: usize,
     x: u8,
     attr: OAMAttr,
     tile: TilePattern,
@@ -122,6 +129,7 @@ impl SpriteDetails {
     fn blit(&self,
             pixel_line: &mut [PaletteIndex],
             priority_line: &mut [SpritePriority],
+            sprite0_line: &mut [bool],
             segment: &Interval,
             sprite_interval: &Interval) {
         let intersection = segment.intersection(sprite_interval);
@@ -130,6 +138,7 @@ impl SpriteDetails {
             if !pal.is_transparent() {
                 pixel_line[x] = pal;
                 priority_line[x] = pri;
+                sprite0_line[x] = self.idx == 0;
             }
         }
     }
@@ -138,6 +147,7 @@ impl SpriteDetails {
 impl Default for SpriteDetails {
     fn default() -> SpriteDetails {
         SpriteDetails {
+            idx: 0xFF,
             x: 0xFF,
             attr: OAMAttr::empty(),
             tile: Default::default(),
@@ -183,6 +193,7 @@ pub struct SpriteRenderer {
 
     pixel_buffer: Box<[PaletteIndex]>,
     priority_buffer: Box<[SpritePriority]>,
+    sprite0_buffer: Box<[bool]>,
 }
 
 impl Default for SpriteRenderer {
@@ -194,6 +205,7 @@ impl Default for SpriteRenderer {
             pixel_buffer: vec![Default::default(); SCREEN_BUFFER_SIZE].into_boxed_slice(),
             priority_buffer: vec![SpritePriority::Background; SCREEN_BUFFER_SIZE]
                                  .into_boxed_slice(),
+            sprite0_buffer: vec![false; SCREEN_BUFFER_SIZE].into_boxed_slice(),
         }
     }
 }
@@ -235,7 +247,7 @@ impl SpriteRenderer {
         for x in 0..64 {
             let oam = &self.primary_oam[x];
             if oam.is_on_scanline(scanline) {
-                secondary_oam_line[n] = oam.build_details(scanline, reg, mem);
+                secondary_oam_line[n] = oam.build_details(x, scanline, reg, mem);
                 n += 1;
                 if n == 8 {
                     return;
@@ -250,6 +262,9 @@ impl SpriteRenderer {
         }
         for dest in self.priority_buffer[start..stop].iter_mut() {
             *dest = SpritePriority::Background;
+        }
+        for dest in self.sprite0_buffer[start..stop].iter_mut() {
+            *dest = false;
         }
     }
 
@@ -285,19 +300,26 @@ impl SpriteRenderer {
         let oam_line = &self.secondary_oam[scanline];
         let pixel_line = &mut self.pixel_buffer[line_start..line_stop];
         let priority_line = &mut self.priority_buffer[line_start..line_stop];
+        let sprite0_line = &mut self.sprite0_buffer[line_start..line_stop];
 
         let segment = Interval::new(start, stop - 1);
 
         for sprite in oam_line.iter().rev() {
             let sprite_interval = Interval::new(sprite.x as usize, sprite.x as usize + 8);
             if segment.intersects_with(&sprite_interval) {
-                sprite.blit(pixel_line, priority_line, &segment, &sprite_interval);
+                sprite.blit(pixel_line,
+                            priority_line,
+                            sprite0_line,
+                            &segment,
+                            &sprite_interval);
             }
         }
     }
 
-    pub fn buffers(&self) -> (&[PaletteIndex], &[SpritePriority]) {
-        (&self.pixel_buffer, &self.priority_buffer)
+    pub fn buffers(&self) -> (&[PaletteIndex], &[SpritePriority], &[bool]) {
+        (&self.pixel_buffer,
+         &self.priority_buffer,
+         &self.sprite0_buffer)
     }
 }
 

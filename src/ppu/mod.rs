@@ -216,6 +216,7 @@ impl PPU {
         }
 
         self.mix(start_px, stop_px);
+        self.sprite0_test(start_px, stop_px);
 
         if hit_nmi {
             StepResult::NMI
@@ -259,6 +260,9 @@ impl PPU {
         if cycle == 0 {
             self.reg.ppustat.remove(VBLANK);
         }
+        if cycle == 1 {
+            self.reg.ppustat.remove(SPRITE_0);
+        }
         if cycle == 339 && self.frame % 2 == 1 {
             self.tick_cycle()
         }
@@ -280,7 +284,7 @@ impl PPU {
 
     fn mix(&mut self, start: usize, stop: usize) {
         let background = self.background_data.buffer();
-        let (sprite, priority) = self.sprite_data.buffers();
+        let (sprite, priority, _) = self.sprite_data.buffers();
 
         for px in start..stop {
             let (priority_px, sprite_px) = (priority[px], sprite[px]);
@@ -294,6 +298,21 @@ impl PPU {
             };
 
             self.screen_buffer[px] = self.ppu_mem.read_palette(pal_idx);
+        }
+    }
+
+    fn sprite0_test(&mut self, start: usize, stop:usize) {
+        let background = self.background_data.buffer();
+        let (_, _, sprite0) = self.sprite_data.buffers();
+
+        let background_slice = &background[start..stop];
+        let sprite0_slice = &sprite0[start..stop];
+
+        for (bck, spr) in background_slice.iter().zip(sprite0_slice.iter()) {
+            if *spr && !bck.is_transparent() {
+                self.reg.ppustat.insert(SPRITE_0);
+                return;
+            }
         }
     }
 
