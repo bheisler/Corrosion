@@ -149,8 +149,6 @@ impl BackgroundRenderer {
         let attr_line = &self.attr[scanline];
         let pixel_line = &mut self.background_buffer[line_start..line_stop];
 
-        println!("Fine X Scroll: {}", reg.scroll_x_fine());
-
         for pixel in start..stop {
             let displayed_pixel = pixel + reg.scroll_x_fine() as usize;
             let tile_idx = displayed_pixel / 8;

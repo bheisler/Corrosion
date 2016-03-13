@@ -34,7 +34,13 @@ fn get_tile_addr(tile_id: u8, plane: u8, fine_y_scroll: u16, tile_table: u16) ->
 
 impl PPUMemory {
     pub fn read_bypass_palette(&mut self, idx: u16) -> u8 {
-        self.vram[(idx % 0x800) as usize]
+        let idx = self.translate_vram_address(idx);
+        self.vram[idx]
+    }
+
+    fn translate_vram_address(&self, idx: u16) -> usize {
+        let translated = idx & 0x0FFF & self.cart.borrow().vram_mask();
+        translated as usize
     }
 
     pub fn read_palette(&mut self, idx: PaletteIndex) -> Color {
@@ -99,7 +105,7 @@ impl MemSegment for PPUMemory {
                 cart.chr_write(idx, val)
             }
             0x2000...0x3EFF => {
-                let idx = ((idx - 0x2000) % 0x800) as usize;
+                let idx = self.translate_vram_address(idx);
                 self.vram[idx] = val;
             }
             0x3F00...0x3FFF => {
