@@ -3,14 +3,14 @@
 use apu::Writable;
 use apu::components::*;
 
-#[allow(dead_code)] //TODO: Remove this
+#[allow(dead_code)]
 pub struct Noise {
     envelope: Envelope,
     mode: u8,
     pub length: Length,
 }
 
-#[allow(unused_variables)] //TODO: Remove this
+#[allow(unused_variables)]
 impl Noise {
     pub fn new() -> Noise {
         Noise {

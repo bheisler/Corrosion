@@ -63,7 +63,7 @@ pub fn start_emulator(cart: Cart) {
     let ppu = PPU::new(cart.clone(), Box::new(screen));
     let apu = APU::new(Box::new(audio_out));
     let io: Box<IO> = if let Some(file) = get_movie_file() {
-        let fm2io = io::fm2::FM2IO::read(file).unwrap(); //TODO: Handle errors
+        let fm2io = io::fm2::FM2IO::read(file).unwrap();
         Box::new(fm2io)
     } else {
         Box::new(io::sdl::SdlIO::new(event_pump.clone()))

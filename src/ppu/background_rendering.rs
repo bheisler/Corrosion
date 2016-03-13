@@ -60,7 +60,6 @@ impl BackgroundRenderer {
         self.draw(start_px, stop_px);
     }
 
-    // TODO: Optimize this
     fn visible_scanline_background(&mut self, x: u16, y: u16, reg: &PPUReg, mem: &mut PPUMemory) {
         if x > 256 {
             return;

@@ -112,7 +112,7 @@ pub struct PPU {
     reg: PPUReg,
     ppudata_read_buffer: u8,
     ppu_mem: PPUMemory,
- 
+
     screen: Box<Screen>,
     screen_buffer: [Color; SCREEN_BUFFER_SIZE],
 
@@ -278,7 +278,6 @@ impl PPU {
         }
     }
 
-    // TODO: Maybe try to vectorize this?
     fn mix(&mut self, start: usize, stop: usize) {
         let background = self.background_data.buffer();
         let (sprite, priority) = self.sprite_data.buffers();

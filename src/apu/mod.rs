@@ -243,7 +243,7 @@ impl APU {
             let iter1 = square_buf.read().iter().cloned();
             let iter2 = tnd_buf.read().iter().cloned();
             iter1.zip(iter2)
-                .map(|(s, t)| s + t) //TODO: Add proper nonlinear mixing.
+                .map(|(s, t)| s + t)
                 .collect()
         };
         self.next_transfer_cyc = cpu_cyc + square_buf.clocks_needed() as u64;
@@ -281,8 +281,6 @@ impl APU {
         status = status | (self.triangle.length.active() << 2);
         status = status | (self.noise.length.active() << 3);
         status = status | if self.irq_requested { 1 << 6 } else { 0 };
-    // TODO add DMC status
-    // TODO add DMC interrupt flag
         self.irq_requested = false;
 
         (interrupt.or(self.run_to(cycle)), status)

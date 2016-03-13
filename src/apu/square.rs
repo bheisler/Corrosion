@@ -62,7 +62,6 @@ impl Sweep {
     }
 
     fn audible(&self) -> bool {
-        // TODO
         true
     }
 

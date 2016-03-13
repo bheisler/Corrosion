@@ -67,6 +67,6 @@ impl MemSegment for FM2IO {
 
 impl IO for FM2IO {
     fn poll(&mut self) {
-        // TODO
+        // Do nothing.
     }
 }

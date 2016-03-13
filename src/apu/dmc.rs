@@ -2,7 +2,7 @@
 
 use apu::Writable;
 
-#[allow(dead_code)] //TODO: Remove this
+#[allow(dead_code)]
 pub struct DMC {
     freq: u8,
     direct: u8,
@@ -10,7 +10,7 @@ pub struct DMC {
     sample_length: u8,
 }
 
-#[allow(unused_variables)] //TODO: Remove this
+#[allow(unused_variables)]
 impl DMC {
     pub fn new() -> DMC {
         DMC {
@@ -24,7 +24,7 @@ impl DMC {
     pub fn play(&mut self, from_cyc: u32, to_cyc: u32) {}
 }
 
-#[allow(unused_variables)] //TODO: Remove this
+#[allow(unused_variables)]
 impl Writable for DMC {
     fn write(&mut self, idx: u16, val: u8) {}
 }

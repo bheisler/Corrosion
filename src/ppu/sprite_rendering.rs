@@ -225,7 +225,6 @@ impl SpriteRenderer {
         self.draw(start, stop)
     }
 
-    // TODO: Optimize this.
     fn sprite_eval(&mut self, scanline: u16, reg: &PPUReg, mem: &mut PPUMemory) {
         if scanline + 1 >= SCREEN_HEIGHT as u16 {
             return;
