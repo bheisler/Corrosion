@@ -18,10 +18,6 @@ impl PPUCtrl {
         PPUCtrl { bits: bits }
     }
 
-    pub fn nametable_num(&self) -> u16 {
-        (self.bits & 0b0000_0011) as u16
-    }
-
     pub fn vram_addr_step(&self) -> u16 {
         if self.bits & 0b0000_0100 != 0 {
             32
@@ -77,8 +73,10 @@ pub struct PPUReg {
     pub ppumask: PPUMask,
     pub ppustat: PPUStat,
     pub oamaddr: u8,
-    ppuscroll: u16,
-    pub ppuaddr: u16,
+
+    pub t: u16,
+    pub v: u16,
+    pub x: u8,
 
     ///A fake dynamic latch representing the capacitance of the wires in the
     ///PPU that we have to emulate.
@@ -89,46 +87,45 @@ pub struct PPUReg {
 }
 
 impl PPUReg {
-    pub fn scroll_x(&self) -> u16 {
-        (self.ppuscroll & 0xFF00) >> 8
-    }
-
     pub fn scroll_x_fine(&self) -> u16 {
-        self.scroll_x() & 0x07
-    }
-
-    pub fn scroll_x_coarse(&self) -> u16 {
-        self.scroll_x() >> 3
-    }
-
-    pub fn scroll_y(&self) -> u16 {
-        (self.ppuscroll & 0x00FF) >> 0
-    }
-
-    pub fn scroll_y_coarse(&self) -> u16 {
-        self.scroll_y() >> 3
+        self.x as u16
     }
 
     pub fn incr_ppuaddr(&mut self) {
         let incr_size = self.ppuctrl.vram_addr_step();
-        self.ppuaddr = self.ppuaddr.wrapping_add(incr_size);
+        self.v = self.v.wrapping_add(incr_size);
     }
 
     pub fn incr_oamaddr(&mut self) {
         self.oamaddr = self.oamaddr.wrapping_add(1);
     }
-}
 
-fn write_addr_byte(latch: &mut AddrByte, target: &mut u16, val: u8) {
-    match *latch {
-        AddrByte::High => {
-            *target = (*target & 0x00FF) | ((val as u16) << 8);
-            *latch = AddrByte::Low;
-        }
-        AddrByte::Low => {
-            *target = (*target & 0xFF00) | ((val as u16) << 0);
-            *latch = AddrByte::High;
-        }
+    fn set_coarse_x(&mut self, val: u8) {
+        let coarse_x = val >> 3;
+        self.t = self.t & 0b111_11_11111_00000 | coarse_x as u16;
+    }
+
+    fn set_fine_x(&mut self, val: u8) {
+        self.x = val & 0b0000_0111;
+    }
+
+    fn set_coarse_y(&mut self, val: u8) {
+        let coarse_y = val >> 3;
+        self.t = self.t & 0b111_11_00000_11111 | (coarse_y as u16) << 5;
+    }
+
+    fn set_fine_y(&mut self, val: u8) {
+        let fine_y = val & 0b0000_0111;
+        self.t = self.t & 0b000_11_11111_11111 | (fine_y as u16) << 12;
+    }
+
+    fn set_addr_high(&mut self, val: u8) {
+        let addr = val & 0b0011_1111;
+        self.t = self.t & 0b_0000000_11111111 | (addr as u16) << 8;
+    }
+
+    fn set_addr_low(&mut self, val: u8) {
+        self.t = self.t & 0b_1111111_00000000 | val as u16;
     }
 }
 
@@ -139,8 +136,9 @@ impl Default for PPUReg {
             ppumask: PPUMask::empty(),
             ppustat: PPUStat::empty(),
             oamaddr: 0,
-            ppuscroll: 0,
-            ppuaddr: 0,
+            t: 0,
+            v: 0,
+            x: 0,
             dyn_latch: 0,
             address_latch: AddrByte::High,
         }
@@ -168,16 +166,39 @@ impl MemSegment for PPUReg {
     fn write(&mut self, idx: u16, val: u8) {
         self.dyn_latch = val;
         match idx % 8 {
-            0x0000 => self.ppuctrl = PPUCtrl::new(val),
+            0x0000 => {
+                self.ppuctrl = PPUCtrl::new(val & 0b1111_1100);
+                self.t = (self.t & 0b1110011_11111111) | ((val & 0b0000_0011) as u16) << 10;
+            }
             0x0001 => self.ppumask = PPUMask::from_bits_truncate(val),
             0x0002 => (),
             0x0003 => self.oamaddr = val,
-            0x0005 => write_addr_byte(&mut self.address_latch, &mut self.ppuscroll, val),
-            0x0006 => {
-                if self.address_latch == AddrByte::High {
-                    self.ppuctrl = PPUCtrl::new(self.ppuctrl.bits & 0b1111_1110);
+            0x0005 => {
+                match self.address_latch {
+                    AddrByte::High => {
+                        self.set_coarse_x(val);
+                        self.set_fine_x(val);
+                        self.address_latch = AddrByte::Low;
+                    }
+                    AddrByte::Low => {
+                        self.set_coarse_y(val);
+                        self.set_fine_y(val);
+                        self.address_latch = AddrByte::High;
+                    }
                 }
-                write_addr_byte(&mut self.address_latch, &mut self.ppuaddr, val)
+            }
+            0x0006 => {
+                match self.address_latch {
+                    AddrByte::High => {
+                        self.set_addr_high(val);
+                        self.address_latch = AddrByte::Low;
+                    }
+                    AddrByte::Low => {
+                        self.set_addr_low(val);
+                        self.v = self.t;
+                        self.address_latch = AddrByte::High;
+                    }
+                }
             }
             _ => invalid_address!(idx),
         }

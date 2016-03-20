@@ -347,7 +347,7 @@ impl MemSegment for PPU {
         match idx % 8 {
             0x0004 => self.sprite_data.read(self.reg.oamaddr as u16),
             0x0007 => {
-                let addr = self.reg.ppuaddr;
+                let addr = self.reg.v;
                 match addr {
                     0x0000...0x3EFF => {
                         let old_buffer = self.ppudata_read_buffer;
@@ -375,7 +375,7 @@ impl MemSegment for PPU {
                 self.reg.incr_oamaddr();
             }
             0x0007 => {
-                self.ppu_mem.write(self.reg.ppuaddr, val);
+                self.ppu_mem.write(self.reg.v, val);
                 self.reg.incr_ppuaddr();
             }
             _ => self.reg.write(idx, val),
