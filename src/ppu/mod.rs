@@ -210,14 +210,14 @@ impl PPU {
         let start_px = start_px % SCREEN_BUFFER_SIZE;
         let stop_px = start_px + delta_px;
 
-        self.background_data.render(start_px, stop_px, &self.reg, &mut self.ppu_mem);
-        self.sprite_data.render(start_px, stop_px, &self.reg, &mut self.ppu_mem);
-
         let mut hit_nmi = false;
         while self.global_cyc < stop {
             self.tick_cycle();
             hit_nmi |= self.run_cycle();
         }
+
+        self.background_data.render(start_px, stop_px, &self.reg, &mut self.ppu_mem);
+        self.sprite_data.render(start_px, stop_px);
 
         self.mix(start_px, stop_px);
         self.sprite0_test(start_px, stop_px);
@@ -249,9 +249,10 @@ impl PPU {
     }
 
     fn run_cycle(&mut self) -> bool {
+        self.sprite_data.run_cycle(self.cyc, self.sl, &mut self.reg, &mut self.ppu_mem);
         match (self.cyc, self.sl) {
-            (c, -1) => self.prerender_scanline(c),
-            (_, 0...239) => (),
+            (_, -1) => self.prerender_scanline(),
+            (_, 0...239) => (), //Visible scanline
             (_, 240) => (), //Post-render idle scanline
             (1, 241) => return self.start_vblank(),
             (_, 241...260) => (), //VBlank lines
@@ -260,14 +261,14 @@ impl PPU {
         false
     }
 
-    fn prerender_scanline(&mut self, cycle: u16) {
-        if cycle == 0 {
+    fn prerender_scanline(&mut self) {
+        if self.cyc == 0 {
             self.reg.ppustat.remove(VBLANK);
         }
-        if cycle == 1 {
+        if self.cyc == 1 {
             self.reg.ppustat.remove(SPRITE_0);
         }
-        if cycle == 339 && self.frame % 2 == 1 {
+        if self.cyc == 339 && self.frame % 2 == 1 {
             self.tick_cycle()
         }
     }

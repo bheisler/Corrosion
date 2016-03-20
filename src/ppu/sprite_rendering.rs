@@ -210,11 +210,6 @@ impl Default for SpriteRenderer {
     }
 }
 
-///Computes the next scanline boundary after the given pixel.
-fn pixel_to_scanline(px: usize) -> usize {
-    (px + SCREEN_WIDTH - 1) / SCREEN_WIDTH
-}
-
 fn get_fine_scroll(screen_dist: u16, sprite_dist: u16, flip: bool) -> u16 {
     let scroll = screen_dist - sprite_dist;
     if flip {
@@ -225,16 +220,16 @@ fn get_fine_scroll(screen_dist: u16, sprite_dist: u16, flip: bool) -> u16 {
 }
 
 impl SpriteRenderer {
-    pub fn render(&mut self, start: usize, stop: usize, reg: &PPUReg, mem: &mut PPUMemory) {
-        let start_sl = pixel_to_scanline(start);
-        let stop_sl = pixel_to_scanline(stop);
-
-        for sl in start_sl..stop_sl {
-            self.sprite_eval(sl as u16, reg, mem)
-        }
-
+    pub fn render(&mut self, start: usize, stop: usize) {
         self.clear(start, stop);
         self.draw(start, stop)
+    }
+
+    pub fn run_cycle(&mut self, cyc: u16, sl: i16, reg: &mut PPUReg, mem: &mut PPUMemory) {
+        match (cyc, sl) {
+            (0, sl@0...239) => self.sprite_eval(sl as u16, reg, mem),
+            _ => (),
+        }
     }
 
     fn sprite_eval(&mut self, scanline: u16, reg: &PPUReg, mem: &mut PPUMemory) {
