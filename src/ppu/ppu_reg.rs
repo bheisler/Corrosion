@@ -173,7 +173,12 @@ impl MemSegment for PPUReg {
             0x0002 => (),
             0x0003 => self.oamaddr = val,
             0x0005 => write_addr_byte(&mut self.address_latch, &mut self.ppuscroll, val),
-            0x0006 => write_addr_byte(&mut self.address_latch, &mut self.ppuaddr, val),
+            0x0006 => {
+                if self.address_latch == AddrByte::High {
+                    self.ppuctrl = PPUCtrl::new(self.ppuctrl.bits & 0b1111_1110);
+                }
+                write_addr_byte(&mut self.address_latch, &mut self.ppuaddr, val)
+            }
             _ => invalid_address!(idx),
         }
     }
