@@ -8,6 +8,7 @@ use super::SCREEN_WIDTH;
 use super::SCREEN_HEIGHT;
 use super::ppu_reg::PPUReg;
 use super::ppu_memory::PPUMemory;
+use memory::MemSegment;
 use std::cmp;
 
 const TILES_PER_LINE: usize = 34;
@@ -54,21 +55,30 @@ impl BackgroundRenderer {
     }
 
     pub fn run_cycle(&mut self, cyc: u16, sl: i16, reg: &mut PPUReg, mem: &mut PPUMemory) {
+        if !reg.ppumask.rendering_enabled() {
+            return;
+        }
         // Match to update vram addresses
         match (cyc, sl) {
             (280...304, -1) => self.copy_vertical(reg),
             (256, -1...239) => self.increment_y(reg),
             (257, -1...239) => self.copy_horizontal(reg),
             (328, -1...239) | (336, -1...239) => self.increment_x(reg),
-            (x@0...256, -1...239) if x % 8 == 0 => self.increment_x(reg),
+            (1...256, -1...239) if cyc % 8 == 0 => self.increment_x(reg),
             _ => (),
         }
         // VRAM Accesses
         match (cyc, sl, cyc % 8) {
             // Fetches for next scanline
-            (320...336, -1...239, 1) => self.fetch_nametable((cyc - 320) / 8, sl + 1, reg, mem),
-            (320...336, -1...239, 3) => self.fetch_attribute((cyc - 320) / 8, sl + 1, reg, mem),
-            (320...336, -1...239, 5) => self.fetch_tile_pattern((cyc - 320) / 8, sl + 1, reg, mem),
+            (320...336, -1...239, 1) => {
+                self.fetch_nametable((cyc - 320) / 8, (sl + 1) % 240, reg, mem)
+            }
+            (320...336, -1...239, 3) => {
+                self.fetch_attribute((cyc - 320) / 8, (sl + 1) % 240, reg, mem)
+            }
+            (320...336, -1...239, 5) => {
+                self.fetch_tile_pattern((cyc - 320) / 8, (sl + 1) % 240, reg, mem)
+            }
 
             // Fetches for this scanline
             (0...256, 0...239, 1) => self.fetch_nametable((cyc + 16) / 8, sl, reg, mem),
@@ -83,35 +93,63 @@ impl BackgroundRenderer {
     }
 
     fn copy_vertical(&self, reg: &mut PPUReg) {
-        unimplemented!();
+        let vertical_mask = 0b_111_10_11111_00000;
+        reg.v = (reg.v & !vertical_mask) | (reg.t & vertical_mask);
     }
 
     fn copy_horizontal(&self, reg: &mut PPUReg) {
-        unimplemented!();
+        let horizontal_mask = 0b_000_01_00000_11111;
+        reg.v = (reg.v & !horizontal_mask) | (reg.t & horizontal_mask);
     }
 
     fn increment_x(&self, reg: &mut PPUReg) {
-        unimplemented!();
+        if (reg.v & 0x001F) == 31 {
+            reg.v &= !0x001F; //clear coarse x
+            reg.v ^= 0x0400; //Switch nametable
+        } else {
+            reg.v += 1; //increment coarse x
+        }
     }
 
     fn increment_y(&self, reg: &mut PPUReg) {
-        unimplemented!();
+        if (reg.v & 0x7000) != 0x7000 {
+            reg.v += 0x1000; //Increment fine Y
+        } else {
+            reg.v &= !0x7000; //Clear fine Y
+            let mut coarse_y = (reg.v & 0x03E0) >> 5;
+            if coarse_y == 29 {
+                coarse_y = 0;
+                reg.v ^= 0x0800; //Switch vertical nametable
+            } else if coarse_y == 31 {
+                coarse_y = 0; //Clear coarse_y, but do not switch nametable
+            } else {
+                coarse_y += 1;
+            }
+            reg.v = (reg.v & !0x03E0) | (coarse_y << 5); //copy coarse_y back into V.
+        }
     }
 
     fn fetch_nametable(&mut self, tile_x: u16, y: i16, reg: &PPUReg, mem: &mut PPUMemory) {
-        unimplemented!();
+        let nametable_addr = 0x2000 | (reg.v & 0x0FFF);
+        self.idx[y as usize][tile_x as usize] = mem.read(nametable_addr);
     }
 
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     fn fetch_attribute(&mut self, tile_x: u16, y: i16, reg: &PPUReg, mem: &mut PPUMemory) {
-        unimplemented!();
+        let attribute_addr = 0x23C0 | (reg.v & 0x0C00) | ((reg.v >> 4) & 0x38) | ((reg.v >> 2) & 0x07);
+        self.attr[y as usize][tile_x as usize] = TileAttribute::new(mem.read(attribute_addr));
     }
 
     fn fetch_tile_pattern(&mut self, tile_x: u16, y: i16, reg: &PPUReg, mem: &mut PPUMemory) {
-        unimplemented!();
+        self.tile[y as usize][tile_x as usize] =
+            mem.read_tile_pattern(self.idx[y as usize][tile_x as usize],
+                                  reg.scroll_y_fine(),
+                                  reg.ppuctrl.background_table());
     }
 
     fn garbage_nametable_fetch(&mut self, reg: &PPUReg, mem: &mut PPUMemory) {
-        unimplemented!();
+        let nametable_addr = 0x2000 | (reg.v & 0x0FFF);
+        mem.read(nametable_addr);
     }
 
     fn draw(&mut self, reg: &PPUReg, start: usize, stop: usize) {

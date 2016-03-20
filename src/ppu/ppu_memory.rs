@@ -40,7 +40,7 @@ impl PPUMemory {
 
     fn translate_vram_address(&self, idx: u16) -> usize {
         let translated = idx & 0x0FFF & self.cart.borrow().vram_mask();
-        translated as usize
+        translated as usize % 2048
     }
 
     pub fn read_palette(&mut self, idx: PaletteIndex) -> Color {

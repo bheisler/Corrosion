@@ -60,6 +60,12 @@ bitflags! {
     }
 }
 
+impl PPUMask {
+    pub fn rendering_enabled(&self) -> bool {
+        self.intersects(S_BCK | S_SPR)
+    }
+}
+
 bitflags! {
     flags PPUStat : u8 {
         const VBLANK =          0b1000_0000, //Currently in the vertical blank interval
@@ -89,6 +95,10 @@ pub struct PPUReg {
 impl PPUReg {
     pub fn scroll_x_fine(&self) -> u16 {
         self.x as u16
+    }
+
+    pub fn scroll_y_fine(&self) -> u16 {
+        self.v >> 12
     }
 
     pub fn incr_ppuaddr(&mut self) {
@@ -122,6 +132,7 @@ impl PPUReg {
     fn set_addr_high(&mut self, val: u8) {
         let addr = val & 0b0011_1111;
         self.t = self.t & 0b_0000000_11111111 | (addr as u16) << 8;
+
     }
 
     fn set_addr_low(&mut self, val: u8) {
