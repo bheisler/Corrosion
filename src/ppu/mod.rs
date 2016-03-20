@@ -263,11 +263,8 @@ impl PPU {
     }
 
     fn prerender_scanline(&mut self) {
-        if self.cyc == 0 {
-            self.reg.ppustat.remove(VBLANK);
-        }
         if self.cyc == 1 {
-            self.reg.ppustat.remove(SPRITE_0);
+            self.reg.ppustat.remove(VBLANK | SPRITE_0 | SPRITE_OVERFLOW);
         }
         if self.cyc == 339 && self.frame % 2 == 1 {
             self.tick_cycle()
