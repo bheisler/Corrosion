@@ -1,3 +1,5 @@
+#![allow(dead_code, unused_variables)] //Temporary
+
 use super::PaletteIndex;
 use super::PaletteSet;
 use super::TilePattern;
@@ -40,6 +42,7 @@ impl Default for TileAttribute {
 }
 
 pub struct BackgroundRenderer {
+    idx: Box<[[u8; TILES_PER_LINE]]>,
     tile: Box<[[TilePattern; TILES_PER_LINE]]>,
     attr: Box<[[TileAttribute; TILES_PER_LINE]]>,
 
@@ -63,9 +66,69 @@ fn get_attribute_addr(reg: &PPUReg, tile_x: u16, tile_y: u16) -> u16 {
 }
 
 impl BackgroundRenderer {
-    pub fn render(&mut self, start_px: usize, stop_px: usize, reg: &PPUReg, mem: &mut PPUMemory) {
-        self.evaluate(reg, mem, start_px, stop_px);
+    pub fn render(&mut self, start_px: usize, stop_px: usize, reg: &PPUReg) {
         self.draw(reg, start_px, stop_px);
+    }
+
+    pub fn run_cycle(&mut self, cyc: u16, sl: i16, reg: &mut PPUReg, mem: &mut PPUMemory) {
+        // Match to update vram addresses
+        match (cyc, sl) {
+            (280...304, -1) => self.copy_vertical(reg),
+            (256, -1...239) => self.increment_y(reg),
+            (257, -1...239) => self.copy_horizontal(reg),
+            (328, -1...239) | (336, -1...239) => self.increment_x(reg),
+            (x@0...256, -1...239) if x % 8 == 0 => self.increment_x(reg),
+            _ => (),
+        }
+        // VRAM Accesses
+        match (cyc, sl, cyc % 8) {
+            // Fetches for next scanline
+            (320...336, -1...239, 1) => self.fetch_nametable((cyc - 320) / 8, sl + 1, reg, mem),
+            (320...336, -1...239, 3) => self.fetch_attribute((cyc - 320) / 8, sl + 1, reg, mem),
+            (320...336, -1...239, 5) => self.fetch_tile_pattern((cyc - 320) / 8, sl + 1, reg, mem),
+
+            // Fetches for this scanline
+            (0...256, 0...239, 1) => self.fetch_nametable((cyc + 16) / 8, sl, reg, mem),
+            (0...256, 0...239, 3) => self.fetch_attribute((cyc + 16) / 8, sl, reg, mem),
+            (0...256, 0...239, 5) => self.fetch_tile_pattern((cyc + 16) / 8, sl, reg, mem),
+
+            // The two garbage nametable fetches at the end of every scanline
+            (337, -1...239, _) | (339, -1...239, _) => self.garbage_nametable_fetch(reg, mem),
+
+            _ => (),
+        }
+    }
+
+    fn copy_vertical(&self, reg: &mut PPUReg) {
+        unimplemented!();
+    }
+
+    fn copy_horizontal(&self, reg: &mut PPUReg) {
+        unimplemented!();
+    }
+
+    fn increment_x(&self, reg: &mut PPUReg) {
+        unimplemented!();
+    }
+
+    fn increment_y(&self, reg: &mut PPUReg) {
+        unimplemented!();
+    }
+
+    fn fetch_nametable(&mut self, tile_x: u16, y: i16, reg: &PPUReg, mem: &mut PPUMemory) {
+        unimplemented!();
+    }
+
+    fn fetch_attribute(&mut self, tile_x: u16, y: i16, reg: &PPUReg, mem: &mut PPUMemory) {
+        unimplemented!();
+    }
+
+    fn fetch_tile_pattern(&mut self, tile_x: u16, y: i16, reg: &PPUReg, mem: &mut PPUMemory) {
+        unimplemented!();
+    }
+
+    fn garbage_nametable_fetch(&mut self, reg: &PPUReg, mem: &mut PPUMemory) {
+        unimplemented!();
     }
 
     fn evaluate(&mut self, reg: &PPUReg, mem: &mut PPUMemory, start: usize, stop: usize) {
@@ -209,13 +272,18 @@ impl BackgroundRenderer {
 impl Default for BackgroundRenderer {
     fn default() -> BackgroundRenderer {
         // Work around the 32-element array limitation
-        let (tiles, attrs) = unsafe {
+        let (idx, tiles, attrs) = unsafe {
             use std::ptr;
             use std::mem;
 
+            let mut idx: [[u8; TILES_PER_LINE]; SCREEN_HEIGHT] = mem::uninitialized();
             let mut tiles: [[TilePattern; TILES_PER_LINE]; SCREEN_HEIGHT] = mem::uninitialized();
             let mut attrs: [[TileAttribute; TILES_PER_LINE]; SCREEN_HEIGHT] = mem::uninitialized();
 
+            for element in idx.iter_mut() {
+                let idx_line: [u8; TILES_PER_LINE] = [0; TILES_PER_LINE];
+                ptr::write(element, idx_line);
+            }
             for element in tiles.iter_mut() {
                 let tile_line: [TilePattern; TILES_PER_LINE] = [Default::default(); TILES_PER_LINE];
                 ptr::write(element, tile_line);
@@ -226,10 +294,11 @@ impl Default for BackgroundRenderer {
                 ptr::write(element, attr_line);
             }
 
-            (tiles, attrs)
+            (idx, tiles, attrs)
         };
 
         BackgroundRenderer {
+            idx: Box::new(idx),
             tile: Box::new(tiles),
             attr: Box::new(attrs),
 

@@ -216,7 +216,7 @@ impl PPU {
             hit_nmi |= self.run_cycle();
         }
 
-        self.background_data.render(start_px, stop_px, &self.reg, &mut self.ppu_mem);
+        self.background_data.render(start_px, stop_px, &self.reg);
         self.sprite_data.render(start_px, stop_px);
 
         self.mix(start_px, stop_px);
@@ -250,6 +250,7 @@ impl PPU {
 
     fn run_cycle(&mut self) -> bool {
         self.sprite_data.run_cycle(self.cyc, self.sl, &mut self.reg, &mut self.ppu_mem);
+        self.background_data.run_cycle(self.cyc, self.sl, &mut self.reg, &mut self.ppu_mem);
         match (self.cyc, self.sl) {
             (_, -1) => self.prerender_scanline(),
             (_, 0...239) => (), //Visible scanline
