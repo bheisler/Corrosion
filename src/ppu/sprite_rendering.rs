@@ -297,7 +297,7 @@ impl SpriteRenderer {
         let priority_line = &mut self.priority_buffer[line_start..line_stop];
         let sprite0_line = &mut self.sprite0_buffer[line_start..line_stop];
 
-        let segment = Interval::new(start, stop - 1);
+        let segment = Interval::new(start, stop);
 
         for sprite in oam_line.iter().rev() {
             let sprite_interval = Interval::new(sprite.x as usize, sprite.x as usize + 8);
