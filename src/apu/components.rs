@@ -80,7 +80,7 @@ impl Length {
 #[derive(Debug)]
 pub struct Envelope {
     should_loop: bool,
-    disable: bool,
+    constant_volume: bool,
     n: u8,
 
     divider: u8,
@@ -91,7 +91,7 @@ impl Envelope {
     pub fn new() -> Envelope {
         Envelope {
             should_loop: false,
-            disable: false,
+            constant_volume: false,
             n: 0,
             divider: 0,
             counter: 0,
@@ -100,7 +100,7 @@ impl Envelope {
 
     pub fn write(&mut self, val: u8) {
         self.should_loop = (val >> 5) & 0x01 != 0;
-        self.disable = (val >> 6) & 0x01 != 0;
+        self.constant_volume = (val >> 4) & 0x01 != 0;
         self.n = val & 0x0F;
         self.divider = self.n;
         self.counter = 15;
@@ -124,7 +124,7 @@ impl Envelope {
     }
 
     pub fn volume(&self) -> i16 {
-        if self.disable {
+        if self.constant_volume {
             self.n as i16
         } else {
             self.counter as i16
