@@ -9,7 +9,7 @@ cputrace = []
 stacktrace = []
 
 [dependencies]
-bitflags = "0.4"
+bitflags = "0.5"
 quick-error = "1.0"
 sdl2 = "0.16"
 stopwatch = "0.0.6"

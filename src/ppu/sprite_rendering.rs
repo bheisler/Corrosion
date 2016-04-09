@@ -20,8 +20,8 @@ bitflags! {
         const FLIP_VERT = 0b1000_0000,
         const FLIP_HORZ = 0b0100_0000,
         const BEHIND    = 0b0010_0000,
-        const PALETTE1  = 0b0000_0010,
-        const PALETTE2  = 0b0000_0001,
+        #[allow(dead_code)]
+        const PALETTE   = 0b0000_0011,
     }
 }
 

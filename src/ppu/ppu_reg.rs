@@ -60,14 +60,20 @@ impl PPUCtrl {
 }
 
 bitflags! {
-    flags PPUMask : u8 {
+    pub flags PPUMask : u8 {
+        #[allow(dead_code)]
         const GREY =    0b0000_0001, //Greyscale
+        #[allow(dead_code)]
         const S_BCK_L = 0b0000_0010, //Show background in the leftmost 8 pixels
+        #[allow(dead_code)]
         const S_SPR_L = 0b0000_0100, //Show sprites in the leftmost 8 pixels
         const S_BCK =   0b0000_1000, //Show background
         const S_SPR =   0b0001_0000, //Show sprites
+        #[allow(dead_code)]
         const EM_R =    0b0010_0000, //Emphasize Red
+        #[allow(dead_code)]
         const EM_G =    0b0100_0000, //Emphasize Green
+        #[allow(dead_code)]
         const EM_B =    0b1000_0000, //Emphasize Blue
     }
 }
@@ -79,7 +85,7 @@ impl PPUMask {
 }
 
 bitflags! {
-    flags PPUStat : u8 {
+    pub flags PPUStat : u8 {
         const VBLANK =          0b1000_0000, //Currently in the vertical blank interval
         const SPRITE_0 =        0b0100_0000, //Sprite 0 hit
         const SPRITE_OVERFLOW = 0b0010_0000, //Greater than 8 sprites on current scanline
