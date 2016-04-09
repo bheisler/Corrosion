@@ -53,7 +53,7 @@ static PALETTE: [u8; 192] = [
 
 fn copy_to_texture(buf: &[Color; SCREEN_BUFFER_SIZE], buffer: &mut [u8], pitch: usize) {
     for y in 0..SCREEN_HEIGHT {
-        for x in 0..SCREEN_HEIGHT {
+        for x in 0..SCREEN_WIDTH {
             let nes_idx = y * SCREEN_WIDTH + x;
             let color = buf[nes_idx];
             let pal_idx = color.bits() as usize * 3;
