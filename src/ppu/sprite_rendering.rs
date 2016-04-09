@@ -48,9 +48,9 @@ struct OAMEntry {
 }
 
 impl OAMEntry {
-    fn is_on_scanline(&self, scanline: u16) -> bool {
+    fn is_on_scanline(&self, reg: &PPUReg, scanline: u16) -> bool {
         let y = self.y as u16;
-        y <= scanline && scanline < y + 8
+        y <= scanline && scanline < y + reg.ppuctrl.sprite_height()
     }
 
     fn build_details(&self,
@@ -60,9 +60,23 @@ impl OAMEntry {
                      mem: &mut PPUMemory)
                      -> SpriteDetails {
         let tile_id = self.tile;
-        let fine_y_scroll = get_fine_scroll(sl, self.y as u16, self.attr.contains(FLIP_VERT));
-        let tile_table = reg.ppuctrl.sprite_table();
-        let tile = mem.read_tile_pattern(tile_id, fine_y_scroll, tile_table);
+        let fine_y_scroll = get_fine_scroll(reg.ppuctrl.sprite_height(),
+                                            sl,
+                                            self.y as u16,
+                                            self.attr.contains(FLIP_VERT));
+        let tile = if reg.ppuctrl.tall_sprites() {
+            let tile_table = (tile_id as u16 & 0b0000_0001) << 12;
+            let mut tile_id = tile_id & 0b1111_1110;
+            let mut fine_y_scroll = fine_y_scroll;
+            if fine_y_scroll >= 8 {
+                tile_id += 1;
+                fine_y_scroll -= 8;
+            }
+            mem.read_tile_pattern(tile_id, fine_y_scroll, tile_table)
+        } else {
+            let tile_table = reg.ppuctrl.sprite_table();
+            mem.read_tile_pattern(tile_id, fine_y_scroll, tile_table)
+        };
         SpriteDetails {
             idx: idx,
             x: self.x,
@@ -115,7 +129,7 @@ struct SpriteDetails {
 
 impl SpriteDetails {
     fn do_get_pixel(&self, x: u16) -> (SpritePriority, PaletteIndex) {
-        let fine_x = get_fine_scroll(x, self.x as u16, self.attr.contains(FLIP_HORZ));
+        let fine_x = get_fine_scroll(8, x, self.x as u16, self.attr.contains(FLIP_HORZ));
         let attr = self.attr;
         let color_id = self.tile.get_color_in_pattern(fine_x as u32);
         let idx = PaletteIndex {
@@ -210,10 +224,10 @@ impl Default for SpriteRenderer {
     }
 }
 
-fn get_fine_scroll(screen_dist: u16, sprite_dist: u16, flip: bool) -> u16 {
+fn get_fine_scroll(size: u16, screen_dist: u16, sprite_dist: u16, flip: bool) -> u16 {
     let scroll = screen_dist - sprite_dist;
     if flip {
-        7 - scroll
+        (size - 1) - scroll
     } else {
         scroll
     }
@@ -241,7 +255,7 @@ impl SpriteRenderer {
         *secondary_oam_line = [Default::default(); 8];
         for x in 0..64 {
             let oam = &self.primary_oam[x];
-            if oam.is_on_scanline(scanline) {
+            if oam.is_on_scanline(reg, scanline) {
                 secondary_oam_line[n] = oam.build_details(x, scanline, reg, mem);
                 n += 1;
                 if n == 8 {

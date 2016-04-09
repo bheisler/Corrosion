@@ -45,6 +45,18 @@ impl PPUCtrl {
     pub fn generate_vblank_nmi(&self) -> bool {
         self.bits & 0b1000_0000 != 0
     }
+
+    pub fn tall_sprites(&self) -> bool {
+        self.bits & 0b0010_0000 != 0
+    }
+
+    pub fn sprite_height(&self) -> u16 {
+        if self.tall_sprites() {
+            16
+        } else {
+            8
+        }
+    }
 }
 
 bitflags! {
