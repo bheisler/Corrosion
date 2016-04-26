@@ -22,7 +22,7 @@ pub fn new(params: MapperParams) -> Box<Mapper> {
 }
 
 impl Mapper for Mapper000 {
-    fn prg_read(&self, idx: u16) -> u8 {
+    fn prg_read(&mut self, idx: u16) -> u8 {
         match idx {
             0x6000...0x7FFF => self.prg_ram[((idx - 0x6000) as usize % self.prg_ram.len())],
             0x8000...0xFFFF => self.prg_rom[((idx - 0x8000) as usize % self.prg_rom.len())],
@@ -41,7 +41,7 @@ impl Mapper for Mapper000 {
         }
     }
 
-    fn chr_read(&self, idx: u16) -> u8 {
+    fn chr_read(&mut self, idx: u16) -> u8 {
         if self.chr_rom.len() == 0 {
             self.chr_ram[idx as usize % self.chr_ram.len()]
         } else {

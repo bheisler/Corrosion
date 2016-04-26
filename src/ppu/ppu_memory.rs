@@ -80,7 +80,7 @@ impl MemSegment for PPUMemory {
     fn read(&mut self, idx: u16) -> u8 {
         match idx {
             0x0000...0x1FFF => {
-                let cart = self.cart.borrow_mut();
+                let mut cart = self.cart.borrow_mut();
                 cart.chr_read(idx)
             }
             0x2000...0x3EFF => self.read_bypass_palette(idx),

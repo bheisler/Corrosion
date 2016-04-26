@@ -98,7 +98,7 @@ impl MemSegment for CpuMemory {
             0x4000...0x4015 => 0,
             0x4016...0x4017 => self.io.read(idx),
             0x4018...0x4019 => 0,
-            0x4020...0xFFFF => self.cart.borrow().prg_read(idx),
+            0x4020...0xFFFF => self.cart.borrow_mut().prg_read(idx),
             x => invalid_address!(x),
         }
     }

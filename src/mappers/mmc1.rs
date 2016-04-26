@@ -1,4 +1,6 @@
 use super::*;
+use memory::MemSegment;
+use super::volatile::VolatileRam;
 
 #[derive(Debug, Clone, PartialEq)]
 struct Ctrl {
@@ -18,7 +20,7 @@ impl Ctrl {
             0 | 1 => PrgMode::Switch32Kb,
             2 => PrgMode::FixFirst,
             3 => PrgMode::FixLast,
-            x => panic!("Can't happen."),
+            _ => panic!("Can't happen."),
         }
     }
 }
@@ -41,7 +43,7 @@ struct MMC1 {
     prg_rom: Box<[u8]>,
     chr_rom: Box<[u8]>,
     chr_ram: Box<[u8]>,
-    prg_ram: Box<[u8]>,
+    prg_ram: Box<MemSegment>,
 }
 
 impl MMC1 {
@@ -60,13 +62,12 @@ impl MMC1 {
             PrgMode::FixLast => (self.prg_rom.len() / 0x4000) as u8 - 1,
         }
     }
+}
 
-    fn prg_ram_addr(&self, idx: u16) -> usize {
-        let addr = idx as usize;
-        let addr = addr - 0x6000;
-        let addr = addr % self.prg_ram.len();
-        addr
-    }
+fn prg_ram_addr(idx: u16) -> u16 {
+    let addr = idx;
+    let addr = addr - 0x6000;
+    addr
 }
 
 pub fn new(params: MapperParams) -> Box<Mapper> {
@@ -87,14 +88,14 @@ pub fn new(params: MapperParams) -> Box<Mapper> {
         prg_rom: params.prg_rom.into_boxed_slice(),
         chr_rom: params.chr_rom.into_boxed_slice(),
         chr_ram: chr_ram,
-        prg_ram: vec![0u8; params.prg_ram_size].into_boxed_slice(),
+        prg_ram: Box::new(VolatileRam::new(params.prg_ram_size as usize)),
     })
 }
 
 impl Mapper for MMC1 {
-    fn prg_read(&self, idx: u16) -> u8 {
+    fn prg_read(&mut self, idx: u16) -> u8 {
         let bank = match idx {
-            0x6000...0x7FFF => return self.prg_ram[self.prg_ram_addr(idx)],
+            0x6000...0x7FFF => return self.prg_ram.read(prg_ram_addr(idx)),
             0x8000...0xBFFF => self.first_bank(),
             0xC000...0xFFFF => self.second_bank(),
             x => invalid_address!(x),
@@ -113,7 +114,7 @@ impl Mapper for MMC1 {
 
     fn prg_write(&mut self, idx: u16, val: u8) {
         if 0x6000 <= idx && idx <= 0x7FFF {
-            self.prg_ram[self.prg_ram_addr(idx)] = val;
+            self.prg_ram.write(prg_ram_addr(idx), val);
             return;
         }
 
@@ -141,7 +142,7 @@ impl Mapper for MMC1 {
         }
     }
 
-    fn chr_read(&self, idx: u16) -> u8 {
+    fn chr_read(&mut self, idx: u16) -> u8 {
         self.chr_ram[idx as usize]
     }
 

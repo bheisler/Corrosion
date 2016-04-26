@@ -54,13 +54,13 @@ quick_error! {
 }
 
 impl Cart {
-    pub fn prg_read(&self, idx: u16) -> u8 {
+    pub fn prg_read(&mut self, idx: u16) -> u8 {
         self.mapper.prg_read(idx)
     }
     pub fn prg_write(&mut self, idx: u16, val: u8) {
         self.mapper.prg_write(idx, val)
     }
-    pub fn chr_read(&self, idx: u16) -> u8 {
+    pub fn chr_read(&mut self, idx: u16) -> u8 {
         self.mapper.chr_read(idx)
     }
     pub fn chr_write(&mut self, idx: u16, val: u8) {
@@ -100,6 +100,8 @@ impl Cart {
             chr_rom: chr_rom,
 
             prg_ram_size: prg_ram_size,
+
+            rom_path: path,
         };
 
         let mapper = Mapper::new(mapper as u16, params);
