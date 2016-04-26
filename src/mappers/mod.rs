@@ -1,4 +1,5 @@
 mod mapper000;
+mod mmc1;
 
 use super::memory::MemSegment;
 
@@ -32,6 +33,7 @@ impl Mapper {
     pub fn new(id: u16, params: MapperParams) -> Box<Mapper> {
         match id {
             0 => mapper000::new(params),
+            1 => mmc1::new(params),
             m => panic!("Unsupported Mapper: {}", m),
         }
     }
