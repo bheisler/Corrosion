@@ -1,4 +1,5 @@
 mod volatile;
+mod battery;
 
 mod mapper000;
 mod mmc1;
@@ -18,7 +19,10 @@ pub struct MapperParams<'a> {
     pub chr_rom: Vec<u8>,
 
     pub prg_ram_size: usize,
-    pub rom_path: &'a Path
+
+    pub rom_path: &'a Path,
+
+    pub has_battery_backed_ram: bool,
 }
 
 impl<'a> MapperParams<'a> {

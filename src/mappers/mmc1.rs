@@ -1,6 +1,7 @@
 use super::*;
 use memory::MemSegment;
 use super::volatile::VolatileRam;
+use super::battery::BatteryBackedRam;
 
 #[derive(Debug, Clone, PartialEq)]
 struct Ctrl {
@@ -76,6 +77,13 @@ pub fn new(params: MapperParams) -> Box<Mapper> {
     } else {
         vec![0u8; 0].into_boxed_slice()
     };
+
+    let prg_ram: Box<MemSegment> = if params.has_battery_backed_ram {
+        Box::new(BatteryBackedRam::new(params.rom_path, params.prg_ram_size as u32).unwrap())
+    } else {
+        Box::new(VolatileRam::new(params.prg_ram_size as usize))
+    };
+
     Box::new(MMC1 {
         regs: Regs {
             control: Ctrl { val: 0x0C },
@@ -88,7 +96,7 @@ pub fn new(params: MapperParams) -> Box<Mapper> {
         prg_rom: params.prg_rom.into_boxed_slice(),
         chr_rom: params.chr_rom.into_boxed_slice(),
         chr_ram: chr_ram,
-        prg_ram: Box::new(VolatileRam::new(params.prg_ram_size as usize)),
+        prg_ram: prg_ram,
     })
 }
 

@@ -3,9 +3,11 @@ extern crate bitflags;
 
 #[macro_use]
 extern crate quick_error;
+
 extern crate sdl2;
 extern crate stopwatch;
 extern crate blip_buf;
+extern crate memmap;
 
 pub mod cart;
 pub mod memory;

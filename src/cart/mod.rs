@@ -93,6 +93,7 @@ impl Cart {
         let screen_mode = rom.screen_mode();
         let system = rom.system();
         let tv = rom.tv_system();
+        let sram = rom.sram();
         let (prg_rom, chr_rom, prg_ram_size) = (rom.prg_rom, rom.chr_rom, rom.prg_ram_size);
 
         let params = MapperParams {
@@ -102,6 +103,8 @@ impl Cart {
             prg_ram_size: prg_ram_size,
 
             rom_path: path,
+
+            has_battery_backed_ram: sram,
         };
 
         let mapper = Mapper::new(mapper as u16, params);
