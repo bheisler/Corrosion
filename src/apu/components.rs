@@ -163,6 +163,10 @@ impl Timer {
         self.period = (self.period & 0x00FF) | (val as u16 & 0x0007) << 8;
     }
 
+    pub fn set_period(&mut self, period: u16) {
+        self.period = period;
+    }
+
     pub fn add_period_shift(&mut self, shift: i16) {
         let new_period = (self.period as i16).wrapping_add(shift);
         self.period = new_period as u16;

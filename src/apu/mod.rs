@@ -86,7 +86,7 @@ impl APU {
             square1: Square::new(false, Waveform::new(square_buffer.clone(), VOLUME_MULT)),
             square2: Square::new(true, Waveform::new(square_buffer.clone(), VOLUME_MULT)),
             triangle: Triangle::new(Waveform::new(tnd_buffer.clone(), VOLUME_MULT)),
-            noise: Noise::new(),
+            noise: Noise::new(Waveform::new(tnd_buffer.clone(), VOLUME_MULT)),
             dmc: DMC::new(),
             frame: Frame::empty(),
 
