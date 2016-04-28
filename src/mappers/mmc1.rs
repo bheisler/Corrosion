@@ -42,7 +42,6 @@ struct MMC1 {
     write_counter: u8,
 
     prg_rom: Box<[u8]>,
-    chr_rom: Box<[u8]>,
     chr_ram: Box<[u8]>,
     prg_ram: Box<MemSegment>,
 }
@@ -94,7 +93,6 @@ pub fn new(params: MapperParams) -> Box<Mapper> {
         accumulator: 0,
         write_counter: 0,
         prg_rom: params.prg_rom.into_boxed_slice(),
-        chr_rom: params.chr_rom.into_boxed_slice(),
         chr_ram: chr_ram,
         prg_ram: prg_ram,
     })

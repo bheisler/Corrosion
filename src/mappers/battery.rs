@@ -1,4 +1,4 @@
-use std::fs::{File, OpenOptions};
+use std::fs::OpenOptions;
 use std::io::Write;
 use std::io;
 use std::path::Path;
@@ -45,6 +45,6 @@ impl MemSegment for BatteryBackedRam {
     fn write(&mut self, idx: u16, val: u8) {
         let addr = self.wrap_addr(idx);
         self.slice()[addr] = val;
-        self.file.flush_async();
+        self.file.flush_async().unwrap();
     }
 }
