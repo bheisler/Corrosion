@@ -1,0 +1,10 @@
+[package]
+name = "corrosion-app"
+version = "0.1.0"
+authors = ["Brook Heisler <redattack34@gmail.com>"]
+
+[dependencies]
+corrosion = { path = ".." }
+
+[profile.release]
+lto = true

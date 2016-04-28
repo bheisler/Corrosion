@@ -18,10 +18,3 @@ memmap = "0.3"
 
 [dev-dependencies]
 rand = "0.3"
-
-[profile.release]
-lto = true
-
-[[bin]]
-name = "main"
-path = "src/bin/main.rs"

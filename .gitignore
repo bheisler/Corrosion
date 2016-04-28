@@ -1,7 +1,9 @@
 /target/
+/app/target/
 .project
 /.settings/
 /target-install/
+/app/target-install/
 **/*.bk
 output
 nestest*
