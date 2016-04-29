@@ -123,24 +123,25 @@ impl MemSegment for PPUMemory {
     }
 }
 
-#[cfg(tests)]
+#[cfg(test)]
 mod tests {
     use memory::MemSegment;
     use super::*;
-    use ppu::PPU;
+    use ppu::tests::*;
+    use ppu::Color;
 
     #[test]
     fn ppu_can_read_write_palette() {
         let mut ppu = create_test_ppu();
 
-        ppu.reg.ppuaddr = 0x3F00;
+        ppu.reg.v = 0x3F00;
         ppu.write(0x2007, 12);
-        ppu.reg.ppuaddr = 0x3F00;
+        ppu.reg.v = 0x3F00;
         assert_eq!(ppu.ppu_mem.palette[0], Color::from_bits_truncate(12));
 
-        ppu.reg.ppuaddr = 0x3F01;
+        ppu.reg.v = 0x3F01;
         ppu.write(0x2007, 212);
-        ppu.reg.ppuaddr = 0x3F01;
+        ppu.reg.v = 0x3F01;
         assert_eq!(ppu.read(0x2007), 212 & 0x3F);
     }
 
@@ -152,14 +153,14 @@ mod tests {
         let targets = [0x3F00, 0x3F04, 0x3F08, 0x3F0C];
         for x in 0..4 {
 
-            ppu.reg.ppuaddr = targets[x];
+            ppu.reg.v = targets[x];
             ppu.write(0x2007, 12);
-            ppu.reg.ppuaddr = mirrors[x];
+            ppu.reg.v = mirrors[x];
             assert_eq!(ppu.read(0x2007), 12);
 
-            ppu.reg.ppuaddr = mirrors[x];
+            ppu.reg.v = mirrors[x];
             ppu.write(0x2007, 12);
-            ppu.reg.ppuaddr = targets[x];
+            ppu.reg.v = targets[x];
             assert_eq!(ppu.read(0x2007), 12);
         }
     }

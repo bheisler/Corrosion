@@ -27,7 +27,7 @@ pub struct MapperParams<'a> {
 
 impl<'a> MapperParams<'a> {
     #[cfg(test)]
-    pub fn simple<'a>(rom_path: &'a Path, prg_rom: Vec<u8>, chr_rom: Vec<u8>) -> MapperParams<'a> {
+    pub fn simple(rom_path: &'a Path, prg_rom: Vec<u8>, chr_rom: Vec<u8>) -> MapperParams<'a> {
         MapperParams {
             prg_rom: prg_rom,
             chr_rom: chr_rom,
@@ -35,6 +35,8 @@ impl<'a> MapperParams<'a> {
             prg_ram_size: 0x2000,
 
             rom_path: rom_path,
+
+            has_battery_backed_ram: false,
         }
     }
 }

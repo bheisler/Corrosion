@@ -13,6 +13,7 @@ pub enum ScreenMode {
     Horizontal,
     Vertical,
     FourScreen,
+    OneScreen,
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]

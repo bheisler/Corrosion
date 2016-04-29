@@ -331,7 +331,7 @@ impl PPU {
 
     #[cfg(feature="cputrace")]
     pub fn vram_addr(&self) -> u16 {
-        self.reg.ppuaddr
+        self.reg.v
     }
 
     pub fn frame(&self) -> u32 {
@@ -396,9 +396,15 @@ mod tests {
     }
 
     pub fn create_test_ppu_with_rom(chr_rom: Vec<u8>) -> PPU {
-        let mapper = Mapper::new(0, MapperParams::simple(vec![0u8; 0x1000], chr_rom));
+        let mapper = create_test_mapper(chr_rom);
         let cart = Cart::new(mapper);
         PPU::new(Rc::new(RefCell::new(cart)), Box::new(DummyScreen::new()))
+    }
+
+    pub fn create_test_mapper(chr_rom: Vec<u8>) -> Box<Mapper> {
+        let path_buf = ::std::path::PathBuf::new();
+        let path = path_buf.as_path();
+        Mapper::new(0, MapperParams::simple(path, vec![0u8; 0x1000], chr_rom))
     }
 
     #[test]
@@ -427,11 +433,11 @@ mod tests {
         chr_rom[0x0DBA] = 212;
         let mut ppu = create_test_ppu_with_rom(chr_rom);
 
-        ppu.reg.ppuaddr = 0x0ABC;
+        ppu.reg.v = 0x0ABC;
         ppu.read(0x2007);//Dummy Read
         assert_eq!(ppu.read(0x2007), 12);
 
-        ppu.reg.ppuaddr = 0x0DBA;
+        ppu.reg.v = 0x0DBA;
         ppu.read(0x2007);//Dummy Read
         assert_eq!(ppu.read(0x2007), 212);
     }
@@ -440,22 +446,22 @@ mod tests {
     fn ppu_can_read_write_vram() {
         let mut ppu = create_test_ppu();
 
-        ppu.reg.ppuaddr = 0x2ABC;
+        ppu.reg.v = 0x2ABC;
         ppu.write(0x2007, 12);
-        ppu.reg.ppuaddr = 0x2ABC;
+        ppu.reg.v = 0x2ABC;
         ppu.read(0x2007);//Dummy read
         assert_eq!(ppu.read(0x2007), 12);
 
-        ppu.reg.ppuaddr = 0x2DBA;
+        ppu.reg.v = 0x2DBA;
         ppu.write(0x2007, 212);
-        ppu.reg.ppuaddr = 0x2DBA;
+        ppu.reg.v = 0x2DBA;
         ppu.read(0x2007);//Dummy Read
         assert_eq!(ppu.read(0x2007), 212);
 
         // Mirroring
-        ppu.reg.ppuaddr = 0x2EFC;
+        ppu.reg.v = 0x2EFC;
         ppu.write(0x2007, 128);
-        ppu.reg.ppuaddr = 0x3EFC;
+        ppu.reg.v = 0x3EFC;
         ppu.read(0x2007);//Dummy Read
         assert_eq!(ppu.read(0x2007), 128);
     }
@@ -463,30 +469,30 @@ mod tests {
     #[test]
     fn ppu_needs_no_dummy_read_for_palette_data() {
         let mut ppu = create_test_ppu();
-        ppu.reg.ppuaddr = 0x3F16;
+        ppu.reg.v = 0x3F16;
         ppu.write(0x2007, 21);
-        ppu.reg.ppuaddr = 0x3F16;
+        ppu.reg.v = 0x3F16;
         assert_eq!(ppu.read(0x2007), 21);
     }
 
     #[test]
     fn accessing_ppudata_increments_ppuaddr() {
         let mut ppu = create_test_ppu();
-        ppu.reg.ppuaddr = 0x2000;
+        ppu.reg.v = 0x2000;
         ppu.read(0x2007);
-        assert_eq!(ppu.reg.ppuaddr, 0x2001);
+        assert_eq!(ppu.reg.v, 0x2001);
         ppu.write(0x2007, 0);
-        assert_eq!(ppu.reg.ppuaddr, 0x2002);
+        assert_eq!(ppu.reg.v, 0x2002);
     }
 
     #[test]
     fn accessing_ppudata_increments_ppuaddr_by_32_when_ctrl_flag_is_set() {
         let mut ppu = create_test_ppu();
         ppu.reg.ppuctrl = PPUCtrl::new(0b0000_0100);
-        ppu.reg.ppuaddr = 0x2000;
+        ppu.reg.v = 0x2000;
         ppu.read(0x2007);
-        assert_eq!(ppu.reg.ppuaddr, 0x2020);
+        assert_eq!(ppu.reg.v, 0x2020);
         ppu.write(0x2007, 0);
-        assert_eq!(ppu.reg.ppuaddr, 0x2040);
+        assert_eq!(ppu.reg.v, 0x2040);
     }
 }

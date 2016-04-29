@@ -127,8 +127,10 @@ mod tests {
     use audio::DummyAudioOut;
 
     fn create_test_memory() -> CpuMemory {
+        let path_buf = ::std::path::PathBuf::new();
+        let path = path_buf.as_path();
         let nrom = Mapper::new(0,
-                               MapperParams::simple(vec!(0u8; 0x4000), vec!(0u8; 0x4000)));
+                               MapperParams::simple(path, vec!(0u8; 0x4000), vec!(0u8; 0x4000)));
         let cart = ::cart::Cart::new(nrom);
         let cart = Rc::new(RefCell::new(cart));
         let ppu = ::ppu::PPU::new(cart.clone(), Box::new(DummyScreen::new()));

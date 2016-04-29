@@ -64,16 +64,22 @@ mod tests {
 
     #[test]
     fn test_can_create_mapper_0() {
-        new(MapperParams::simple(vec![], vec![]));
+        let path_buf = ::std::path::PathBuf::new();
+        let path = path_buf.as_path();
+        new(MapperParams::simple(path, vec![], vec![]));
     }
 
     fn create_test_mapper() -> Box<Mapper> {
-        new(MapperParams::simple(vec!(0u8; 0x4000), vec!(0u8; 0x4000)))
+        let path_buf = ::std::path::PathBuf::new();
+        let path = path_buf.as_path();
+        new(MapperParams::simple(path, vec!(0u8; 0x4000), vec!(0u8; 0x4000)))
     }
 
     #[test]
     fn test_prg_ram_read_write() {
-        let mut params = MapperParams::simple(vec!(0u8; 0x4000), vec!(0u8; 0x4000));
+        let path_buf = ::std::path::PathBuf::new();
+        let path = path_buf.as_path();
+        let mut params = MapperParams::simple(path, vec!(0u8; 0x4000), vec!(0u8; 0x4000));
         params.prg_ram_size = 0x1000;
         let mut nrom = new(params);
         nrom.prg_write(0x6111, 15);
@@ -85,19 +91,23 @@ mod tests {
 
     #[test]
     fn test_prg_rom_read() {
+        let path_buf = ::std::path::PathBuf::new();
+        let path = path_buf.as_path();
         let prg_rom: Vec<_> = (0..0x4000)
                                   .map(|val| (val % 0xFF) as u8)
                                   .collect();
-        let mapper = new(MapperParams::simple(prg_rom, vec!(0u8; 0x4000)));
+        let mut mapper = new(MapperParams::simple(path, prg_rom, vec!(0u8; 0x4000)));
 
         assert_eq!(mapper.prg_read(0x8111), mapper.prg_read(0xC111));
     }
 
     #[test]
     fn test_prg_rom_mirroring() {
+        let path_buf = ::std::path::PathBuf::new();
+        let path = path_buf.as_path();
         let mut prg_rom: Vec<_> = vec!(0u8; 0x4000);
         prg_rom[0x2612] = 0x15;
-        let mapper = new(MapperParams::simple(prg_rom, vec!(0u8; 0x1000)));
+        let mut mapper = new(MapperParams::simple(path, prg_rom, vec!(0u8; 0x1000)));
         assert_eq!(mapper.prg_read(0xA612), 0x15);
     }
 
@@ -111,10 +121,12 @@ mod tests {
 
     #[test]
     fn test_chr_rom_read() {
+        let path_buf = ::std::path::PathBuf::new();
+        let path = path_buf.as_path();
         let chr_rom: Vec<_> = (0..0x2000)
                                   .map(|val| (val % 0xFF) as u8)
                                   .collect();
-        let mapper = new(MapperParams::simple(vec!(0u8; 0x4000), chr_rom));
+        let mut mapper = new(MapperParams::simple(path, vec!(0u8; 0x4000), chr_rom));
 
         assert_eq!(mapper.prg_read(0x8111), mapper.prg_read(0xC111));
     }
