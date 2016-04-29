@@ -1,5 +1,5 @@
 use memory::MemSegment;
-use cart::Cart;
+use cart::{Cart, ScreenMode};
 use std::rc::Rc;
 use std::cell::RefCell;
 use super::Color;
@@ -9,16 +9,28 @@ use super::TilePattern;
 ///Represents the PPU's memory map.
 pub struct PPUMemory {
     cart: Rc<RefCell<Cart>>,
-    vram: [u8; 0x0800],
+    vram: [u8; 0x0F00],
     palette: [Color; 0x20],
+    nametable_addrs: [u16; 4],
+}
+
+fn get_nametable_addrs(mode: ScreenMode) -> [u16; 4] {
+    match mode {
+        ScreenMode::Vertical => [0x2000, 0x2400, 0x2000, 0x2400],
+        ScreenMode::Horizontal => [0x2000, 0x2000, 0x2800, 0x2800],
+        ScreenMode::OneScreen => [0x2000, 0x2000, 0x2000, 0x2000],
+        ScreenMode::FourScreen => [0x2000, 0x2400, 0x2800, 0x2C00],
+    }
 }
 
 impl PPUMemory {
     pub fn new(cart: Rc<RefCell<Cart>>) -> PPUMemory {
+        let mode = cart.borrow().mode;
         PPUMemory {
             cart: cart,
-            vram: [0u8; 0x0800],
+            vram: [0u8; 0x0F00],
             palette: [Color::from_bits_truncate(0); 0x20],
+            nametable_addrs: get_nametable_addrs(mode),
         }
     }
 }
@@ -39,8 +51,11 @@ impl PPUMemory {
     }
 
     fn translate_vram_address(&self, idx: u16) -> usize {
-        let translated = idx & 0x0FFF & self.cart.borrow().vram_mask();
-        translated as usize % 2048
+        let idx = idx & 0x0FFF;
+        let nametable_num = (idx / 0x0400) as usize;
+        let idx_in_nametable = idx % 0x400;
+        let translated = self.nametable_addrs[nametable_num] + idx_in_nametable;
+        translated as usize % self.vram.len()
     }
 
     pub fn read_palette(&mut self, idx: PaletteIndex) -> Color {
@@ -126,9 +141,9 @@ impl MemSegment for PPUMemory {
 #[cfg(test)]
 mod tests {
     use memory::MemSegment;
-    use super::*;
     use ppu::tests::*;
-    use ppu::Color;
+    use ppu::{Color, PPU};
+    use cart::ScreenMode;
 
     #[test]
     fn ppu_can_read_write_palette() {
@@ -163,5 +178,86 @@ mod tests {
             ppu.reg.v = targets[x];
             assert_eq!(ppu.read(0x2007), 12);
         }
+    }
+
+    fn to_nametable_idx(idx: u16, tbl: u16) -> u16 {
+        0x2000 + (0x0400 * tbl) + idx
+    }
+
+    fn assert_mirrored(ppu: &mut PPU, tbl1: u16, tbl2: u16) {
+        for idx in 0x0000..0x0400 {
+            let tbl1_idx = to_nametable_idx(idx, tbl1);
+            let tbl2_idx = to_nametable_idx(idx, tbl2);
+
+            println!("Translated: tbl1: {:04X}, tbl2: {:04X}",
+                ppu.ppu_mem.translate_vram_address(tbl1_idx),
+                ppu.ppu_mem.translate_vram_address(tbl2_idx),
+            );
+
+            ppu.ppu_mem.write(tbl1_idx, 0xFF);
+            assert_eq!(0xFF, ppu.ppu_mem.read(tbl2_idx));
+
+            ppu.ppu_mem.write(tbl2_idx, 0x61);
+            assert_eq!(0x61, ppu.ppu_mem.read(tbl1_idx));
+        }
+    }
+
+    fn assert_not_mirrored(ppu: &mut PPU, tbl1: u16, tbl2: u16) {
+        for idx in 0x0000..0x0400 {
+            let tbl1_idx = to_nametable_idx(idx, tbl1);
+            let tbl2_idx = to_nametable_idx(idx, tbl2);
+
+            println!("Translated: tbl1: {:04X}, tbl2: {:04X}",
+                ppu.ppu_mem.translate_vram_address(tbl1_idx),
+                ppu.ppu_mem.translate_vram_address(tbl2_idx),
+            );
+
+            ppu.ppu_mem.write(tbl1_idx, 0x00);
+            ppu.ppu_mem.write(tbl2_idx, 0x00);
+
+            ppu.ppu_mem.write(tbl1_idx, 0xFF);
+            assert_eq!(0x00, ppu.ppu_mem.read(tbl2_idx));
+
+            ppu.ppu_mem.write(tbl2_idx, 0x61);
+            assert_eq!(0xFF, ppu.ppu_mem.read(tbl1_idx));
+        }
+    }
+
+    #[test]
+    fn single_screen_mirroring_mirrors_both_ways() {
+        let mut ppu = create_test_ppu_with_mirroring(ScreenMode::OneScreen);
+
+        assert_mirrored(&mut ppu, 0, 1);
+        assert_mirrored(&mut ppu, 1, 2);
+        assert_mirrored(&mut ppu, 2, 3);
+    }
+
+    #[test]
+    fn four_screen_mirroring_mirrors_both_ways() {
+        let mut ppu = create_test_ppu_with_mirroring(ScreenMode::FourScreen);
+
+        assert_not_mirrored(&mut ppu, 0, 1);
+        assert_not_mirrored(&mut ppu, 1, 2);
+        assert_not_mirrored(&mut ppu, 2, 3);
+    }
+
+    #[test]
+    fn horizontal_mirroring_mirrors_horizontally() {
+        let mut ppu = create_test_ppu_with_mirroring(ScreenMode::Horizontal);
+
+        assert_mirrored(&mut ppu, 0, 1);
+        assert_mirrored(&mut ppu, 2, 3);
+        assert_not_mirrored(&mut ppu, 0, 2);
+        assert_not_mirrored(&mut ppu, 1, 3);
+    }
+
+    #[test]
+    fn vertical_mirroring_mirrors_vertically() {
+        let mut ppu = create_test_ppu_with_mirroring(ScreenMode::Vertical);
+
+        assert_not_mirrored(&mut ppu, 0, 1);
+        assert_not_mirrored(&mut ppu, 2, 3);
+        assert_mirrored(&mut ppu, 0, 2);
+        assert_mirrored(&mut ppu, 1, 3);
     }
 }

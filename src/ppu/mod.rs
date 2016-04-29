@@ -386,7 +386,7 @@ mod tests {
     use mappers::{Mapper, MapperParams};
     use std::rc::Rc;
     use std::cell::RefCell;
-    use cart::Cart;
+    use cart::{Cart, ScreenMode};
     use screen::DummyScreen;
     use ppu::ppu_reg::PPUCtrl;
     use memory::MemSegment;
@@ -405,6 +405,13 @@ mod tests {
         let path_buf = ::std::path::PathBuf::new();
         let path = path_buf.as_path();
         Mapper::new(0, MapperParams::simple(path, vec![0u8; 0x1000], chr_rom))
+    }
+
+    pub fn create_test_ppu_with_mirroring(mode: ScreenMode) -> PPU {
+        let mapper = create_test_mapper(vec![0u8; 0x1000]);
+        let mut cart = Cart::new(mapper);
+        cart.mode = mode;
+        PPU::new(Rc::new(RefCell::new(cart)), Box::new(DummyScreen::new()))
     }
 
     #[test]

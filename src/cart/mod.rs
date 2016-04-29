@@ -67,13 +67,6 @@ impl Cart {
     pub fn chr_write(&mut self, idx: u16, val: u8) {
         self.mapper.chr_write(idx, val)
     }
-    pub fn vram_mask(&self) -> u16 {
-        match self.mode {
-            ScreenMode::Horizontal => 0xFBFF,
-            ScreenMode::Vertical => 0xF7FF,
-            _ => panic!("unsupported mirroring mode."),
-        }
-    }
 
     pub fn new(mapper: Box<Mapper>) -> Cart {
         Cart {
