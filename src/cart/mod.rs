@@ -13,7 +13,8 @@ pub enum ScreenMode {
     Horizontal,
     Vertical,
     FourScreen,
-    OneScreen,
+    OneScreenLow,
+    OneScreenHigh,
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -31,7 +32,6 @@ pub enum TvFormat {
 
 pub struct Cart {
     mapper: Box<Mapper>,
-    pub mode: ScreenMode,
     pub system: System,
     pub tv: TvFormat,
 }
@@ -71,10 +71,13 @@ impl Cart {
     pub fn new(mapper: Box<Mapper>) -> Cart {
         Cart {
             mapper: mapper,
-            mode: ScreenMode::Horizontal,
             system: System::NES,
             tv: TvFormat::NTSC,
         }
+    }
+
+    pub fn get_mirroring_mode(&self) -> ScreenMode {
+        self.mapper.get_mirroring_mode()
     }
 
     pub fn read(path: &Path) -> Result<Cart, RomReadError> {
@@ -99,12 +102,12 @@ impl Cart {
             rom_path: path,
 
             has_battery_backed_ram: sram,
+            mirroring_mode : screen_mode,
         };
 
         let mapper = Mapper::new(mapper as u16, params);
         Ok(Cart {
             mapper: mapper,
-            mode: screen_mode,
             system: system,
             tv: tv,
         })

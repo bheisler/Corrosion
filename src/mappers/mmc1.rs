@@ -2,10 +2,12 @@ use super::*;
 use memory::MemSegment;
 use super::volatile::VolatileRam;
 use super::battery::BatteryBackedRam;
+use cart::ScreenMode;
 
 #[derive(Debug, Clone, PartialEq)]
 struct Ctrl {
-    val: u8,
+    mode: PrgMode,
+    mirroring: ScreenMode, // TODO: Add chr mode
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -13,17 +15,6 @@ enum PrgMode {
     Switch32Kb,
     FixFirst,
     FixLast,
-}
-
-impl Ctrl {
-    fn prg_mode(&self) -> PrgMode {
-        match (self.val & 0x0C) >> 2 {
-            0 | 1 => PrgMode::Switch32Kb,
-            2 => PrgMode::FixFirst,
-            3 => PrgMode::FixLast,
-            _ => panic!("Can't happen."),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -48,7 +39,7 @@ struct MMC1 {
 
 impl MMC1 {
     fn first_bank(&self) -> u8 {
-        match self.regs.control.prg_mode() {
+        match self.regs.control.mode {
             PrgMode::Switch32Kb => self.regs.prg_bank & 0b0001_1110,
             PrgMode::FixFirst => 0,
             PrgMode::FixLast => self.regs.prg_bank,
@@ -56,7 +47,7 @@ impl MMC1 {
     }
 
     fn second_bank(&self) -> u8 {
-        match self.regs.control.prg_mode() {
+        match self.regs.control.mode {
             PrgMode::Switch32Kb => self.regs.prg_bank | 1,
             PrgMode::FixFirst => self.regs.prg_bank,
             PrgMode::FixLast => (self.prg_rom.len() / 0x4000) as u8 - 1,
@@ -85,7 +76,10 @@ pub fn new(params: MapperParams) -> Box<Mapper> {
 
     Box::new(MMC1 {
         regs: Regs {
-            control: Ctrl { val: 0x0C },
+            control: Ctrl {
+                mode: PrgMode::FixLast,
+                mirroring: ScreenMode::OneScreenLow,
+            },
             chr_0: 0,
             chr_1: 0,
             prg_bank: 0,
@@ -107,14 +101,6 @@ impl Mapper for MMC1 {
             x => invalid_address!(x),
         };
         let address = (bank as usize * 0x4000) | (idx as usize & 0x3FFF);
-        if address > self.prg_rom.len() {
-            println!("{:?}, {:?}, bank={:02X}, idx={:04X} = {}",
-                     self.regs,
-                     self.regs.control.prg_mode(),
-                     bank,
-                     idx,
-                     address);
-        }
         self.prg_rom[address]
     }
 
@@ -127,7 +113,10 @@ impl Mapper for MMC1 {
         if val & 0b1000_0000 != 0 {
             self.accumulator = 0;
             self.write_counter = 0;
-            self.regs.control.val = 0x0C;
+            self.regs.control = Ctrl {
+                mode: PrgMode::FixLast,
+                mirroring: ScreenMode::OneScreenLow,
+            };
             return;
         }
 
@@ -137,7 +126,26 @@ impl Mapper for MMC1 {
         if self.write_counter == 5 {
 
             match idx {
-                0x8000...0x9FFF => self.regs.control.val = self.accumulator,
+                0x8000...0x9FFF => {
+                    let val = self.accumulator;
+                    let mode = match (val & 0x0C) >> 2 {
+                        0 | 1 => PrgMode::Switch32Kb,
+                        2 => PrgMode::FixFirst,
+                        3 => PrgMode::FixLast,
+                        _ => panic!("Can't happen."),
+                    };
+                    let mirroring = match val & 0x03 {
+                        0 => ScreenMode::OneScreenLow,
+                        1 => ScreenMode::OneScreenHigh,
+                        2 => ScreenMode::Vertical,
+                        3 => ScreenMode::Horizontal,
+                        _ => panic!("Can't happen."),
+                    };
+                    self.regs.control = Ctrl {
+                        mode: mode,
+                        mirroring: mirroring,
+                    };
+                }
                 0xA000...0xBFFF => self.regs.chr_0 = self.accumulator,
                 0xC000...0xDFFF => self.regs.chr_1 = self.accumulator,
                 0xE000...0xFFFF => self.regs.prg_bank = self.accumulator,
@@ -154,5 +162,9 @@ impl Mapper for MMC1 {
 
     fn chr_write(&mut self, idx: u16, val: u8) {
         self.chr_ram[idx as usize] = val;
+    }
+
+    fn get_mirroring_mode(&self) -> ScreenMode {
+        self.regs.control.mirroring
     }
 }

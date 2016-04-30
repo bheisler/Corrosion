@@ -6,12 +6,15 @@ mod mmc1;
 
 use super::memory::MemSegment;
 use std::path::Path;
+use cart::ScreenMode;
 
 pub trait Mapper {
     fn prg_read(&mut self, idx: u16) -> u8;
     fn prg_write(&mut self, idx: u16, val: u8);
     fn chr_read(&mut self, idx: u16) -> u8;
     fn chr_write(&mut self, idx: u16, val: u8);
+
+    fn get_mirroring_mode(&self) -> ScreenMode;
 }
 
 pub struct MapperParams<'a> {
@@ -23,6 +26,7 @@ pub struct MapperParams<'a> {
     pub rom_path: &'a Path,
 
     pub has_battery_backed_ram: bool,
+    pub mirroring_mode: ScreenMode,
 }
 
 impl<'a> MapperParams<'a> {
