@@ -188,14 +188,16 @@ impl BackgroundRenderer {
         let pixel_line = &mut self.background_buffer[line_start..line_stop];
 
         for pixel in start..stop {
-            let displayed_pixel = pixel + reg.scroll_x_fine() as usize;
+            let fine_x_scroll = reg.scroll_x_fine();
+            let displayed_pixel = pixel + fine_x_scroll as usize;
             let tile_idx = displayed_pixel / 8;
             let pattern = pattern_line[tile_idx];
             let fine_x = displayed_pixel as u32 & 0x07;
             let color_id = pattern.get_color_in_pattern(fine_x);
 
             let attr = attr_line[tile_idx];
-            let palette_id = attr.get_palette(pixel as u16, scanline as u16);
+            let palette_id = attr.get_palette(pixel as u16 + reg.get_scroll_x() as u16,
+                                              scanline as u16 + reg.get_scroll_y() as u16);
 
             pixel_line[pixel] = PaletteIndex {
                 set: PaletteSet::Background,

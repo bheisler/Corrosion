@@ -102,6 +102,11 @@ pub struct PPUReg {
     pub v: u16,
     pub x: u8,
 
+    // Normally the scroll values are stored in pieces in t and x. We need the whole values during
+    // rendering though, so we keep them here to avoid complicated bit-hacking.
+    scroll_x: u8,
+    scroll_y: u8,
+
     ///A fake dynamic latch representing the capacitance of the wires in the
     ///PPU that we have to emulate.
     dyn_latch: u8,
@@ -128,6 +133,14 @@ impl PPUReg {
         self.oamaddr = self.oamaddr.wrapping_add(1);
     }
 
+    pub fn get_scroll_x(&self) -> u8 {
+        self.scroll_x
+    }
+
+    pub fn get_scroll_y(&self) -> u8 {
+        self.scroll_y
+    }
+
     fn set_coarse_x(&mut self, val: u8) {
         let coarse_x = val >> 3;
         self.t = self.t & 0b111_11_11111_00000 | coarse_x as u16;
@@ -150,7 +163,6 @@ impl PPUReg {
     fn set_addr_high(&mut self, val: u8) {
         let addr = val & 0b0011_1111;
         self.t = self.t & 0b_0000000_11111111 | (addr as u16) << 8;
-
     }
 
     fn set_addr_low(&mut self, val: u8) {
@@ -168,6 +180,8 @@ impl Default for PPUReg {
             t: 0,
             v: 0,
             x: 0,
+            scroll_x: 0,
+            scroll_y: 0,
             dyn_latch: 0,
             address_latch: AddrByte::High,
         }
@@ -207,11 +221,13 @@ impl MemSegment for PPUReg {
                     AddrByte::High => {
                         self.set_coarse_x(val);
                         self.set_fine_x(val);
+                        self.scroll_x = val;
                         self.address_latch = AddrByte::Low;
                     }
                     AddrByte::Low => {
                         self.set_coarse_y(val);
                         self.set_fine_y(val);
+                        self.scroll_y = val;
                         self.address_latch = AddrByte::High;
                     }
                 }
