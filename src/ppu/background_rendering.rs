@@ -24,6 +24,7 @@ impl TileAttribute {
     }
 
     fn get_palette(&self, x: u16, y: u16) -> u8 {
+        let y = y % SCREEN_HEIGHT as u16;
         let mut at = self.bits;
         if y & 0x10 != 0 {
             at >>= 4
@@ -36,6 +37,7 @@ impl TileAttribute {
 
     #[cfg(feature="mousepick")]
     fn get_palette_mask(&self, x: u16, y: u16) -> u8 {
+        let y = y % SCREEN_HEIGHT as u16;
         let mut at = 0xFF;
         if y & 0x10 != 0 {
             at &= 0b1111_0000;
