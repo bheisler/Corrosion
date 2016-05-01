@@ -7,6 +7,7 @@ authors = ["Brook Heisler <redattack34@gmail.com>"]
 default = []
 cputrace = []
 stacktrace = []
+mousepick = []
 
 [dependencies]
 bitflags = "0.5"

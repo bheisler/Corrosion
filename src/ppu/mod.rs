@@ -337,6 +337,12 @@ impl PPU {
     pub fn frame(&self) -> u32 {
         self.frame
     }
+
+    #[cfg(feature="mousepick")]
+    pub fn mouse_pick(&self, px_x: i32, px_y: i32) {
+        self.background_data.mouse_pick(&self.reg, px_x, px_y);
+        self.sprite_data.mouse_pick(px_x, px_y);
+    }
 }
 
 impl MemSegment for PPU {

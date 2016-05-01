@@ -32,6 +32,7 @@ use ppu::PPU;
 use io::IO;
 use sdl2::EventPump;
 use sdl2::event::Event;
+use sdl2::Sdl;
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -53,6 +54,18 @@ fn get_movie_file() -> Option<String> {
                .skip_while(|arg| arg != "--movie")
                .skip(1)
                .next();
+}
+
+#[cfg(feature="mousepick")]
+fn mouse_pick(sdl: &Sdl, cpu: &CPU ) {
+    let (_, scr_x, scr_y) = sdl.mouse().mouse_state();
+    let (px_x, px_y) = (scr_x / 3, scr_y / 3); //Should get this from the screen, but eh.
+    cpu.mem.ppu.mouse_pick(px_x, px_y);
+}
+
+#[cfg(not(feature="mousepick"))]
+fn mouse_pick(_: &Sdl, _: &CPU ) {
+
 }
 
 pub fn start_emulator(cart: Cart) {
@@ -84,6 +97,9 @@ pub fn start_emulator(cart: Cart) {
         cpu.run_frame();
         let current = stopwatch.elapsed().num_nanoseconds().unwrap() as f64;
         avg_frame_time = (avg_frame_time * smoothing) + (current * (1.0 - smoothing));
+
+        mouse_pick(&sdl, &cpu);
+
         println!("Frames per second:{:.*}", 2, 1000000000.0 / avg_frame_time);
         stopwatch.restart();
     }

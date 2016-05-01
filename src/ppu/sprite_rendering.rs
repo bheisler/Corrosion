@@ -330,6 +330,17 @@ impl SpriteRenderer {
          &self.priority_buffer,
          &self.sprite0_buffer)
     }
+
+    #[cfg(feature="mousepick")]
+    pub fn mouse_pick(&self, px_x: i32, px_y: i32) {
+        let scanline = px_y as usize;
+        let pixel = px_x as u8;
+        for sprite in self.secondary_oam[scanline].iter() {
+            if sprite.x <= pixel && pixel <= (sprite.x + 8) {
+                println!("{:?}", sprite);
+            }
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone)]

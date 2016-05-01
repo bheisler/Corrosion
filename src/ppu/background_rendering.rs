@@ -33,6 +33,23 @@ impl TileAttribute {
         }
         at & 0x03
     }
+
+    #[cfg(feature="mousepick")]
+    fn get_palette_mask(&self, x: u16, y: u16) -> u8 {
+        let mut at = 0xFF;
+        if y & 0x10 != 0 {
+            at &= 0b1111_0000;
+        } else {
+            at &= 0b0000_1111;
+        }
+
+        if x & 0x10 != 0 {
+            at &= 0b1100_1100;
+        } else {
+            at &= 0b0011_0011;
+        }
+        at
+    }
 }
 
 impl Default for TileAttribute {
@@ -243,6 +260,25 @@ impl BackgroundRenderer {
             println!("");
         }
         println!("");
+    }
+
+    #[cfg(feature="mousepick")]
+    pub fn mouse_pick(&self, reg: &PPUReg, px_x: i32, px_y: i32) {
+        let scanline = px_y as usize;
+        let tile = (px_x / 8) as usize;
+        let tile_id = self.idx[scanline][tile];
+        let attr = self.attr[scanline][tile];
+        let scrolled_x = px_x as u16 + reg.get_scroll_x() as u16;
+        let scrolled_y = px_y as u16 + reg.get_scroll_y() as u16;
+        let palette = attr.get_palette(scrolled_x, scrolled_y);
+        let palette_mask = attr.get_palette_mask(scrolled_x, scrolled_y);
+        println!("{:03}/{:03}: Tile: {:03}, Attribute: {:08b} & {:08b}, Palette: {}",
+                 scrolled_x / 8,
+                 scrolled_y / 8,
+                 tile_id,
+                 attr.bits,
+                 palette_mask,
+                 palette);
     }
 }
 
