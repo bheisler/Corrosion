@@ -216,8 +216,12 @@ impl PPU {
             hit_nmi |= self.run_cycle();
         }
 
-        self.background_data.render(start_px, stop_px, &self.reg);
-        self.sprite_data.render(start_px, stop_px);
+        if self.reg.ppumask.contains( S_BCK ) {
+            self.background_data.render(start_px, stop_px, &self.reg);
+        }
+        if self.reg.ppumask.contains( S_SPR ) {
+            self.sprite_data.render(start_px, stop_px);
+        }
 
         self.mix(start_px, stop_px);
         self.sprite0_test(start_px, stop_px);
@@ -277,6 +281,10 @@ impl PPU {
 
         let buf = &self.screen_buffer;
         self.screen.draw(buf);
+
+        self.background_data.clear();
+        self.sprite_data.clear();
+
         if self.frame > 0 {
             self.reg.ppustat.insert(VBLANK);
             self.reg.ppuctrl.generate_vblank_nmi()

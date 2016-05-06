@@ -235,7 +235,6 @@ fn get_fine_scroll(size: u16, screen_dist: u16, sprite_dist: u16, flip: bool) ->
 
 impl SpriteRenderer {
     pub fn render(&mut self, start: usize, stop: usize) {
-        self.clear(start, stop);
         self.draw(start, stop)
     }
 
@@ -265,14 +264,14 @@ impl SpriteRenderer {
         }
     }
 
-    fn clear(&mut self, start: usize, stop: usize) {
-        for dest in self.pixel_buffer[start..stop].iter_mut() {
+    pub fn clear(&mut self) {
+        for dest in self.pixel_buffer.iter_mut() {
             *dest = TRANSPARENT;
         }
-        for dest in self.priority_buffer[start..stop].iter_mut() {
+        for dest in self.priority_buffer.iter_mut() {
             *dest = SpritePriority::Background;
         }
-        for dest in self.sprite0_buffer[start..stop].iter_mut() {
+        for dest in self.sprite0_buffer.iter_mut() {
             *dest = false;
         }
     }

@@ -73,6 +73,12 @@ impl BackgroundRenderer {
         self.draw(reg, start_px, stop_px);
     }
 
+    pub fn clear(&mut self) {
+        for dst in self.background_buffer.iter_mut() {
+            *dst = Default::default();
+        }
+    }
+
     pub fn run_cycle(&mut self, cyc: u16, sl: i16, reg: &mut PPUReg, mem: &mut PPUMemory) {
         if !reg.ppumask.rendering_enabled() {
             return;

@@ -213,7 +213,10 @@ impl MemSegment for PPUReg {
                 self.ppuctrl = PPUCtrl::new(val & 0b1111_1100);
                 self.t = (self.t & 0b1110011_11111111) | ((val & 0b0000_0011) as u16) << 10;
             }
-            0x0001 => self.ppumask = PPUMask::from_bits_truncate(val),
+            0x0001 => {
+                self.ppumask = PPUMask::from_bits_truncate(val);
+                println!("{:?}", self.ppumask);
+            }
             0x0002 => (),
             0x0003 => self.oamaddr = val,
             0x0005 => {

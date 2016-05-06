@@ -100,7 +100,7 @@ pub fn start_emulator(cart: Cart) {
 
         mouse_pick(&sdl, &cpu);
 
-        println!("Frames per second:{:.*}", 2, 1000000000.0 / avg_frame_time);
+        //println!("Frames per second:{:.*}", 2, 1000000000.0 / avg_frame_time);
         stopwatch.restart();
     }
 }
