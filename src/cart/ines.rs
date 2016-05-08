@@ -53,7 +53,7 @@ fn read_bytes(iter: &mut Iterator<Item = u8>, bytes: usize) -> Result<Vec<u8>, R
 impl Rom {
     ///Parse the given bytes as an iNES 1.0 header.
     ///NES 2.0 is not supported yet.
-    pub fn parse(data: &Vec<u8>) -> Result<Rom, RomError> {
+    pub fn parse(data: &[u8]) -> Result<Rom, RomError> {
         let mut iter = data.iter().cloned();
         if try!(read_bytes(&mut iter, 4)) != MAGIC_NUMBERS {
             return Err(RomError::DamagedHeader);

@@ -56,13 +56,11 @@ impl MMC1 {
 }
 
 fn prg_ram_addr(idx: u16) -> u16 {
-    let addr = idx;
-    let addr = addr - 0x6000;
-    addr
+    idx - 0x6000
 }
 
 pub fn new(params: MapperParams) -> Box<Mapper> {
-    let chr_ram = if params.chr_rom.len() == 0 {
+    let chr_ram = if params.chr_rom.is_empty() {
         vec![0u8; 0x2000].into_boxed_slice()
     } else {
         vec![0u8; 0].into_boxed_slice()

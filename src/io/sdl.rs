@@ -10,7 +10,7 @@ use io::OPEN_BUS;
 use memory::MemSegment;
 use util::ShiftRegister8;
 
-const A: u8 = 1 << 0;
+const A: u8 = 1;
 const B: u8 = 1 << 1;
 const SELECT: u8 = 1 << 2;
 const START: u8 = 1 << 3;
@@ -73,7 +73,7 @@ impl IO for SdlIO {
         let pump_ref = self.event_pump.borrow();
         let state = KeyboardState::new(&*pump_ref);
 
-        let c1 = 0 |
+        let c1 =
             read_key(&state, Scancode::Z, A) |
             read_key(&state, Scancode::X, B) |
             read_key(&state, Scancode::Return, START) |

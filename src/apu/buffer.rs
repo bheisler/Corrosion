@@ -1,4 +1,5 @@
-//! Thin layer over BlipBuf which provides a slightly more convenient interface.
+//! Thin layer over `BlipBuf` which provides a slightly more convenient
+//! interface.
 
 use blip_buf::BlipBuf;
 use apu::Sample;
@@ -52,7 +53,7 @@ impl SampleBuffer {
     }
 }
 
-///Allows multiple channels to share a SampleBuffer but maintain separate waveforms.
+///Allows multiple channels to share a `SampleBuffer` but maintain separate waveforms.
 pub struct Waveform {
     buffer: Rc<RefCell<SampleBuffer>>,
     last_amp: Sample,

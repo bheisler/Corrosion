@@ -307,7 +307,7 @@ use disasm::Disassembler;
 
 /// The number of cycles that each machine operation takes. Indexed by opcode
 /// number.
-/// Copied from FCEU & SprocketNES.
+/// Copied from `FCEUX` & `SprocketNES`.
 #[cfg_attr(rustfmt, rustfmt_skip)]
 static CYCLE_TABLE: [u8; 256] = [
     /*0x00*/ 7,6,2,8,3,3,5,5,3,2,2,2,4,4,6,6,

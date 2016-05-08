@@ -21,13 +21,13 @@ impl FM2IO {
         let reader = BufReader::new(file);
         let iter = reader.lines()
                          .map(|result| result.unwrap())
-                         .skip_while(|line| !line.contains("|"))
+                         .skip_while(|line| !line.contains('|'))
                          .skip(1);
-        return Ok(FM2IO {
+        Ok(FM2IO {
             iter: Box::new(iter),
             controller1: ShiftRegister8::new(0),
             controller2: ShiftRegister8::new(0),
-        });
+        })
     }
 }
 
@@ -51,7 +51,7 @@ impl MemSegment for FM2IO {
             0x4016 => {
                 if val & 0x01 != 0 {
                     if let Some(line) = self.iter.next() {
-                        let mut split = line.split("|")
+                        let mut split = line.split('|')
                                             .skip(1)
                                             .skip(1); //Ignore the commands for now.
                         self.controller1.load(parse(split.next().unwrap()));

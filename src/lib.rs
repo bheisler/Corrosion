@@ -1,3 +1,9 @@
+#![feature(plugin)]
+#![plugin(clippy)]
+
+#![allow(new_without_default)]
+#![allow(match_same_arms)]
+
 #[macro_use]
 extern crate bitflags;
 
@@ -41,19 +47,18 @@ use stopwatch::Stopwatch;
 
 fn pump_events(pump: &Rc<RefCell<EventPump>>) -> bool {
     for event in pump.borrow_mut().poll_iter() {
-        match event {
-            Event::Quit {..} => return true,
-            _ => (),
+        if let Event::Quit {..} = event {
+            return true;
         }
     }
     false
 }
 
 fn get_movie_file() -> Option<String> {
-    return std::env::args()
+    std::env::args()
                .skip_while(|arg| arg != "--movie")
                .skip(1)
-               .next();
+               .next()
 }
 
 #[cfg(feature="mousepick")]

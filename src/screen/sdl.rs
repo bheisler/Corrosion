@@ -58,7 +58,7 @@ fn copy_to_texture(buf: &[Color; SCREEN_BUFFER_SIZE], buffer: &mut [u8], pitch: 
             let color = buf[nes_idx];
             let pal_idx = color.bits() as usize * 3;
             let offset = y * pitch + x * 3;
-            buffer[offset + 0] = PALETTE[pal_idx + 0];
+            buffer[offset] = PALETTE[pal_idx];
             buffer[offset + 1] = PALETTE[pal_idx + 1];
             buffer[offset + 2] = PALETTE[pal_idx + 2];
         }

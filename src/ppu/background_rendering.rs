@@ -212,7 +212,7 @@ impl BackgroundRenderer {
         let attr_line = &self.attr[scanline];
         let pixel_line = &mut self.background_buffer[line_start..line_stop];
 
-        for pixel in start..stop {
+        for (pixel, item) in pixel_line.iter_mut().enumerate().take(stop).skip(start) {
             let fine_x_scroll = reg.scroll_x_fine();
             let displayed_pixel = pixel + fine_x_scroll as usize;
             let tile_idx = displayed_pixel / 8;
@@ -224,7 +224,7 @@ impl BackgroundRenderer {
             let palette_id = attr.get_palette(pixel as u16 + reg.get_scroll_x() as u16,
                                               scanline as u16 + reg.get_scroll_y() as u16);
 
-            pixel_line[pixel] = PaletteIndex {
+            *item = PaletteIndex {
                 set: PaletteSet::Background,
                 palette_id: palette_id,
                 color_id: color_id,

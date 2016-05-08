@@ -27,7 +27,7 @@ impl LinearFeedbackShiftRegister {
         let new_bit = bit0 ^ bit1;
 
         self.value = (self.value >> 1) | (new_bit << 14);
-        return self.value & 0x01 == 1;
+        self.value & 0x01 == 1
     }
 
     fn other_bit(&self) -> u16 {
@@ -103,7 +103,6 @@ impl Writable for Noise {
                 self.length.write_halt(val);
                 self.envelope.write(val);
             }
-            1 => (),
             2 => {
                 let mode = (val & 0b1000_0000) >> 7;
                 self.shifter.set_mode(mode);

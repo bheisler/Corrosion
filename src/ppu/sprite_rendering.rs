@@ -137,7 +137,7 @@ impl SpriteDetails {
             palette_id: attr.palette(),
             color_id: color_id,
         };
-        return (attr.priority(), idx);
+        (attr.priority(), idx)
     }
 
     fn blit(&self,
@@ -184,13 +184,7 @@ impl Interval {
     }
 
     fn intersects_with(&self, other: &Interval) -> bool {
-        if self.start >= other.end {
-            false
-        } else if self.end <= other.start {
-            false
-        } else {
-            true
-        }
+        self.start < other.end && self.end > other.start
     }
 
     fn intersection(&self, other: &Interval) -> Interval {
@@ -239,9 +233,8 @@ impl SpriteRenderer {
     }
 
     pub fn run_cycle(&mut self, cyc: u16, sl: i16, reg: &mut PPUReg, mem: &mut PPUMemory) {
-        match (cyc, sl) {
-            (0, sl@0...239) => self.sprite_eval(sl as u16, reg, mem),
-            _ => (),
+        if let (0, sl@0...239) = (cyc, sl) {
+            self.sprite_eval(sl as u16, reg, mem);
         }
     }
 

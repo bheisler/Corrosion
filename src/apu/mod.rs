@@ -34,9 +34,9 @@ bitflags! {
 impl Frame {
     fn mode(&self) -> usize {
         if self.contains(MODE) {
-            return 1;
+            1
         } else {
-            return 0;
+            0
         }
     }
 }
@@ -215,9 +215,11 @@ impl APU {
     fn raise_irq(&mut self) -> IrqInterrupt {
         if !self.frame.contains(SUPPRESS_IRQ) {
             self.irq_requested = true;
-            return IrqInterrupt::IRQ;
+            IrqInterrupt::IRQ
         }
-        return IrqInterrupt::None;
+        else {
+            IrqInterrupt::None
+        }
     }
 
     fn play(&mut self, from_cyc: u64, to_cyc: u64) {
@@ -276,7 +278,7 @@ impl APU {
         let interrupt = self.run_to(cycle - 1);
 
         let mut status: u8 = 0;
-        status = status | (self.square1.length.active() << 0);
+        status = status | self.square1.length.active();
         status = status | (self.square2.length.active() << 1);
         status = status | (self.triangle.length.active() << 2);
         status = status | (self.noise.length.active() << 3);
@@ -293,14 +295,12 @@ impl APU {
             x @ 0x08...0x0B => self.triangle.write(x, val),
             x @ 0x0C...0x0F => self.noise.write(x, val),
             x @ 0x10...0x13 => self.dmc.write(x, val),
-            0x0014 => (),
             0x0015 => {
                 self.noise.length.set_enable(val & 0b0000_1000 != 0);
                 self.triangle.length.set_enable(val & 0b0000_0100 != 0);
                 self.square2.length.set_enable(val & 0b0000_0010 != 0);
                 self.square1.length.set_enable(val & 0b0000_0001 != 0);
             }
-            0x0016 => (),
             0x0017 => {
                 if self.global_cyc % 2 == 0 {
                     self.set_4017(val);

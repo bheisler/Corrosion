@@ -11,7 +11,7 @@ struct Mapper000 {
 }
 
 pub fn new(params: MapperParams) -> Box<Mapper> {
-    let chr_ram = if params.chr_rom.len() == 0 {
+    let chr_ram = if params.chr_rom.is_empty() {
         vec![0u8; 0x2000].into_boxed_slice()
     } else {
         vec![0u8; 0].into_boxed_slice()
