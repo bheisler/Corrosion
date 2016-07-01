@@ -67,9 +67,9 @@ impl PaletteIndex {
             0x3F00
         } else {
             let mut addr: u16 = 0x3F00;
-            addr = addr | self.set.table();
-            addr = addr | (self.palette_id as u16 & 0x03) << 2;
-            addr = addr | self.color_id as u16 & 0x03;
+            addr |= self.set.table();
+            addr |= (self.palette_id as u16 & 0x03) << 2;
+            addr |= self.color_id as u16 & 0x03;
             addr
         }
     }

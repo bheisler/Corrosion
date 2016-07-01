@@ -1,5 +1,4 @@
 use std::fs::OpenOptions;
-use std::io::Write;
 use std::io;
 use std::path::Path;
 use memmap::{Mmap, Protection};
@@ -14,10 +13,10 @@ impl BatteryBackedRam {
     pub fn new(rom_path: &Path, size: u32) -> io::Result<BatteryBackedRam> {
         let sav_path = rom_path.to_path_buf().with_extension("sav");
         let file = try!(OpenOptions::new()
-                            .write(true)
-                            .read(true)
-                            .create(true)
-                            .open(sav_path));
+            .write(true)
+            .read(true)
+            .create(true)
+            .open(sav_path));
         try!(file.set_len(size as u64));
         let file = try!(Mmap::open(&file, Protection::ReadWrite));
         Ok(BatteryBackedRam {

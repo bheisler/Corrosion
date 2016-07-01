@@ -26,10 +26,10 @@ impl AudioCallback for BufferOut {
         {
             let out_iter = out.iter_mut();
             let in_iter = self.samples
-                              .iter()
-                              .cycle()
-                              .skip(self.playback_counter)
-                              .take(self.input_samples);
+                .iter()
+                .cycle()
+                .skip(self.playback_counter)
+                .take(self.input_samples);
 
             for (dest, src) in out_iter.zip(in_iter) {
                 *dest = *src;
@@ -37,7 +37,7 @@ impl AudioCallback for BufferOut {
         }
 
         let transferred = cmp::min(out.len(), self.input_samples);
-        self.input_samples = self.input_samples - transferred;
+        self.input_samples -= transferred;
         self.playback_counter = (self.playback_counter + transferred) % self.samples.len();
 
         {
@@ -88,7 +88,7 @@ impl AudioOut for SDLAudioOut {
             }
         }
         out.input_counter = (out.input_counter + in_len) % out_len;
-        out.input_samples = out.input_samples + in_len;
+        out.input_samples += in_len;
     }
 
     fn sample_rate(&self) -> f64 {
@@ -111,16 +111,16 @@ impl SDLAudioOut {
         };
 
         let device = audio_subsystem.open_playback(None, &desired_spec, |_| {
-                                        BufferOut {
-                                            samples: [0; BUFFER_SIZE],
-                                            input_counter: 0,
-                                            playback_counter: 0,
-                                            input_samples: 0,
-                                            too_slow: false,
-                                            condvar: condvar.clone(),
-                                        }
-                                    })
-                                    .unwrap();
+                BufferOut {
+                    samples: [0; BUFFER_SIZE],
+                    input_counter: 0,
+                    playback_counter: 0,
+                    input_samples: 0,
+                    too_slow: false,
+                    condvar: condvar.clone(),
+                }
+            })
+            .unwrap();
 
         // Start playback
         device.resume();

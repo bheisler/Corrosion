@@ -118,7 +118,7 @@ impl Mapper for MMC1 {
             return;
         }
 
-        self.accumulator = self.accumulator | ((val & 1) << self.write_counter);
+        self.accumulator |= (val & 1) << self.write_counter;
         self.write_counter += 1;
 
         if self.write_counter == 5 {

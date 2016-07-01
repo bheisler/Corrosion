@@ -5,7 +5,6 @@ mod triangle;
 mod noise;
 mod dmc;
 
-use super::memory::MemSegment;
 use audio::AudioOut;
 use std::cmp;
 use cpu::IrqInterrupt;
@@ -278,11 +277,11 @@ impl APU {
         let interrupt = self.run_to(cycle - 1);
 
         let mut status: u8 = 0;
-        status = status | self.square1.length.active();
-        status = status | (self.square2.length.active() << 1);
-        status = status | (self.triangle.length.active() << 2);
-        status = status | (self.noise.length.active() << 3);
-        status = status | if self.irq_requested { 1 << 6 } else { 0 };
+        status |= self.square1.length.active();
+        status |= self.square2.length.active() << 1;
+        status |= self.triangle.length.active() << 2;
+        status |= self.noise.length.active() << 3;
+        status |= if self.irq_requested { 1 << 6 } else { 0 };
         self.irq_requested = false;
 
         (interrupt.or(self.run_to(cycle)), status)

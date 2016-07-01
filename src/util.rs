@@ -9,7 +9,7 @@ impl ShiftRegister8 {
 
     pub fn shift(&mut self) -> u8 {
         let result = self.bits & 0x01;
-        self.bits = self.bits >> 1;
+        self.bits >>= 1;
         result
     }
 

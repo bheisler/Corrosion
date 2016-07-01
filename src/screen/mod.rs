@@ -8,9 +8,8 @@ pub trait Screen {
 
 pub struct DummyScreen;
 
-
-impl DummyScreen {
-    pub fn new() -> DummyScreen {
+impl Default for DummyScreen {
+    fn default() -> DummyScreen {
         DummyScreen
     }
 }

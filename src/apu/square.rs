@@ -9,7 +9,7 @@ static SQUARE_DUTY_CYCLES: [[i16; 8]; 4] = [[0, 1, -1, 0, 0, 0, 0, 0],
                                             [0, 1, 0, 0, 0, -1, 0, 0],
                                             [0, -1, 0, 1, 0, 0, 0, 0]];
 
-///Represents the frequency-sweep units used by the two square channels.
+/// Represents the frequency-sweep units used by the two square channels.
 struct Sweep {
     enable: bool,
     period: u8,
@@ -67,11 +67,11 @@ impl Sweep {
 
     fn period_shift(&self, timer: &Timer) -> i16 {
         let mut shift = timer.period() as i16;
-        shift = shift >> self.shift;
+        shift >>= self.shift;
         if self.negate {
             shift = -shift;
             if self.is_square2 {
-                shift = shift + 1;
+                shift += 1;
             }
         }
         shift
