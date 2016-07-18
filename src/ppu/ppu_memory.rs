@@ -6,7 +6,7 @@ use super::Color;
 use super::PaletteIndex;
 use super::TilePattern;
 
-///Represents the PPU's memory map.
+/// Represents the PPU's memory map.
 pub struct PPUMemory {
     cart: Rc<RefCell<Cart>>,
     vram: [u8; 0x0F00],
@@ -100,13 +100,13 @@ impl MemSegment for PPUMemory {
             0x2000...0x3EFF => self.read_bypass_palette(idx),
             0x3F00...0x3FFF => {
                 match (idx & 0x001F) as usize {
-                    0x10 => self.palette[0x00],
-                    0x14 => self.palette[0x04],
-                    0x18 => self.palette[0x08],
-                    0x1C => self.palette[0x0C],
-                    x => self.palette[x],
-                }
-                .bits()
+                        0x10 => self.palette[0x00],
+                        0x14 => self.palette[0x04],
+                        0x18 => self.palette[0x08],
+                        0x1C => self.palette[0x0C],
+                        x => self.palette[x],
+                    }
+                    .bits()
             }
             x => invalid_address!(x),
         }
@@ -224,7 +224,7 @@ mod tests {
 
     #[test]
     fn single_screen_mirroring_mirrors_both_ways() {
-        let mut ppu = create_test_ppu_with_mirroring(ScreenMode::OneScreen);
+        let mut ppu = create_test_ppu_with_mirroring(ScreenMode::OneScreenLow);
 
         assert_mirrored(&mut ppu, 0, 1);
         assert_mirrored(&mut ppu, 1, 2);

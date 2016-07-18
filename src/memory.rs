@@ -133,7 +133,7 @@ mod tests {
                                MapperParams::simple(path, vec!(0u8; 0x4000), vec!(0u8; 0x4000)));
         let cart = ::cart::Cart::new(nrom);
         let cart = Rc::new(RefCell::new(cart));
-        let ppu = ::ppu::PPU::new(cart.clone(), Box::new(DummyScreen::new()));
+        let ppu = ::ppu::PPU::new(cart.clone(), Box::new(DummyScreen::default()));
         let apu = ::apu::APU::new(Box::new(DummyAudioOut));
         let io = DummyIO::new();
         CpuMemory::new(ppu, apu, Box::new(io), cart)

@@ -51,8 +51,8 @@ fn read_bytes(iter: &mut Iterator<Item = u8>, bytes: usize) -> Result<Vec<u8>, R
 }
 
 impl Rom {
-    ///Parse the given bytes as an iNES 1.0 header.
-    ///NES 2.0 is not supported yet.
+    /// Parse the given bytes as an iNES 1.0 header.
+    /// NES 2.0 is not supported yet.
     pub fn parse(data: &[u8]) -> Result<Rom, RomError> {
         let mut iter = data.iter().cloned();
         if try!(read_bytes(&mut iter, 4)) != MAGIC_NUMBERS {
@@ -144,7 +144,7 @@ mod tests {
     }
 
     fn set_bit(byte: &mut u8, bit_num: u8) {
-        *byte = *byte | 1u8 << bit_num;
+        *byte |= 1u8 << bit_num;
     }
 
     fn generate_bytes(size: usize) -> Vec<u8> {
@@ -158,12 +158,13 @@ mod tests {
         fn new() -> RomBuilder {
             let mut header = vec![0x4Eu8, 0x45u8, 0x53u8, 0x1Au8];
             header.extend([0; 12].iter().cloned());
-            return RomBuilder {
+
+            RomBuilder {
                 header: header,
                 trainer: vec![],
                 prg_rom: vec![],
                 chr_rom: vec![],
-            };
+            }
         }
 
         fn set_prg_page_count(&mut self, count: u8) {
@@ -198,7 +199,7 @@ mod tests {
 
         fn set_mapper(&mut self, mapper: u8) {
             self.header[6] = (self.header[6] & 0x0F) | ((mapper & 0x0Fu8) << 4);
-            self.header[7] = (self.header[7] & 0x0F) | ((mapper & 0xF0u8) << 0);
+            self.header[7] = (self.header[7] & 0x0F) | ((mapper & 0xF0u8));
         }
 
         fn set_prg_ram_pages(&mut self, pages: u8) {
@@ -228,7 +229,7 @@ mod tests {
 
     #[test]
     fn parse_returns_failure_on_empty_input() {
-        assert!(Rom::parse(&vec![]).err().unwrap() == RomError::UnexpectedEndOfData);
+        assert!(Rom::parse(&Vec::new()).err().unwrap() == RomError::UnexpectedEndOfData);
     }
 
     #[test]

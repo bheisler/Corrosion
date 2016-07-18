@@ -397,7 +397,7 @@ impl MemSegment for PPU {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mappers::{Mapper, MapperParams};
+    use mappers::create_test_mapper;
     use std::rc::Rc;
     use std::cell::RefCell;
     use cart::{Cart, ScreenMode};
@@ -410,22 +410,15 @@ mod tests {
     }
 
     pub fn create_test_ppu_with_rom(chr_rom: Vec<u8>) -> PPU {
-        let mapper = create_test_mapper(chr_rom);
+        let mapper = create_test_mapper(vec![0u8; 0x1000], chr_rom, ScreenMode::FourScreen);
         let cart = Cart::new(mapper);
-        PPU::new(Rc::new(RefCell::new(cart)), Box::new(DummyScreen::new()))
-    }
-
-    pub fn create_test_mapper(chr_rom: Vec<u8>) -> Box<Mapper> {
-        let path_buf = ::std::path::PathBuf::new();
-        let path = path_buf.as_path();
-        Mapper::new(0, MapperParams::simple(path, vec![0u8; 0x1000], chr_rom))
+        PPU::new(Rc::new(RefCell::new(cart)), Box::new(DummyScreen::default()))
     }
 
     pub fn create_test_ppu_with_mirroring(mode: ScreenMode) -> PPU {
-        let mapper = create_test_mapper(vec![0u8; 0x1000]);
-        let mut cart = Cart::new(mapper);
-        cart.mode = mode;
-        PPU::new(Rc::new(RefCell::new(cart)), Box::new(DummyScreen::new()))
+        let mapper = create_test_mapper(vec![0u8; 0x1000], vec![0u8; 0x1000], mode);
+        let cart = Cart::new(mapper);
+        PPU::new(Rc::new(RefCell::new(cart)), Box::new(DummyScreen::default()))
     }
 
     #[test]

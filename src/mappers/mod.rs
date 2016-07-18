@@ -41,6 +41,7 @@ impl<'a> MapperParams<'a> {
             rom_path: rom_path,
 
             has_battery_backed_ram: false,
+            mirroring_mode: ScreenMode::OneScreenLow,
         }
     }
 }
@@ -62,4 +63,13 @@ impl MemSegment for Mapper {
     fn write(&mut self, idx: u16, val: u8) {
         self.prg_write(idx, val)
     }
+}
+
+#[cfg(test)]
+pub fn create_test_mapper(prg_rom: Vec<u8>, chr_rom: Vec<u8>, mode: ScreenMode) -> Box<Mapper> {
+    let path_buf = ::std::path::PathBuf::new();
+    let path = path_buf.as_path();
+    let mut params = MapperParams::simple(path, prg_rom, chr_rom);
+    params.mirroring_mode = mode;
+    Mapper::new(0, params)
 }
