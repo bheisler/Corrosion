@@ -107,11 +107,11 @@ pub struct PPUReg {
     scroll_x: u8,
     scroll_y: u8,
 
-    ///A fake dynamic latch representing the capacitance of the wires in the
-    ///PPU that we have to emulate.
+    /// A fake dynamic latch representing the capacitance of the wires in the
+    /// PPU that we have to emulate.
     dyn_latch: u8,
 
-    ///The address registers are two bytes but we can only write one at a time.
+    /// The address registers are two bytes but we can only write one at a time.
     address_latch: AddrByte,
 }
 
@@ -215,7 +215,6 @@ impl MemSegment for PPUReg {
             }
             0x0001 => {
                 self.ppumask = PPUMask::from_bits_truncate(val);
-                println!("{:?}", self.ppumask);
             }
             0x0002 => (),
             0x0003 => self.oamaddr = val,
