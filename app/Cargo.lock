@@ -65,6 +65,7 @@ dependencies = [
  "memmap 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "quick-error 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sdl2 0.17.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sha1 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "stopwatch 0.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -245,6 +246,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "nom 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "sha1"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "stopwatch"
