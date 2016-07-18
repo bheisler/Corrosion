@@ -212,7 +212,7 @@ impl Default for SpriteRenderer {
 
             pixel_buffer: vec![Default::default(); SCREEN_BUFFER_SIZE].into_boxed_slice(),
             priority_buffer: vec![SpritePriority::Background; SCREEN_BUFFER_SIZE]
-                                 .into_boxed_slice(),
+                .into_boxed_slice(),
             sprite0_buffer: vec![false; SCREEN_BUFFER_SIZE].into_boxed_slice(),
         }
     }
@@ -233,7 +233,7 @@ impl SpriteRenderer {
     }
 
     pub fn run_cycle(&mut self, cyc: u16, sl: i16, reg: &mut PPUReg, mem: &mut PPUMemory) {
-        if let (0, sl@0...239) = (cyc, sl) {
+        if let (0, sl @ 0...239) = (cyc, sl) {
             self.sprite_eval(sl as u16, reg, mem);
         }
     }
@@ -318,16 +318,14 @@ impl SpriteRenderer {
     }
 
     pub fn buffers(&self) -> (&[PaletteIndex], &[SpritePriority], &[bool]) {
-        (&self.pixel_buffer,
-         &self.priority_buffer,
-         &self.sprite0_buffer)
+        (&self.pixel_buffer, &self.priority_buffer, &self.sprite0_buffer)
     }
 
     #[cfg(feature="mousepick")]
     pub fn mouse_pick(&self, px_x: i32, px_y: i32) {
         let scanline = px_y as usize;
         let pixel = px_x as u8;
-        for sprite in self.secondary_oam[scanline].iter() {
+        for sprite in &self.secondary_oam[scanline] {
             if sprite.x <= pixel && pixel <= (sprite.x + 8) {
                 println!("{:?}", sprite);
             }
@@ -341,7 +339,7 @@ pub enum SpritePriority {
     Background,
 }
 
-///Reads the primary OAM table.
+/// Reads the primary OAM table.
 impl MemSegment for SpriteRenderer {
     fn read(&mut self, idx: u16) -> u8 {
         if idx > 256 {
