@@ -1,14 +1,11 @@
 pub mod sdl;
 pub mod fm2;
 
-#[cfg(test)]
-pub mod test_io;
-
 use super::memory::MemSegment;
 
 ///Some bits of the controller reads return open bus garbage. Since the last byte on the bus is
 ///almost always 0x40, we can just use that as a constant for now.
-const OPEN_BUS: u8 = 0x40;
+pub const OPEN_BUS: u8 = 0x40;
 
 pub trait IO : MemSegment {
     fn poll(&mut self);

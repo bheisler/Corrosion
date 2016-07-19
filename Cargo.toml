@@ -15,8 +15,8 @@ quick-error = "1.0"
 sdl2 = "0.17"
 blip_buf = "0.1.4"
 memmap = "0.3"
-sha1 = "0.2"
 clippy = "0.0.77"
 
 [dev-dependencies]
+sha1 = "0.2"
 rand = "0.3"

@@ -26,6 +26,9 @@ pub mod audio;
 
 mod util;
 
+#[cfg(test)]
+mod tests;
+
 #[cfg(feature="cputrace")]
 pub mod disasm;
 

@@ -15,12 +15,14 @@ fn hash_screen(buf: &[Color; SCREEN_BUFFER_SIZE]) -> Digest {
     s.digest()
 }
 
+#[allow(dead_code)]
 pub struct HashPrinter {
     frames: u32,
 
     delegate: Box<Screen>,
 }
 
+#[allow(dead_code)]
 impl HashPrinter {
     pub fn new(delegate: Box<Screen>) -> HashPrinter {
         HashPrinter {
