@@ -15,6 +15,8 @@ const TRANSPARENT: PaletteIndex = PaletteIndex {
     color_id: 0,
 };
 
+const EMPTY_PIXEL_BUFFER: [PaletteIndex; SCREEN_BUFFER_SIZE] = [TRANSPARENT; SCREEN_BUFFER_SIZE];
+
 bitflags! {
     flags OAMAttr : u8 {
         const FLIP_VERT = 0b1000_0000,
@@ -199,9 +201,9 @@ pub struct SpriteRenderer {
     primary_oam: [OAMEntry; 64],
     secondary_oam: [[SpriteDetails; 8]; SCREEN_HEIGHT],
 
-    pixel_buffer: Box<[PaletteIndex]>,
-    priority_buffer: Box<[SpritePriority]>,
-    sprite0_buffer: Box<[bool]>,
+    pixel_buffer: Box<[PaletteIndex; SCREEN_BUFFER_SIZE]>,
+    priority_buffer: Box<[SpritePriority; SCREEN_BUFFER_SIZE]>,
+    sprite0_buffer: Box<[bool; SCREEN_BUFFER_SIZE]>,
 }
 
 impl Default for SpriteRenderer {
@@ -210,10 +212,9 @@ impl Default for SpriteRenderer {
             primary_oam: [Default::default(); 64],
             secondary_oam: [[Default::default(); 8]; SCREEN_HEIGHT],
 
-            pixel_buffer: vec![Default::default(); SCREEN_BUFFER_SIZE].into_boxed_slice(),
-            priority_buffer: vec![SpritePriority::Background; SCREEN_BUFFER_SIZE]
-                .into_boxed_slice(),
-            sprite0_buffer: vec![false; SCREEN_BUFFER_SIZE].into_boxed_slice(),
+            pixel_buffer: Box::new([TRANSPARENT; SCREEN_BUFFER_SIZE]),
+            priority_buffer: Box::new([SpritePriority::Background; SCREEN_BUFFER_SIZE]),
+            sprite0_buffer: Box::new([false; SCREEN_BUFFER_SIZE]),
         }
     }
 }
@@ -258,9 +259,7 @@ impl SpriteRenderer {
     }
 
     pub fn clear(&mut self) {
-        for dest in self.pixel_buffer.iter_mut() {
-            *dest = TRANSPARENT;
-        }
+        self.pixel_buffer.copy_from_slice(&EMPTY_PIXEL_BUFFER);
         for dest in self.priority_buffer.iter_mut() {
             *dest = SpritePriority::Background;
         }
@@ -318,7 +317,7 @@ impl SpriteRenderer {
     }
 
     pub fn buffers(&self) -> (&[PaletteIndex], &[SpritePriority], &[bool]) {
-        (&self.pixel_buffer, &self.priority_buffer, &self.sprite0_buffer)
+        (&*self.pixel_buffer, &*self.priority_buffer, &*self.sprite0_buffer)
     }
 
     #[cfg(feature="mousepick")]

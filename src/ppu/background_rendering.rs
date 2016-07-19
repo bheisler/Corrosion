@@ -13,6 +13,14 @@ use std::cmp;
 
 const TILES_PER_LINE: usize = 34;
 
+const TRANSPARENT: PaletteIndex = PaletteIndex {
+    set: PaletteSet::Background,
+    palette_id: 0,
+    color_id: 0,
+};
+
+const EMPTY_PIXEL_BUFFER: [PaletteIndex; SCREEN_BUFFER_SIZE] = [TRANSPARENT; SCREEN_BUFFER_SIZE];
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 struct TileAttribute {
     bits: u8,
@@ -61,11 +69,11 @@ impl Default for TileAttribute {
 }
 
 pub struct BackgroundRenderer {
-    idx: Box<[[u8; TILES_PER_LINE]]>,
-    tile: Box<[[TilePattern; TILES_PER_LINE]]>,
-    attr: Box<[[TileAttribute; TILES_PER_LINE]]>,
+    idx: Box<[[u8; TILES_PER_LINE]; SCREEN_HEIGHT]>,
+    tile: Box<[[TilePattern; TILES_PER_LINE]; SCREEN_HEIGHT]>,
+    attr: Box<[[TileAttribute; TILES_PER_LINE]; SCREEN_HEIGHT]>,
 
-    background_buffer: Box<[PaletteIndex]>,
+    background_buffer: Box<[PaletteIndex; SCREEN_BUFFER_SIZE]>,
 }
 
 impl BackgroundRenderer {
@@ -74,9 +82,7 @@ impl BackgroundRenderer {
     }
 
     pub fn clear(&mut self) {
-        for dst in self.background_buffer.iter_mut() {
-            *dst = Default::default();
-        }
+        self.background_buffer.copy_from_slice(&EMPTY_PIXEL_BUFFER);
     }
 
     pub fn run_cycle(&mut self, cyc: u16, sl: i16, reg: &mut PPUReg, mem: &mut PPUMemory) {
@@ -233,7 +239,7 @@ impl BackgroundRenderer {
     }
 
     pub fn buffer(&self) -> &[PaletteIndex] {
-        &self.background_buffer
+        &*self.background_buffer
     }
 
     #[allow(dead_code)]
@@ -323,7 +329,7 @@ impl Default for BackgroundRenderer {
             tile: Box::new(tiles),
             attr: Box::new(attrs),
 
-            background_buffer: vec![Default::default(); SCREEN_BUFFER_SIZE].into_boxed_slice(),
+            background_buffer: Box::new([Default::default(); SCREEN_BUFFER_SIZE]),
         }
     }
 }
