@@ -13,8 +13,10 @@ pub struct TestIO {
     controller2: ShiftRegister8,
 }
 
+// Commands are in the FM2 RLDUTSBA|RLDUTSBA format minus the commands block at
+// the start
 impl TestIO {
-    pub fn new(commands: Hashmap<u32, &'static str>) -> TestIO {
+    pub fn new(commands: HashMap<u32, &'static str>) -> TestIO {
         TestIO {
             frames: 0,
             commands: commands,
@@ -44,7 +46,7 @@ impl MemSegment for TestIO {
         match idx {
             0x4016 => {
                 if val & 0x01 != 0 {
-                    if let Some(line) = self.commands.get(self.frames) {
+                    if let Some(line) = self.commands.get(&self.frames) {
                         let mut split = line.split('|');
                         self.controller1.load(parse(split.next().unwrap()));
                         self.controller2.load(parse(split.next().unwrap()));

@@ -2,7 +2,7 @@ use ppu::{Color, SCREEN_BUFFER_SIZE};
 
 pub mod sdl;
 
-//#[cfg(test)]
+#[cfg(test)]
 pub mod hash_screen;
 
 pub trait Screen {

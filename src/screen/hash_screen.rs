@@ -22,7 +22,7 @@ pub struct HashPrinter {
 }
 
 impl HashPrinter {
-    fn new(delegate: Box<Screen>) -> HashPrinter {
+    pub fn new(delegate: Box<Screen>) -> HashPrinter {
         HashPrinter {
             frames: 0,
             delegate: delegate,
@@ -47,7 +47,7 @@ pub struct HashVerifier {
 }
 
 impl HashVerifier {
-    fn new(hashes: HashMap<u32, &'static str>) -> HashVerifier {
+    pub fn new(hashes: HashMap<u32, &'static str>) -> HashVerifier {
         HashVerifier {
             frames: 0,
             hashes: hashes,
