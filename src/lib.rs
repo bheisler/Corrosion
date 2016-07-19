@@ -1,6 +1,8 @@
 #![feature(plugin)]
 #![plugin(clippy)]
 
+#![feature(test)]
+
 #![allow(new_without_default)]
 #![allow(match_same_arms)]
 
@@ -10,8 +12,7 @@ extern crate bitflags;
 #[macro_use]
 extern crate quick_error;
 
-extern crate sdl2;
-extern crate stopwatch;
+pub extern crate sdl2;
 extern crate blip_buf;
 extern crate memmap;
 
@@ -27,6 +28,9 @@ pub mod audio;
 
 mod util;
 
+#[cfg(test)]
+mod tests;
+
 #[cfg(feature="cputrace")]
 pub mod disasm;
 
@@ -36,76 +40,66 @@ use memory::CpuMemory;
 use apu::APU;
 use ppu::PPU;
 use io::IO;
-use sdl2::EventPump;
-use sdl2::event::Event;
-use sdl2::Sdl;
 
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use stopwatch::Stopwatch;
+pub struct EmulatorBuilder {
+    pub cart: Cart,
 
-fn pump_events(pump: &Rc<RefCell<EventPump>>) -> bool {
-    for event in pump.borrow_mut().poll_iter() {
-        if let Event::Quit {..} = event {
-            return true;
+    pub screen: Box<screen::Screen>,
+    pub audio_out: Box<audio::AudioOut>,
+    pub io: Box<IO>,
+}
+
+impl EmulatorBuilder {
+    pub fn new(cart: Cart) -> EmulatorBuilder {
+        EmulatorBuilder {
+            cart: cart,
+
+            screen: Box::new(screen::DummyScreen::default()),
+            audio_out: Box::new(audio::DummyAudioOut),
+            io: Box::new(io::DummyIO::Dummy),
         }
     }
-    false
-}
 
-fn get_movie_file() -> Option<String> {
-    std::env::args()
-               .skip_while(|arg| arg != "--movie")
-               .skip(1)
-               .next()
-}
+    pub fn new_sdl(cart: Cart, sdl: &sdl2::Sdl, event_pump: &Rc<RefCell<sdl2::EventPump>>) -> EmulatorBuilder {
+        EmulatorBuilder {
+            cart: cart,
 
-#[cfg(feature="mousepick")]
-fn mouse_pick(sdl: &Sdl, cpu: &CPU ) {
-    let (_, scr_x, scr_y) = sdl.mouse().mouse_state();
-    let (px_x, px_y) = (scr_x / 3, scr_y / 3); //Should get this from the screen, but eh.
-    cpu.mem.ppu.mouse_pick(px_x, px_y);
-}
-
-#[cfg(not(feature="mousepick"))]
-fn mouse_pick(_: &Sdl, _: &CPU ) {
-
-}
-
-pub fn start_emulator(cart: Cart) {
-    let sdl = sdl2::init().unwrap();
-    let screen = screen::sdl::SDLScreen::new(&sdl);
-    let audio_out = audio::sdl::SDLAudioOut::new(&sdl);
-    let event_pump = Rc::new(RefCell::new(sdl.event_pump().unwrap()));
-
-    let cart: Rc<RefCell<Cart>> = Rc::new(RefCell::new(cart));
-    let ppu = PPU::new(cart.clone(), Box::new(screen));
-    let apu = APU::new(Box::new(audio_out));
-    let io: Box<IO> = if let Some(file) = get_movie_file() {
-        let fm2io = io::fm2::FM2IO::read(file).unwrap();
-        Box::new(fm2io)
-    } else {
-        Box::new(io::sdl::SdlIO::new(event_pump.clone()))
-    };
-    let mem = CpuMemory::new(ppu, apu, io, cart);
-    let mut cpu = CPU::new(mem);
-    cpu.init();
-
-    let mut stopwatch = Stopwatch::start_new();
-    let smoothing = 0.9;
-    let mut avg_frame_time = 0.0f64;
-    loop {
-        if pump_events(&event_pump) || cpu.halted() {
-            break;
+            screen: Box::new(screen::sdl::SDLScreen::new(sdl)),
+            audio_out: Box::new(audio::sdl::SDLAudioOut::new(sdl)),
+            io: Box::new(io::sdl::SdlIO::new(event_pump.clone())),
         }
-        cpu.run_frame();
-        let current = stopwatch.elapsed().num_nanoseconds().unwrap() as f64;
-        avg_frame_time = (avg_frame_time * smoothing) + (current * (1.0 - smoothing));
+    }
 
-        mouse_pick(&sdl, &cpu);
+    pub fn build(self) -> Emulator {
+        let cart: Rc<RefCell<Cart>> = Rc::new(RefCell::new(self.cart));
+        let ppu = PPU::new(cart.clone(), self.screen);
+        let apu = APU::new(self.audio_out);
+        let mem = CpuMemory::new(ppu, apu, self.io, cart);
+        let mut cpu = CPU::new(mem);
+        cpu.init();
 
-        //println!("Frames per second:{:.*}", 2, 1000000000.0 / avg_frame_time);
-        stopwatch.restart();
+        Emulator{ cpu: cpu }
+    }
+}
+
+pub struct Emulator {
+    cpu: CPU,
+}
+
+impl Emulator {
+    pub fn run_frame(&mut self) {
+        self.cpu.run_frame();
+    }
+
+    pub fn halted(&self) -> bool {
+        self.cpu.halted()
+    }
+
+    #[cfg(feature="mousepick")]
+    pub fn mouse_pick(&self, px_x: i32, px_y: i32) {
+        self.cpu.mem.ppu.mouse_pick(px_x, px_y);
     }
 }
