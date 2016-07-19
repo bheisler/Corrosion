@@ -58,8 +58,17 @@ impl PPUMemory {
     }
 
     pub fn read_palette(&mut self, idx: PaletteIndex) -> Color {
-        let bits = self.read(idx.to_addr());
-        Color::from_bits_truncate(bits)
+        self.read_palette_mem(idx.to_addr() as usize)
+    }
+
+    fn read_palette_mem(&self, idx: usize) -> Color {
+        match (idx % 0x1F) as usize {
+            0x10 => self.palette[0x00],
+            0x14 => self.palette[0x04],
+            0x18 => self.palette[0x08],
+            0x1C => self.palette[0x0C],
+            x => self.palette[x],
+        }
     }
 
     pub fn read_tile_pattern(&mut self,
@@ -98,16 +107,7 @@ impl MemSegment for PPUMemory {
                 cart.chr_read(idx)
             }
             0x2000...0x3EFF => self.read_bypass_palette(idx),
-            0x3F00...0x3FFF => {
-                match (idx & 0x001F) as usize {
-                        0x10 => self.palette[0x00],
-                        0x14 => self.palette[0x04],
-                        0x18 => self.palette[0x08],
-                        0x1C => self.palette[0x0C],
-                        x => self.palette[x],
-                    }
-                    .bits()
-            }
+            0x3F00...0x3FFF => self.read_palette_mem(idx as usize).bits(),
             x => invalid_address!(x),
         }
     }
