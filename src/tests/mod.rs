@@ -1,5 +1,6 @@
 mod hash_screen;
 mod test_io;
+mod bench;
 
 use std::collections::HashMap;
 use std::path::Path;

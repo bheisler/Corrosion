@@ -1,6 +1,8 @@
 #![feature(plugin)]
 #![plugin(clippy)]
 
+#![feature(test)]
+
 #![allow(new_without_default)]
 #![allow(match_same_arms)]
 
