@@ -1,6 +1,9 @@
 pub mod sdl;
 pub mod fm2;
 
+#[cfg(test)]
+pub mod test_io;
+
 use super::memory::MemSegment;
 
 ///Some bits of the controller reads return open bus garbage. Since the last byte on the bus is
