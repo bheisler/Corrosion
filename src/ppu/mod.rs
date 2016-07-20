@@ -55,6 +55,7 @@ impl PaletteSet {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
+#[repr(C)]
 pub struct PaletteIndex {
     addr: u8,
 }

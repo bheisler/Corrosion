@@ -25,12 +25,8 @@ impl OAMAttr {
         self.bits & 0x03
     }
 
-    fn priority(&self) -> SpritePriority {
-        if self.contains(BEHIND) {
-            SpritePriority::Background
-        } else {
-            SpritePriority::Foreground
-        }
+    fn priority(&self) -> bool {
+        !self.contains(BEHIND)
     }
 }
 
@@ -129,7 +125,7 @@ const NO_SPRITE: SpriteDetails = SpriteDetails {
 const EMPTY_SECONDARY_OAM_LINE: [SpriteDetails; 8] = [NO_SPRITE; 8];
 
 impl SpriteDetails {
-    fn do_get_pixel(&self, x: u16) -> (SpritePriority, PaletteIndex) {
+    fn do_get_pixel(&self, x: u16) -> (bool, PaletteIndex) {
         let fine_x = get_fine_scroll(8, x, self.x as u16, self.attr.contains(FLIP_HORZ));
         let attr = self.attr;
         let color_id = self.tile.get_color_in_pattern(fine_x as u32);
@@ -139,7 +135,7 @@ impl SpriteDetails {
 
     fn blit(&self,
             pixel_line: &mut [PaletteIndex],
-            priority_line: &mut [SpritePriority],
+            priority_line: &mut [bool],
             sprite0_line: &mut [bool],
             segment: &Interval,
             sprite_interval: &Interval) {
@@ -192,7 +188,7 @@ pub struct SpriteRenderer {
     secondary_oam: [[SpriteDetails; 8]; SCREEN_HEIGHT],
 
     pixel_buffer: Box<[PaletteIndex; SCREEN_BUFFER_SIZE]>,
-    priority_buffer: Box<[SpritePriority; SCREEN_BUFFER_SIZE]>,
+    priority_buffer: Box<[bool; SCREEN_BUFFER_SIZE]>,
     sprite0_buffer: Box<[bool; SCREEN_BUFFER_SIZE]>,
 }
 
@@ -203,7 +199,7 @@ impl Default for SpriteRenderer {
             secondary_oam: [[Default::default(); 8]; SCREEN_HEIGHT],
 
             pixel_buffer: Box::new([TRANSPARENT; SCREEN_BUFFER_SIZE]),
-            priority_buffer: Box::new([SpritePriority::Background; SCREEN_BUFFER_SIZE]),
+            priority_buffer: Box::new([false; SCREEN_BUFFER_SIZE]),
             sprite0_buffer: Box::new([false; SCREEN_BUFFER_SIZE]),
         }
     }
@@ -253,7 +249,7 @@ impl SpriteRenderer {
             *dest = TRANSPARENT;
         }
         for dest in self.priority_buffer.iter_mut() {
-            *dest = SpritePriority::Background;
+            *dest = false;
         }
         for dest in self.sprite0_buffer.iter_mut() {
             *dest = false;
@@ -308,8 +304,11 @@ impl SpriteRenderer {
         }
     }
 
-    pub fn buffers(&self) -> (&[PaletteIndex], &[SpritePriority], &[bool]) {
-        (&*self.pixel_buffer, &*self.priority_buffer, &*self.sprite0_buffer)
+    pub fn buffers(&self)
+                   -> (&[PaletteIndex; SCREEN_BUFFER_SIZE],
+                       &[bool; SCREEN_BUFFER_SIZE],
+                       &[bool; SCREEN_BUFFER_SIZE]) {
+        (&self.pixel_buffer, &self.priority_buffer, &self.sprite0_buffer)
     }
 
     #[cfg(feature="mousepick")]
@@ -322,12 +321,6 @@ impl SpriteRenderer {
             }
         }
     }
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum SpritePriority {
-    Foreground,
-    Background,
 }
 
 /// Reads the primary OAM table.
