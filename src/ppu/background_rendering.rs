@@ -238,8 +238,8 @@ impl BackgroundRenderer {
         }
     }
 
-    pub fn buffer(&self) -> &[PaletteIndex] {
-        &*self.background_buffer
+    pub fn buffer(&self) -> &[PaletteIndex; SCREEN_BUFFER_SIZE] {
+        &self.background_buffer
     }
 
     #[allow(dead_code)]

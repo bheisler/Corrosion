@@ -43,7 +43,7 @@ impl OAMAttr {
 
 #[derive(Debug, Copy, Clone)]
 struct OAMEntry {
-    y: u8,
+    y: u16,
     tile: u8,
     attr: OAMAttr,
     x: u8,
@@ -51,8 +51,7 @@ struct OAMEntry {
 
 impl OAMEntry {
     fn is_on_scanline(&self, reg: &PPUReg, scanline: u16) -> bool {
-        let y = self.y as u16;
-        y <= scanline && scanline < y + reg.ppuctrl.sprite_height()
+        self.y <= scanline && scanline < self.y + reg.ppuctrl.sprite_height()
     }
 
     fn build_details(&self,
@@ -64,7 +63,7 @@ impl OAMEntry {
         let tile_id = self.tile;
         let fine_y_scroll = get_fine_scroll(reg.ppuctrl.sprite_height(),
                                             sl,
-                                            self.y as u16,
+                                            self.y,
                                             self.attr.contains(FLIP_VERT));
         let tile = if reg.ppuctrl.tall_sprites() {
             let tile_table = (tile_id as u16 & 0b0000_0001) << 12;
@@ -102,7 +101,7 @@ impl Default for OAMEntry {
 impl MemSegment for OAMEntry {
     fn read(&mut self, idx: u16) -> u8 {
         match idx {
-            0 => self.y,
+            0 => self.y as u8,
             1 => self.tile,
             2 => self.attr.bits(),
             3 => self.x,
@@ -112,7 +111,7 @@ impl MemSegment for OAMEntry {
 
     fn write(&mut self, idx: u16, val: u8) {
         match idx {
-            0 => self.y = val,
+            0 => self.y = val as u16,
             1 => self.tile = val,
             2 => self.attr = OAMAttr::from_bits_truncate(val),
             3 => self.x = val,
@@ -128,6 +127,13 @@ struct SpriteDetails {
     attr: OAMAttr,
     tile: TilePattern,
 }
+const NO_SPRITE: SpriteDetails = SpriteDetails {
+    idx: 0xFF,
+    x: 0xFF,
+    attr: OAMAttr { bits: 0 },
+    tile: ::ppu::NO_TILE,
+};
+const EMPTY_SECONDARY_OAM_LINE: [SpriteDetails; 8] = [NO_SPRITE; 8];
 
 impl SpriteDetails {
     fn do_get_pixel(&self, x: u16) -> (SpritePriority, PaletteIndex) {
@@ -162,12 +168,7 @@ impl SpriteDetails {
 
 impl Default for SpriteDetails {
     fn default() -> SpriteDetails {
-        SpriteDetails {
-            idx: 0xFF,
-            x: 0xFF,
-            attr: OAMAttr::empty(),
-            tile: Default::default(),
-        }
+        NO_SPRITE
     }
 }
 
@@ -245,7 +246,7 @@ impl SpriteRenderer {
         }
         let mut n = 0;
         let secondary_oam_line = &mut self.secondary_oam[scanline as usize + 1];
-        *secondary_oam_line = [Default::default(); 8];
+        secondary_oam_line.copy_from_slice(&EMPTY_SECONDARY_OAM_LINE);
         for x in 0..64 {
             let oam = &self.primary_oam[x];
             if oam.is_on_scanline(reg, scanline) {

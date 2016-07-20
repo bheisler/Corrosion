@@ -95,9 +95,11 @@ pub struct TilePattern {
     hi: u8,
 }
 
+pub const NO_TILE: TilePattern = TilePattern { lo: 0, hi : 0 };
+
 impl Default for TilePattern {
     fn default() -> TilePattern {
-        TilePattern { lo: 0, hi: 0 }
+        NO_TILE
     }
 }
 

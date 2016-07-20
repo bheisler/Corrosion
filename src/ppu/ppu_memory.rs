@@ -62,7 +62,7 @@ impl PPUMemory {
     }
 
     fn read_palette_mem(&self, idx: usize) -> Color {
-        match (idx % 0x1F) as usize {
+        match (idx & 0x1F) as usize {
             0x10 => self.palette[0x00],
             0x14 => self.palette[0x04],
             0x18 => self.palette[0x08],

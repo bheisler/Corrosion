@@ -309,7 +309,7 @@ use disasm::Disassembler;
 /// number.
 /// Copied from `FCEUX` & `SprocketNES`.
 #[cfg_attr(rustfmt, rustfmt_skip)]
-static CYCLE_TABLE: [u8; 256] = [
+static CYCLE_TABLE: [u64; 256] = [
     /*0x00*/ 7,6,2,8,3,3,5,5,3,2,2,2,4,4,6,6,
     /*0x10*/ 2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7,
     /*0x20*/ 6,6,2,8,3,3,5,5,4,2,2,2,4,4,6,6,
@@ -1109,7 +1109,7 @@ impl CPU {
         self.trace();
         self.stack_dump();
         let opcode: u8 = self.load_incr_pc();
-        self.incr_cycle(CYCLE_TABLE[opcode as usize] as u64);
+        self.incr_cycle(CYCLE_TABLE[opcode as usize]);
         decode_opcode!(opcode, self);
     }
 
