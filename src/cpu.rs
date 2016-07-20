@@ -419,6 +419,7 @@ pub struct CPU {
     pub mem: CpuMemory,
     cycle: u64,
     halted: bool,
+    io_strobe: bool,
 }
 
 impl MemSegment for CPU {
@@ -435,6 +436,12 @@ impl MemSegment for CPU {
                     self.irq();
                 }
                 val
+            }
+            0x4016 | 0x4017 => {
+                if self.io_strobe {
+                    self.mem.io.poll();
+                }
+                self.mem.read(idx)
             }
             _ => self.mem.read(idx),
         }
@@ -454,6 +461,13 @@ impl MemSegment for CPU {
             0x4000...0x4013 | 0x4015 | 0x4017 => {
                 self.run_apu();
                 self.mem.write(idx, val);
+            }
+            0x4016 => {
+                self.io_strobe = val & 0x01 != 0;
+                self.mem.write(idx, val);
+                if self.io_strobe {
+                    self.mem.io.poll();
+                }
             }
             _ => self.mem.write(idx, val),
         }
@@ -916,6 +930,7 @@ impl CPU {
             cycle: 0,
             mem: mem,
             halted: false,
+            io_strobe: false,
         }
     }
 
@@ -1095,8 +1110,6 @@ impl CPU {
         if self.halted {
             return;
         }
-
-        self.mem.io.poll();
 
         if self.mem.apu.requested_run_cycle() <= self.cycle {
             self.run_apu();
