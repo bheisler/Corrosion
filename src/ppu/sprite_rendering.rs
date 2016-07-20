@@ -5,17 +5,10 @@ use super::TilePattern;
 use super::SCREEN_BUFFER_SIZE;
 use super::SCREEN_WIDTH;
 use super::SCREEN_HEIGHT;
+use super::TRANSPARENT;
 use super::ppu_reg::PPUReg;
 use super::ppu_memory::PPUMemory;
 use std::cmp;
-
-const TRANSPARENT: PaletteIndex = PaletteIndex {
-    set: PaletteSet::Sprite,
-    palette_id: 0,
-    color_id: 0,
-};
-
-const EMPTY_PIXEL_BUFFER: [PaletteIndex; SCREEN_BUFFER_SIZE] = [TRANSPARENT; SCREEN_BUFFER_SIZE];
 
 bitflags! {
     flags OAMAttr : u8 {
@@ -140,11 +133,7 @@ impl SpriteDetails {
         let fine_x = get_fine_scroll(8, x, self.x as u16, self.attr.contains(FLIP_HORZ));
         let attr = self.attr;
         let color_id = self.tile.get_color_in_pattern(fine_x as u32);
-        let idx = PaletteIndex {
-            set: PaletteSet::Sprite,
-            palette_id: attr.palette(),
-            color_id: color_id,
-        };
+        let idx = PaletteIndex::from_unpacked(PaletteSet::Sprite, attr.palette(), color_id);
         (attr.priority(), idx)
     }
 
@@ -260,7 +249,9 @@ impl SpriteRenderer {
     }
 
     pub fn clear(&mut self) {
-        self.pixel_buffer.copy_from_slice(&EMPTY_PIXEL_BUFFER);
+        for dest in self.pixel_buffer.iter_mut() {
+            *dest = TRANSPARENT;
+        }
         for dest in self.priority_buffer.iter_mut() {
             *dest = SpritePriority::Background;
         }

@@ -6,20 +6,13 @@ use super::TilePattern;
 use super::SCREEN_BUFFER_SIZE;
 use super::SCREEN_WIDTH;
 use super::SCREEN_HEIGHT;
+use super::TRANSPARENT;
 use super::ppu_reg::PPUReg;
 use super::ppu_memory::PPUMemory;
 use memory::MemSegment;
 use std::cmp;
 
 const TILES_PER_LINE: usize = 34;
-
-const TRANSPARENT: PaletteIndex = PaletteIndex {
-    set: PaletteSet::Background,
-    palette_id: 0,
-    color_id: 0,
-};
-
-const EMPTY_PIXEL_BUFFER: [PaletteIndex; SCREEN_BUFFER_SIZE] = [TRANSPARENT; SCREEN_BUFFER_SIZE];
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 struct TileAttribute {
@@ -82,7 +75,9 @@ impl BackgroundRenderer {
     }
 
     pub fn clear(&mut self) {
-        self.background_buffer.copy_from_slice(&EMPTY_PIXEL_BUFFER);
+        for dest in self.background_buffer.iter_mut() {
+            *dest = TRANSPARENT;
+        }
     }
 
     pub fn run_cycle(&mut self, cyc: u16, sl: i16, reg: &mut PPUReg, mem: &mut PPUMemory) {
@@ -230,11 +225,11 @@ impl BackgroundRenderer {
             let palette_id = attr.get_palette(pixel as u16 + reg.get_scroll_x() as u16,
                                               scanline as u16 + reg.get_scroll_y() as u16);
 
-            *item = PaletteIndex {
-                set: PaletteSet::Background,
-                palette_id: palette_id,
-                color_id: color_id,
-            }
+            *item = PaletteIndex::from_unpacked(
+                PaletteSet::Background,
+                palette_id,
+                color_id,
+            );
         }
     }
 
@@ -251,7 +246,7 @@ impl BackgroundRenderer {
                 if pix.is_transparent() {
                     print!(" ");
                 } else {
-                    print!("{}", pix.color_id);
+                    print!("{}", pix.color_id());
                 }
             }
             println!("");
@@ -268,7 +263,7 @@ impl BackgroundRenderer {
                 if pix.is_transparent() {
                     print!(" ");
                 } else {
-                    print!("{}", pix.palette_id);
+                    print!("{}", pix.palette_id());
                 }
             }
             println!("");
@@ -329,7 +324,7 @@ impl Default for BackgroundRenderer {
             tile: Box::new(tiles),
             attr: Box::new(attrs),
 
-            background_buffer: Box::new([Default::default(); SCREEN_BUFFER_SIZE]),
+            background_buffer: Box::new([TRANSPARENT; SCREEN_BUFFER_SIZE]),
         }
     }
 }

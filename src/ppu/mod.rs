@@ -46,7 +46,7 @@ pub enum PaletteSet {
 }
 
 impl PaletteSet {
-    fn table(&self) -> u16 {
+    fn table(&self) -> u8 {
         match *self {
             PaletteSet::Background => 0x00,
             PaletteSet::Sprite => 0x10,
@@ -56,36 +56,39 @@ impl PaletteSet {
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct PaletteIndex {
-    pub set: PaletteSet,
-    pub palette_id: u8,
-    pub color_id: u8,
+    addr: u8,
 }
 
+const TRANSPARENT: PaletteIndex = PaletteIndex{ addr: 0x00 };
+
 impl PaletteIndex {
-    fn to_addr(self) -> u16 {
-        if self.is_transparent() {
-            0x3F00
-        } else {
-            let mut addr: u16 = 0x3F00;
-            addr |= self.set.table();
-            addr |= (self.palette_id as u16 & 0x03) << 2;
-            addr |= self.color_id as u16 & 0x03;
-            addr
+    pub fn from_unpacked( set: PaletteSet,
+        palette_id: u8,
+        color_id: u8 ) -> PaletteIndex {
+        if color_id == 0 {
+            return PaletteIndex{ addr: 0 }
         }
+        let mut addr: u8 = 0x00;
+        addr |= set.table();
+        addr |= (palette_id & 0x03) << 2;
+        addr |= color_id & 0x03;
+        PaletteIndex{ addr: addr }
+    }
+
+    fn to_addr(self) -> u16 {
+        0x3F00 | (self.addr as u16)
     }
 
     fn is_transparent(&self) -> bool {
-        self.color_id == 0
+        self.addr == 0
     }
-}
 
-impl Default for PaletteIndex {
-    fn default() -> PaletteIndex {
-        PaletteIndex {
-            set: PaletteSet::Background,
-            palette_id: 0,
-            color_id: 0,
-        }
+    fn color_id(&self) -> u8 {
+        self.addr & 0x03
+    }
+
+    fn palette_id(&self) -> u8 {
+        ( self.addr >> 2 ) & 0x03
     }
 }
 
@@ -306,8 +309,8 @@ impl PPU {
             let pal_idx = match (background_px, priority_px, sprite_px) {
                 (bck, _, spr) if spr.is_transparent() => bck,
                 (bck, _, spr) if bck.is_transparent() => spr,
-                (_, SpritePriority::Foreground, spr) => spr,
-                (bck, SpritePriority::Background, _) => bck,
+                (_, true, spr) => spr,
+                (bck, false, _) => bck,
             };
 
             self.screen_buffer[px] = self.ppu_mem.read_palette(pal_idx);
