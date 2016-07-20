@@ -62,13 +62,7 @@ impl PPUMemory {
     }
 
     fn read_palette_mem(&self, idx: usize) -> Color {
-        match (idx & 0x1F) as usize {
-            0x10 => self.palette[0x00],
-            0x14 => self.palette[0x04],
-            0x18 => self.palette[0x08],
-            0x1C => self.palette[0x0C],
-            x => self.palette[x],
-        }
+        self.palette[idx & 0x1F]
     }
 
     pub fn read_tile_pattern(&mut self,
@@ -124,13 +118,26 @@ impl MemSegment for PPUMemory {
             }
             0x3F00...0x3FFF => {
                 let val = Color::from_bits_truncate(val);
-                match (idx & 0x001F) as usize {
+                let idx = (idx & 0x001F) as usize;
+                // Do the palette mirroring on write since we read a lot more than we write.
+                // This is not strictly accurate - the PPU can actually render these colors
+                // in certain rare circumstances - but it's good enough.
+                match idx {
                     0x10 => self.palette[0x00] = val,
+                    0x00 => self.palette[0x10] = val,
+
                     0x14 => self.palette[0x04] = val,
+                    0x04 => self.palette[0x14] = val,
+
                     0x18 => self.palette[0x08] = val,
+                    0x08 => self.palette[0x18] = val,
+
                     0x1C => self.palette[0x0C] = val,
-                    x => self.palette[x] = val,
-                }
+                    0x0C => self.palette[0x1C] = val,
+
+                    _ => (),
+                };
+                self.palette[idx] = val;
             }
             x => invalid_address!(x),
         }
