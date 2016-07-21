@@ -3,7 +3,6 @@ use cart::{Cart, ScreenMode};
 use std::rc::Rc;
 use std::cell::RefCell;
 use super::Color;
-use super::PaletteIndex;
 use super::TilePattern;
 
 /// Represents the PPU's memory map.
@@ -57,12 +56,15 @@ impl PPUMemory {
         translated as usize % self.vram.len()
     }
 
-    pub fn read_palette(&mut self, idx: PaletteIndex) -> Color {
-        self.read_palette_mem(idx.to_addr() as usize)
+    #[cfg(feature="vectorize")]
+    pub fn get_palettes(&self) -> (::simd::u8x16, ::simd::u8x16) {
+        let palette_bytes: &[u8; 0x20] = unsafe { ::std::mem::transmute(&self.palette) };
+        (::simd::u8x16::load(palette_bytes, 0), ::simd::u8x16::load(palette_bytes, 16))
     }
 
-    fn read_palette_mem(&self, idx: usize) -> Color {
-        self.palette[idx & 0x1F]
+    #[cfg(not(feature="vectorize"))]
+    pub fn read_palette(&mut self, idx: super::PaletteIndex) -> Color {
+        self.palette[idx.to_index()]
     }
 
     pub fn read_tile_pattern(&mut self,
@@ -101,7 +103,7 @@ impl MemSegment for PPUMemory {
                 cart.chr_read(idx)
             }
             0x2000...0x3EFF => self.read_bypass_palette(idx),
-            0x3F00...0x3FFF => self.read_palette_mem(idx as usize).bits(),
+            0x3F00...0x3FFF => self.palette[(idx & 0x1F) as usize].bits(),
             x => invalid_address!(x),
         }
     }

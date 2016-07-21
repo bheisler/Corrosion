@@ -63,6 +63,10 @@ pub struct PaletteIndex {
 const TRANSPARENT: PaletteIndex = PaletteIndex{ addr: 0x00 };
 
 impl PaletteIndex {
+    pub fn from_packed(addr: u8) -> PaletteIndex {
+        PaletteIndex{ addr: addr }
+    }
+
     pub fn from_unpacked( set: PaletteSet,
         palette_id: u8,
         color_id: u8 ) -> PaletteIndex {
@@ -76,8 +80,9 @@ impl PaletteIndex {
         PaletteIndex{ addr: addr }
     }
 
-    fn to_addr(self) -> u16 {
-        0x3F00 | (self.addr as u16)
+    #[cfg(not(feature="vectorize"))]
+    fn to_index(self) -> usize {
+        self.addr as usize
     }
 
     fn is_transparent(&self) -> bool {
@@ -299,6 +304,56 @@ impl PPU {
         }
     }
 
+    #[cfg(feature="vectorize")]
+    fn mix(&mut self, start: usize, stop: usize) {
+        use std::mem;
+        use std::cmp;
+        use simd::u8x16;
+        use simd::x86::ssse3::Ssse3U8x16;
+
+        let background = self.background_data.buffer();
+        let (sprite, priority, _) = self.sprite_data.buffers();
+
+        let mut start = start;
+
+        let (background_pal, sprite_pal) = self.ppu_mem.get_palettes();
+
+        let background_bytes : &[u8; SCREEN_BUFFER_SIZE] = unsafe{ mem::transmute( background ) };
+        let sprite_bytes : &[u8; SCREEN_BUFFER_SIZE] = unsafe{ mem::transmute( sprite ) };
+        let priority_bytes : &[u8; SCREEN_BUFFER_SIZE] = unsafe{ mem::transmute( priority ) };
+
+        let color_bytes : &mut [u8; SCREEN_BUFFER_SIZE] = unsafe{ mem::transmute(&mut self.screen_buffer) };
+
+        while start < stop {
+            start = cmp::min(start, SCREEN_BUFFER_SIZE - 16);
+            let background_color = u8x16::load( background_bytes, start );
+            let background_transparent = background_color.eq( u8x16::splat(0) );
+            let sprite_color = u8x16::load( sprite_bytes, start );
+            let sprite_solid = sprite_color.ne( u8x16::splat(0) );
+
+            //the simd crate doesn't have a bool8ix16::load method for some reason, so we have to
+            //hack around that by transmuting to u8 and checking for non-equality with zero.
+            //bool8ix16 has a slightly unusual internal representation, so we can't just use
+            //bool8ix16::from_repr(i8x16)
+            let sprite_priority = u8x16::load(priority_bytes, start).ne(u8x16::splat(0));
+
+            let use_sprite = background_transparent | (sprite_solid & sprite_priority);
+            let final_idx = use_sprite.select( sprite_color, background_color );
+
+            let table: u8x16 = final_idx >> 4;
+            let use_sprite_table = table.ne(u8x16::splat(0));
+            let color_id = final_idx & u8x16::splat(0b0000_1111);
+
+            let background_shuf = background_pal.shuffle_bytes(color_id);
+            let sprite_shuf = sprite_pal.shuffle_bytes(color_id);
+
+            let final_color = use_sprite_table.select( sprite_shuf, background_shuf);
+            final_color.store(&mut *color_bytes, start);
+            start += 16;
+        }
+    }
+
+    #[cfg(not(feature="vectorize"))]
     fn mix(&mut self, start: usize, stop: usize) {
         let background = self.background_data.buffer();
         let (sprite, priority, _) = self.sprite_data.buffers();
@@ -307,12 +362,8 @@ impl PPU {
             let (priority_px, sprite_px) = (priority[px], sprite[px]);
             let background_px = background[px];
 
-            let pal_idx = match (background_px, priority_px, sprite_px) {
-                (bck, _, spr) if spr.is_transparent() => bck,
-                (bck, _, spr) if bck.is_transparent() => spr,
-                (_, true, spr) => spr,
-                (bck, false, _) => bck,
-            };
+            let use_sprite = background_px.is_transparent() || (priority_px && !sprite_px.is_transparent());
+            let pal_idx = if use_sprite { sprite_px } else { background_px };
 
             self.screen_buffer[px] = self.ppu_mem.read_palette(pal_idx);
         }

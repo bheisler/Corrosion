@@ -1,7 +1,6 @@
+#![feature(test)]
 #![feature(plugin)]
 #![plugin(clippy)]
-
-#![feature(test)]
 
 #![allow(new_without_default)]
 #![allow(match_same_arms)]
@@ -15,6 +14,7 @@ extern crate quick_error;
 pub extern crate sdl2;
 extern crate blip_buf;
 extern crate memmap;
+extern crate simd;
 
 pub mod cart;
 pub mod memory;

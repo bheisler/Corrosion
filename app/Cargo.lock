@@ -66,6 +66,7 @@ dependencies = [
  "memmap 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "quick-error 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sdl2 0.17.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "simd 0.1.1 (git+https://github.com/huonw/simd)",
 ]
 
 [[package]]
@@ -245,6 +246,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "nom 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "simd"
+version = "0.1.1"
+source = "git+https://github.com/huonw/simd#0d85d25d5cc3788062b252e31ad48dd19e805e90"
 
 [[package]]
 name = "stopwatch"
