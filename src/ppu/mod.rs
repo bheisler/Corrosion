@@ -264,11 +264,14 @@ impl PPU {
     }
 
     fn run_cycle(&mut self) -> bool {
-        self.sprite_data.run_cycle(self.cyc, self.sl, &mut self.reg, &mut self.ppu_mem);
         self.background_data.run_cycle(self.cyc, self.sl, &mut self.reg, &mut self.ppu_mem);
         match (self.cyc, self.sl) {
             (_, -1) => self.prerender_scanline(),
-            (_, 0...239) => (), //Visible scanline
+
+            //Visible scanlines
+            (0, 0...239) => self.sprite_data.sprite_eval(self.sl as u16, &self.reg, &mut self.ppu_mem),
+            (_, 0...239) => (),
+
             (_, 240) => (), //Post-render idle scanline
             (1, 241) => return self.start_vblank(),
             (_, 241...260) => (), //VBlank lines

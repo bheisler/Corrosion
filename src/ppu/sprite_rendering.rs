@@ -39,8 +39,8 @@ struct OAMEntry {
 }
 
 impl OAMEntry {
-    fn is_on_scanline(&self, reg: &PPUReg, scanline: u16) -> bool {
-        self.y <= scanline && scanline < self.y + reg.ppuctrl.sprite_height()
+    fn is_on_scanline(&self, scanline: u16, sprite_height: u16) -> bool {
+        self.y <= scanline && scanline < self.y + sprite_height
     }
 
     fn build_details(&self,
@@ -219,22 +219,17 @@ impl SpriteRenderer {
         self.draw(start, stop)
     }
 
-    pub fn run_cycle(&mut self, cyc: u16, sl: i16, reg: &mut PPUReg, mem: &mut PPUMemory) {
-        if let (0, sl @ 0...239) = (cyc, sl) {
-            self.sprite_eval(sl as u16, reg, mem);
-        }
-    }
-
-    fn sprite_eval(&mut self, scanline: u16, reg: &PPUReg, mem: &mut PPUMemory) {
+    pub fn sprite_eval(&mut self, scanline: u16, reg: &PPUReg, mem: &mut PPUMemory) {
         if scanline + 1 >= SCREEN_HEIGHT as u16 {
             return;
         }
         let mut n = 0;
+        let sprite_height = reg.ppuctrl.sprite_height();
         let secondary_oam_line = &mut self.secondary_oam[scanline as usize + 1];
         secondary_oam_line.copy_from_slice(&EMPTY_SECONDARY_OAM_LINE);
         for x in 0..64 {
             let oam = &self.primary_oam[x];
-            if oam.is_on_scanline(reg, scanline) {
+            if oam.is_on_scanline(scanline, sprite_height) {
                 secondary_oam_line[n] = oam.build_details(x, scanline, reg, mem);
                 n += 1;
                 if n == 8 {
