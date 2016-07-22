@@ -81,10 +81,13 @@ impl BackgroundRenderer {
     }
 
     pub fn run_cycle(&mut self, cyc: u16, sl: i16, reg: &mut PPUReg, mem: &mut PPUMemory) {
-        if !reg.ppumask.rendering_enabled() {
-            return;
-        }
         // Match to update vram addresses
+        self.update_vram_address(cyc, sl, reg);
+        // VRAM Accesses
+        self.read_data(cyc, sl, reg, mem);
+    }
+
+    fn update_vram_address(&self, cyc: u16, sl: i16, reg: &mut PPUReg) {
         match (cyc, sl) {
             (280...304, -1) => self.copy_vertical(reg),
             (256, -1...239) => self.increment_y(reg),
@@ -93,7 +96,9 @@ impl BackgroundRenderer {
             (1...256, -1...239) if cyc % 8 == 0 => self.increment_x(reg),
             _ => (),
         }
-        // VRAM Accesses
+    }
+
+    fn read_data(&mut self, cyc: u16, sl: i16, reg: &mut PPUReg, mem: &mut PPUMemory) {
         match (cyc, sl, cyc % 8) {
             // Fetches for next scanline
             (320...336, -1...239, 1) => {
