@@ -27,6 +27,11 @@ fn run_benchmark(bencher: &mut Bencher, file_name: &Path, commands: HashMap<u32,
 
     let mut emulator = builder.build();
 
+    while !emulator.rendering_enabled() {
+        assert!(!emulator.halted());
+        emulator.run_frame();
+    }
+
     bencher.iter(|| {
         assert!(!emulator.halted());
         emulator.run_frame();

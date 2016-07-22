@@ -10,3 +10,4 @@ nestest*
 SDL2.dll
 /.cargo/
 **/*fuse_hidden*
+callgrind.out*

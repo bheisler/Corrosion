@@ -102,4 +102,8 @@ impl Emulator {
     pub fn mouse_pick(&self, px_x: i32, px_y: i32) {
         self.cpu.mem.ppu.mouse_pick(px_x, px_y);
     }
+
+    pub fn rendering_enabled(&self) -> bool {
+        self.cpu.mem.ppu.rendering_enabled()
+    }
 }

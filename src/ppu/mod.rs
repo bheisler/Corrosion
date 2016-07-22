@@ -351,6 +351,10 @@ impl PPU {
         self.background_data.mouse_pick(&self.reg, px_x, px_y);
         self.sprite_data.mouse_pick(px_x, px_y);
     }
+
+    pub fn rendering_enabled(&self) -> bool {
+        self.reg.ppumask.rendering_enabled()
+    }
 }
 
 impl MemSegment for PPU {
