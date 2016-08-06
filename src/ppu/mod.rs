@@ -221,10 +221,12 @@ impl PPU {
         let start_px = start_px % SCREEN_BUFFER_SIZE;
         let stop_px = start_px + delta_px;
 
+        let rendering_enabled = self.reg.ppumask.rendering_enabled();
+
         let mut hit_nmi = false;
         while self.global_cyc < stop {
             self.tick_cycle();
-            hit_nmi |= self.run_cycle();
+            hit_nmi |= self.run_cycle(rendering_enabled);
         }
 
         if self.reg.ppumask.contains( S_BCK ) {
@@ -263,9 +265,9 @@ impl PPU {
         }
     }
 
-    fn run_cycle(&mut self) -> bool {
+    fn run_cycle(&mut self, rendering_enabled: bool) -> bool {
         if let -1...240 = self.sl {
-            if self.reg.ppumask.rendering_enabled() {
+            if rendering_enabled {
                 self.background_data.run_cycle(self.cyc, self.sl, &mut self.reg, &mut self.ppu_mem);
             }
         }
