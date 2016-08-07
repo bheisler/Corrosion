@@ -75,8 +75,8 @@ impl BackgroundRenderer {
     }
 
     pub fn clear(&mut self) {
-        for dest in self.background_buffer.iter_mut() {
-            *dest = TRANSPARENT;
+        unsafe {
+            ::std::ptr::write_bytes(&mut *self.background_buffer as *mut [PaletteIndex; SCREEN_BUFFER_SIZE], 0x00, 1);
         }
     }
 

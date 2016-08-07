@@ -240,14 +240,10 @@ impl SpriteRenderer {
     }
 
     pub fn clear(&mut self) {
-        for dest in self.pixel_buffer.iter_mut() {
-            *dest = TRANSPARENT;
-        }
-        for dest in self.priority_buffer.iter_mut() {
-            *dest = false;
-        }
-        for dest in self.sprite0_buffer.iter_mut() {
-            *dest = false;
+        unsafe {
+            ::std::ptr::write_bytes(&mut *self.pixel_buffer as *mut [PaletteIndex; SCREEN_BUFFER_SIZE], 0x00, 1 );
+            ::std::ptr::write_bytes(&mut *self.priority_buffer as *mut [bool; SCREEN_BUFFER_SIZE], 0x00, 1 );
+            ::std::ptr::write_bytes(&mut *self.sprite0_buffer as *mut [bool; SCREEN_BUFFER_SIZE], 0x00, 1 );
         }
     }
 
