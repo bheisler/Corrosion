@@ -1,13 +1,13 @@
 use memory::MemSegment;
 use cart::{Cart, ScreenMode};
 use std::rc::Rc;
-use std::cell::RefCell;
+use std::cell::UnsafeCell;
 use super::Color;
 use super::TilePattern;
 
 /// Represents the PPU's memory map.
 pub struct PPUMemory {
-    cart: Rc<RefCell<Cart>>,
+    cart: Rc<UnsafeCell<Cart>>,
     vram: [u8; 0x0F00],
     palette: [Color; 0x20],
 }
@@ -23,7 +23,7 @@ fn get_nametable_addrs(mode: ScreenMode) -> [u16; 4] {
 }
 
 impl PPUMemory {
-    pub fn new(cart: Rc<RefCell<Cart>>) -> PPUMemory {
+    pub fn new(cart: Rc<UnsafeCell<Cart>>) -> PPUMemory {
         PPUMemory {
             cart: cart,
             vram: [0u8; 0x0F00],
@@ -51,7 +51,7 @@ impl PPUMemory {
         let idx = idx & 0x0FFF;
         let nametable_num = (idx / 0x0400) as usize;
         let idx_in_nametable = idx % 0x400;
-        let mode = self.cart.borrow().get_mirroring_mode();
+        let mode = unsafe { (*self.cart.get()).get_mirroring_mode() };
         let translated = get_nametable_addrs(mode)[nametable_num] + idx_in_nametable;
         translated as usize % self.vram.len()
     }
@@ -99,8 +99,7 @@ impl MemSegment for PPUMemory {
     fn read(&mut self, idx: u16) -> u8 {
         match idx {
             0x0000...0x1FFF => {
-                let mut cart = self.cart.borrow_mut();
-                cart.chr_read(idx)
+                unsafe { (*self.cart.get()).chr_read(idx) }
             }
             0x2000...0x3EFF => self.read_bypass_palette(idx),
             0x3F00...0x3FFF => self.palette[(idx & 0x1F) as usize].bits(),
@@ -111,8 +110,7 @@ impl MemSegment for PPUMemory {
     fn write(&mut self, idx: u16, val: u8) {
         match idx {
             0x0000...0x1FFF => {
-                let mut cart = self.cart.borrow_mut();
-                cart.chr_write(idx, val)
+                unsafe { (*self.cart.get()).chr_write(idx, val) }
             }
             0x2000...0x3EFF => {
                 let idx = self.translate_vram_address(idx);

@@ -42,6 +42,7 @@ use ppu::PPU;
 use io::IO;
 
 use std::rc::Rc;
+use std::cell::UnsafeCell;
 use std::cell::RefCell;
 
 pub struct EmulatorBuilder {
@@ -74,7 +75,7 @@ impl EmulatorBuilder {
     }
 
     pub fn build(self) -> Emulator {
-        let cart: Rc<RefCell<Cart>> = Rc::new(RefCell::new(self.cart));
+        let cart: Rc<UnsafeCell<Cart>> = Rc::new(UnsafeCell::new(self.cart));
         let ppu = PPU::new(cart.clone(), self.screen);
         let apu = APU::new(self.audio_out);
         let mem = CpuMemory::new(ppu, apu, self.io, cart);

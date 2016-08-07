@@ -2,7 +2,7 @@ use memory::MemSegment;
 use screen::Screen;
 use cart::Cart;
 use std::rc::Rc;
-use std::cell::RefCell;
+use std::cell::UnsafeCell;
 use std::default::Default;
 use std::cmp;
 
@@ -191,7 +191,7 @@ fn cyc_to_px(ppu_cyc: u64) -> usize {
 }
 
 impl PPU {
-    pub fn new(cart: Rc<RefCell<Cart>>, screen: Box<Screen>) -> PPU {
+    pub fn new(cart: Rc<UnsafeCell<Cart>>, screen: Box<Screen>) -> PPU {
         PPU {
             reg: Default::default(),
             ppudata_read_buffer: 0,
@@ -469,7 +469,7 @@ mod tests {
     use super::*;
     use mappers::create_test_mapper;
     use std::rc::Rc;
-    use std::cell::RefCell;
+    use std::cell::UnsafeCell;
     use cart::{Cart, ScreenMode};
     use screen::DummyScreen;
     use ppu::ppu_reg::PPUCtrl;
@@ -482,13 +482,13 @@ mod tests {
     pub fn create_test_ppu_with_rom(chr_rom: Vec<u8>) -> PPU {
         let mapper = create_test_mapper(vec![0u8; 0x1000], chr_rom, ScreenMode::FourScreen);
         let cart = Cart::new(mapper);
-        PPU::new(Rc::new(RefCell::new(cart)), Box::new(DummyScreen::default()))
+        PPU::new(Rc::new(UnsafeCell::new(cart)), Box::new(DummyScreen::default()))
     }
 
     pub fn create_test_ppu_with_mirroring(mode: ScreenMode) -> PPU {
         let mapper = create_test_mapper(vec![0u8; 0x1000], vec![0u8; 0x1000], mode);
         let cart = Cart::new(mapper);
-        PPU::new(Rc::new(RefCell::new(cart)), Box::new(DummyScreen::default()))
+        PPU::new(Rc::new(UnsafeCell::new(cart)), Box::new(DummyScreen::default()))
     }
 
     #[test]
