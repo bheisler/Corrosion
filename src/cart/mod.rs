@@ -76,8 +76,8 @@ impl Cart {
         }
     }
 
-    pub fn get_mirroring_mode(&self) -> ScreenMode {
-        self.mapper.get_mirroring_mode()
+    pub fn get_mirroring_table(&self) -> &[u16; 4] {
+        self.mapper.get_mirroring_table()
     }
 
     pub fn read(path: &Path) -> Result<Cart, RomReadError> {

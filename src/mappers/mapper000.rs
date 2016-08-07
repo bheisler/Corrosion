@@ -1,5 +1,4 @@
 use super::*;
-use cart::ScreenMode;
 
 struct Mapper000 {
     prg_rom: Box<[u8]>,
@@ -7,7 +6,7 @@ struct Mapper000 {
     chr_ram: Box<[u8]>,
     prg_ram: Box<[u8]>,
 
-    mode: ScreenMode,
+    mode: &'static [u16; 4],
 }
 
 pub fn new(params: MapperParams) -> Box<Mapper> {
@@ -21,7 +20,7 @@ pub fn new(params: MapperParams) -> Box<Mapper> {
         chr_rom: params.chr_rom.into_boxed_slice(),
         chr_ram: chr_ram,
         prg_ram: vec![0u8; params.prg_ram_size].into_boxed_slice(),
-        mode: params.mirroring_mode,
+        mode: super::standard_mapping_tables( params.mirroring_mode ),
     })
 }
 
@@ -60,7 +59,7 @@ impl Mapper for Mapper000 {
         }
     }
 
-    fn get_mirroring_mode(&self) -> ScreenMode {
+    fn get_mirroring_table(&self) -> &[u16; 4] {
         self.mode
     }
 }

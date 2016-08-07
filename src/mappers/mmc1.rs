@@ -7,7 +7,7 @@ use cart::ScreenMode;
 #[derive(Debug, Clone, PartialEq)]
 struct Ctrl {
     mode: PrgMode,
-    mirroring: ScreenMode, // TODO: Add chr mode
+    mirroring: &'static [u16; 4], // TODO: Add chr mode
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -76,7 +76,7 @@ pub fn new(params: MapperParams) -> Box<Mapper> {
         regs: Regs {
             control: Ctrl {
                 mode: PrgMode::FixLast,
-                mirroring: ScreenMode::OneScreenLow,
+                mirroring: super::standard_mapping_tables( ScreenMode::OneScreenLow ),
             },
             chr_0: 0,
             chr_1: 0,
@@ -113,7 +113,7 @@ impl Mapper for MMC1 {
             self.write_counter = 0;
             self.regs.control = Ctrl {
                 mode: PrgMode::FixLast,
-                mirroring: ScreenMode::OneScreenLow,
+                mirroring: super::standard_mapping_tables( ScreenMode::OneScreenLow ),
             };
             return;
         }
@@ -141,7 +141,7 @@ impl Mapper for MMC1 {
                     };
                     self.regs.control = Ctrl {
                         mode: mode,
-                        mirroring: mirroring,
+                        mirroring: super::standard_mapping_tables( mirroring ),
                     };
                 }
                 0xA000...0xBFFF => self.regs.chr_0 = self.accumulator,
@@ -162,7 +162,7 @@ impl Mapper for MMC1 {
         self.chr_ram[idx as usize] = val;
     }
 
-    fn get_mirroring_mode(&self) -> ScreenMode {
+    fn get_mirroring_table(&self) -> &[u16; 4] {
         self.regs.control.mirroring
     }
 }

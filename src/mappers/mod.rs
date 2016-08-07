@@ -8,13 +8,29 @@ use super::memory::MemSegment;
 use std::path::Path;
 use cart::ScreenMode;
 
+static VERTICAL: [u16; 4] = [0x2000, 0x2400, 0x2000, 0x2400];
+static HORIZONTAL: [u16; 4] = [0x2000, 0x2000, 0x2400, 0x2400];
+static ONE_SCREEN_LOW: [u16; 4] = [0x2000, 0x2000, 0x2000, 0x2000];
+static ONE_SCREEN_HIGH: [u16; 4] = [0x2400, 0x2400, 0x2400, 0x2400];
+static FOUR_SCREEN: [u16; 4] = [0x2000, 0x2400, 0x2800, 0x2C00];
+
+fn standard_mapping_tables(mode: ScreenMode) -> &'static [u16; 4] {
+    match mode {
+        ScreenMode::Vertical => &VERTICAL,
+        ScreenMode::Horizontal => &HORIZONTAL,
+        ScreenMode::OneScreenHigh => &ONE_SCREEN_HIGH,
+        ScreenMode::OneScreenLow => &ONE_SCREEN_LOW,
+        ScreenMode::FourScreen => &FOUR_SCREEN,
+    }
+}
+
 pub trait Mapper {
     fn prg_read(&mut self, idx: u16) -> u8;
     fn prg_write(&mut self, idx: u16, val: u8);
     fn chr_read(&mut self, idx: u16) -> u8;
     fn chr_write(&mut self, idx: u16, val: u8);
 
-    fn get_mirroring_mode(&self) -> ScreenMode;
+    fn get_mirroring_table(&self) -> &[u16; 4];
 }
 
 pub struct MapperParams<'a> {

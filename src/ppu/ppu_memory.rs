@@ -1,5 +1,5 @@
 use memory::MemSegment;
-use cart::{Cart, ScreenMode};
+use cart::Cart;
 use std::rc::Rc;
 use std::cell::UnsafeCell;
 use super::Color;
@@ -10,16 +10,6 @@ pub struct PPUMemory {
     cart: Rc<UnsafeCell<Cart>>,
     vram: [u8; 0x0F00],
     palette: [Color; 0x20],
-}
-
-fn get_nametable_addrs(mode: ScreenMode) -> [u16; 4] {
-    match mode {
-        ScreenMode::Vertical => [0x2000, 0x2400, 0x2000, 0x2400],
-        ScreenMode::Horizontal => [0x2000, 0x2000, 0x2400, 0x2400],
-        ScreenMode::OneScreenLow => [0x2000, 0x2000, 0x2000, 0x2000],
-        ScreenMode::OneScreenHigh => [0x2400, 0x2400, 0x2400, 0x2400],
-        ScreenMode::FourScreen => [0x2000, 0x2400, 0x2800, 0x2C00],
-    }
 }
 
 impl PPUMemory {
@@ -51,8 +41,8 @@ impl PPUMemory {
         let idx = idx & 0x0FFF;
         let nametable_num = (idx / 0x0400) as usize;
         let idx_in_nametable = idx % 0x400;
-        let mode = unsafe { (*self.cart.get()).get_mirroring_mode() };
-        let translated = get_nametable_addrs(mode)[nametable_num] + idx_in_nametable;
+        let table : &[u16; 4] = unsafe { (*self.cart.get()).get_mirroring_table() };
+        let translated = table[nametable_num] + idx_in_nametable;
         translated as usize % self.vram.len()
     }
 
