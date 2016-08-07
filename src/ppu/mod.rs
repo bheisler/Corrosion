@@ -149,6 +149,15 @@ pub enum StepResult {
     Continue,
 }
 
+#[cfg(feature="vectorize")]
+fn load_bool8ix16(array: &[u8], idx: usize) -> ::simd::bool8ix16 {
+    //the simd crate doesn't have a bool8ix16::load method for some reason, so we have to
+    //hack around that by transmuting to u8 and checking for non-equality with zero.
+    //bool8ix16 has a slightly unusual internal representation, so we can't just use
+    //bool8ix16::from_repr(i8x16)
+    ::simd::u8x16::load(array, idx).ne(::simd::u8x16::splat(0))
+}
+
 fn div_rem(num: u64, den: u64) -> (u64, u64) {
     (num / den, num % den)
 }
@@ -340,11 +349,7 @@ impl PPU {
             let sprite_color = u8x16::load( sprite_bytes, start );
             let sprite_solid = sprite_color.ne( u8x16::splat(0) );
 
-            //the simd crate doesn't have a bool8ix16::load method for some reason, so we have to
-            //hack around that by transmuting to u8 and checking for non-equality with zero.
-            //bool8ix16 has a slightly unusual internal representation, so we can't just use
-            //bool8ix16::from_repr(i8x16)
-            let sprite_priority = u8x16::load(priority_bytes, start).ne(u8x16::splat(0));
+            let sprite_priority = load_bool8ix16(priority_bytes, start);
 
             let use_sprite = background_transparent | (sprite_solid & sprite_priority);
             let final_idx = use_sprite.select( sprite_color, background_color );
@@ -378,6 +383,34 @@ impl PPU {
         }
     }
 
+    #[cfg(feature="vectorize")]
+    fn sprite0_test(&mut self, start: usize, stop:usize) {
+        use std::mem;
+        use simd::u8x16;
+
+        let background = self.background_data.buffer();
+        let (_, _, sprite0) = self.sprite_data.buffers();
+
+        let background_bytes : &[u8; SCREEN_BUFFER_SIZE] = unsafe{ mem::transmute( background ) };
+        let sprite0_bytes : &[u8; SCREEN_BUFFER_SIZE] = unsafe{ mem::transmute( sprite0 ) };
+
+        let mut start = start;
+        while start < stop {
+            start = cmp::min(start, SCREEN_BUFFER_SIZE - 16);
+            let background_color = u8x16::load( background_bytes, start );
+            let background_solid = background_color.ne( u8x16::splat(0) );
+
+            let sprite0 = load_bool8ix16(sprite0_bytes, start);
+
+            if (background_solid & sprite0).any() {
+                self.reg.ppustat.insert(SPRITE_0);
+                return;
+            }
+            start += 16;
+        }
+    }
+
+    #[cfg(not(feature="vectorize"))]
     fn sprite0_test(&mut self, start: usize, stop:usize) {
         let background = self.background_data.buffer();
         let (_, _, sprite0) = self.sprite_data.buffers();
