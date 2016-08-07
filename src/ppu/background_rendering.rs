@@ -6,7 +6,6 @@ use super::TilePattern;
 use super::SCREEN_BUFFER_SIZE;
 use super::SCREEN_WIDTH;
 use super::SCREEN_HEIGHT;
-use super::TRANSPARENT;
 use super::ppu_reg::PPUReg;
 use super::ppu_memory::PPUMemory;
 use memory::MemSegment;
@@ -65,19 +64,11 @@ pub struct BackgroundRenderer {
     idx: Box<[[u8; TILES_PER_LINE]; SCREEN_HEIGHT]>,
     tile: Box<[[TilePattern; TILES_PER_LINE]; SCREEN_HEIGHT]>,
     attr: Box<[[TileAttribute; TILES_PER_LINE]; SCREEN_HEIGHT]>,
-
-    background_buffer: Box<[PaletteIndex; SCREEN_BUFFER_SIZE]>,
 }
 
 impl BackgroundRenderer {
-    pub fn render(&mut self, start_px: usize, stop_px: usize, reg: &PPUReg) {
-        self.draw(reg, start_px, stop_px);
-    }
-
-    pub fn clear(&mut self) {
-        unsafe {
-            ::std::ptr::write_bytes(&mut *self.background_buffer as *mut [PaletteIndex; SCREEN_BUFFER_SIZE], 0x00, 1);
-        }
+    pub fn render(&mut self, buffer: &mut [PaletteIndex; SCREEN_BUFFER_SIZE], start_px: usize, stop_px: usize, reg: &PPUReg) {
+        self.draw(buffer, reg, start_px, stop_px);
     }
 
     pub fn run_cycle(&mut self, cyc: u16, sl: i16, reg: &mut PPUReg, mem: &mut PPUMemory) {
@@ -183,7 +174,7 @@ impl BackgroundRenderer {
         mem.read(nametable_addr);
     }
 
-    fn draw(&mut self, reg: &PPUReg, start: usize, stop: usize) {
+    fn draw(&mut self, buffer: &mut [PaletteIndex; SCREEN_BUFFER_SIZE], reg: &PPUReg, start: usize, stop: usize) {
         let mut current_scanline = start / SCREEN_WIDTH;
         let mut last_scanline_boundary = current_scanline * SCREEN_WIDTH;
         let next_scanline = current_scanline + 1;
@@ -195,6 +186,7 @@ impl BackgroundRenderer {
             let segment_end = cmp::min(next_scanline_boundary, stop) - last_scanline_boundary;
 
             self.draw_segment(reg,
+                buffer,
                               current_scanline,
                               last_scanline_boundary,
                               next_scanline_boundary,
@@ -207,8 +199,10 @@ impl BackgroundRenderer {
         }
     }
 
+    #[allow(too_many_arguments)]
     fn draw_segment(&mut self,
                     reg: &PPUReg,
+                    buffer: &mut [PaletteIndex; SCREEN_BUFFER_SIZE],
                     scanline: usize,
                     line_start: usize,
                     line_stop: usize,
@@ -216,7 +210,7 @@ impl BackgroundRenderer {
                     stop: usize) {
         let pattern_line = &self.tile[scanline];
         let attr_line = &self.attr[scanline];
-        let pixel_line = &mut self.background_buffer[line_start..line_stop];
+        let pixel_line = &mut buffer[line_start..line_stop];
 
         for (pixel, item) in pixel_line.iter_mut().enumerate().take(stop).skip(start) {
             let fine_x_scroll = reg.scroll_x_fine();
@@ -236,44 +230,6 @@ impl BackgroundRenderer {
                 color_id,
             );
         }
-    }
-
-    pub fn buffer(&self) -> &[PaletteIndex; SCREEN_BUFFER_SIZE] {
-        &self.background_buffer
-    }
-
-    #[allow(dead_code)]
-    pub fn dump_background_pixels(&self) {
-        for y in 0..SCREEN_HEIGHT {
-            for x in 0..SCREEN_WIDTH {
-                let idx = y * SCREEN_WIDTH + x;
-                let pix = self.background_buffer[idx];
-                if pix.is_transparent() {
-                    print!(" ");
-                } else {
-                    print!("{}", pix.color_id());
-                }
-            }
-            println!("");
-        }
-        println!("");
-    }
-
-    #[allow(dead_code)]
-    pub fn dump_background_palettes(&self) {
-        for y in 0..SCREEN_HEIGHT {
-            for x in 0..SCREEN_WIDTH {
-                let idx = y * SCREEN_WIDTH + x;
-                let pix = self.background_buffer[idx];
-                if pix.is_transparent() {
-                    print!(" ");
-                } else {
-                    print!("{}", pix.palette_id());
-                }
-            }
-            println!("");
-        }
-        println!("");
     }
 
     #[cfg(feature="mousepick")]
@@ -328,8 +284,6 @@ impl Default for BackgroundRenderer {
             idx: Box::new(idx),
             tile: Box::new(tiles),
             attr: Box::new(attrs),
-
-            background_buffer: Box::new([TRANSPARENT; SCREEN_BUFFER_SIZE]),
         }
     }
 }

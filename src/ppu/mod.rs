@@ -88,14 +88,6 @@ impl PaletteIndex {
     fn is_transparent(&self) -> bool {
         self.addr == 0
     }
-
-    fn color_id(&self) -> u8 {
-        self.addr & 0x03
-    }
-
-    fn palette_id(&self) -> u8 {
-        ( self.addr >> 2 ) & 0x03
-    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -129,6 +121,7 @@ pub struct PPU {
     ppu_mem: PPUMemory,
 
     screen: Box<Screen>,
+    palette_buffer: [PaletteIndex; SCREEN_BUFFER_SIZE],
     screen_buffer: [Color; SCREEN_BUFFER_SIZE],
 
     sprite_data: SpriteRenderer,
@@ -205,6 +198,8 @@ impl PPU {
             reg: Default::default(),
             ppudata_read_buffer: 0,
             ppu_mem: PPUMemory::new(cart),
+
+            palette_buffer: [TRANSPARENT; SCREEN_BUFFER_SIZE],
             screen_buffer: [Color::from_bits_truncate(0x00); SCREEN_BUFFER_SIZE],
             screen: screen,
 
@@ -239,14 +234,19 @@ impl PPU {
         }
 
         if self.reg.ppumask.contains( S_BCK ) {
-            self.background_data.render(start_px, stop_px, &self.reg);
+            self.background_data.render(&mut self.palette_buffer, start_px, stop_px, &self.reg);
+        }
+        else {
+            let slice = &mut self.palette_buffer[start_px..stop_px];
+            for dest in slice.iter_mut() {
+                *dest = TRANSPARENT;
+            }
         }
         if self.reg.ppumask.contains( S_SPR ) {
-            self.sprite_data.render(start_px, stop_px);
+            self.sprite_data.render(&mut self.palette_buffer, &mut self.reg, start_px, stop_px);
         }
 
-        self.mix(start_px, stop_px);
-        self.sprite0_test(start_px, stop_px);
+        self.colorize(start_px, stop_px);
 
         if hit_nmi {
             StepResult::NMI
@@ -311,9 +311,6 @@ impl PPU {
         let buf = &self.screen_buffer;
         self.screen.draw(buf);
 
-        self.background_data.clear();
-        self.sprite_data.clear();
-
         if self.frame > 0 {
             self.reg.ppustat.insert(VBLANK);
             self.reg.ppuctrl.generate_vblank_nmi()
@@ -323,40 +320,25 @@ impl PPU {
     }
 
     #[cfg(feature="vectorize")]
-    fn mix(&mut self, start: usize, stop: usize) {
+    fn colorize(&mut self, start:usize, stop: usize) {
         use std::mem;
         use std::cmp;
         use simd::u8x16;
         use simd::x86::ssse3::Ssse3U8x16;
 
-        let background = self.background_data.buffer();
-        let (sprite, priority, _) = self.sprite_data.buffers();
+        let (background_pal, sprite_pal) = self.ppu_mem.get_palettes();
+        let index_bytes : &[u8; SCREEN_BUFFER_SIZE] = unsafe{ mem::transmute( &self.palette_buffer ) };
+        let color_bytes : &mut [u8; SCREEN_BUFFER_SIZE] = unsafe{ mem::transmute( &mut self.screen_buffer ) };
 
         let mut start = start;
 
-        let (background_pal, sprite_pal) = self.ppu_mem.get_palettes();
-
-        let background_bytes : &[u8; SCREEN_BUFFER_SIZE] = unsafe{ mem::transmute( background ) };
-        let sprite_bytes : &[u8; SCREEN_BUFFER_SIZE] = unsafe{ mem::transmute( sprite ) };
-        let priority_bytes : &[u8; SCREEN_BUFFER_SIZE] = unsafe{ mem::transmute( priority ) };
-
-        let color_bytes : &mut [u8; SCREEN_BUFFER_SIZE] = unsafe{ mem::transmute(&mut self.screen_buffer) };
-
         while start < stop {
             start = cmp::min(start, SCREEN_BUFFER_SIZE - 16);
-            let background_color = u8x16::load( background_bytes, start );
-            let background_transparent = background_color.eq( u8x16::splat(0) );
-            let sprite_color = u8x16::load( sprite_bytes, start );
-            let sprite_solid = sprite_color.ne( u8x16::splat(0) );
+            let palette_idx = u8x16::load( index_bytes, start );
 
-            let sprite_priority = load_bool8ix16(priority_bytes, start);
-
-            let use_sprite = background_transparent | (sprite_solid & sprite_priority);
-            let final_idx = use_sprite.select( sprite_color, background_color );
-
-            let table: u8x16 = final_idx >> 4;
+            let table: u8x16 = palette_idx >> 4;
             let use_sprite_table = table.ne(u8x16::splat(0));
-            let color_id = final_idx & u8x16::splat(0b0000_1111);
+            let color_id = palette_idx & u8x16::splat(0b0000_1111);
 
             let background_shuf = background_pal.shuffle_bytes(color_id);
             let sprite_shuf = sprite_pal.shuffle_bytes(color_id);
@@ -368,61 +350,12 @@ impl PPU {
     }
 
     #[cfg(not(feature="vectorize"))]
-    fn mix(&mut self, start: usize, stop: usize) {
-        let background = self.background_data.buffer();
-        let (sprite, priority, _) = self.sprite_data.buffers();
+    fn colorize(&mut self, start: usize, stop: usize ) {
+        let color_slice = self.screen_buffer[start...stop];
+        let index_slice = self.palette_buffer[start...stop];
 
-        for px in start..stop {
-            let (priority_px, sprite_px) = (priority[px], sprite[px]);
-            let background_px = background[px];
-
-            let use_sprite = background_px.is_transparent() || (priority_px && !sprite_px.is_transparent());
-            let pal_idx = if use_sprite { sprite_px } else { background_px };
-
-            self.screen_buffer[px] = self.ppu_mem.read_palette(pal_idx);
-        }
-    }
-
-    #[cfg(feature="vectorize")]
-    fn sprite0_test(&mut self, start: usize, stop:usize) {
-        use std::mem;
-        use simd::u8x16;
-
-        let background = self.background_data.buffer();
-        let (_, _, sprite0) = self.sprite_data.buffers();
-
-        let background_bytes : &[u8; SCREEN_BUFFER_SIZE] = unsafe{ mem::transmute( background ) };
-        let sprite0_bytes : &[u8; SCREEN_BUFFER_SIZE] = unsafe{ mem::transmute( sprite0 ) };
-
-        let mut start = start;
-        while start < stop {
-            start = cmp::min(start, SCREEN_BUFFER_SIZE - 16);
-            let background_color = u8x16::load( background_bytes, start );
-            let background_solid = background_color.ne( u8x16::splat(0) );
-
-            let sprite0 = load_bool8ix16(sprite0_bytes, start);
-
-            if (background_solid & sprite0).any() {
-                self.reg.ppustat.insert(SPRITE_0);
-                return;
-            }
-            start += 16;
-        }
-    }
-
-    #[cfg(not(feature="vectorize"))]
-    fn sprite0_test(&mut self, start: usize, stop:usize) {
-        let background = self.background_data.buffer();
-        let (_, _, sprite0) = self.sprite_data.buffers();
-
-        let background_slice = &background[start..stop];
-        let sprite0_slice = &sprite0[start..stop];
-
-        for (bck, spr) in background_slice.iter().zip(sprite0_slice.iter()) {
-            if *spr && !bck.is_transparent() {
-                self.reg.ppustat.insert(SPRITE_0);
-                return;
-            }
+        for (src, dest) in color_slice.iter().zip_with(index_slice.iter_mut()) {
+            *dest = self.ppu_mem.read_palette(src);
         }
     }
 
