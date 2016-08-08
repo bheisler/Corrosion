@@ -230,7 +230,7 @@ impl PPU {
         let mut hit_nmi = false;
         while self.global_cyc < stop {
             self.tick_cycle();
-            hit_nmi |= self.run_cycle(rendering_enabled);
+            self.run_cycle(rendering_enabled, &mut hit_nmi);
         }
 
         if self.reg.ppumask.contains( S_BCK ) {
@@ -274,7 +274,7 @@ impl PPU {
         }
     }
 
-    fn run_cycle(&mut self, rendering_enabled: bool) -> bool {
+    fn run_cycle(&mut self, rendering_enabled: bool, hit_nmi: &mut bool) {
         if let -1...239 = self.sl {
             if rendering_enabled {
                 self.background_data.run_cycle(self.cyc, self.sl, &mut self.reg, &mut self.ppu_mem);
@@ -288,11 +288,10 @@ impl PPU {
             (_, 0...239) => (),
 
             (_, 240) => (), //Post-render idle scanline
-            (1, 241) => return self.start_vblank(),
+            (1, 241) => self.start_vblank( hit_nmi ),
             (_, 241...260) => (), //VBlank lines
             _ => (),
         }
-        false
     }
 
     fn prerender_scanline(&mut self) {
@@ -304,7 +303,7 @@ impl PPU {
         }
     }
 
-    fn start_vblank(&mut self) -> bool {
+    fn start_vblank(&mut self, hit_nmi: &mut bool) {
         self.next_vblank_ppu_cyc += CYCLES_PER_FRAME;
         self.next_vblank_cpu_cyc = ppu_to_cpu_cyc(self.next_vblank_ppu_cyc);
 
@@ -313,9 +312,7 @@ impl PPU {
 
         if self.frame > 0 {
             self.reg.ppustat.insert(VBLANK);
-            self.reg.ppuctrl.generate_vblank_nmi()
-        } else {
-            false
+            *hit_nmi |= self.reg.ppuctrl.generate_vblank_nmi();
         }
     }
 
