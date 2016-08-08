@@ -79,38 +79,58 @@ impl BackgroundRenderer {
     }
 
     fn update_vram_address(&self, cyc: u16, sl: i16, reg: &mut PPUReg) {
-        match (cyc, sl) {
-            (280...304, -1) => self.copy_vertical(reg),
-            (256, -1...239) => self.increment_y(reg),
-            (257, -1...239) => self.copy_horizontal(reg),
-            (328, -1...239) | (336, -1...239) => self.increment_x(reg),
-            (1...256, -1...239) if cyc % 8 == 0 => self.increment_x(reg),
-            _ => (),
+        if sl < 240 {
+            match cyc {
+                280 if sl == -1 => self.copy_vertical(reg),
+                256 => self.increment_y(reg),
+                257 => self.copy_horizontal(reg),
+                8 | 16 | 24 | 32 | 40 | 48 | 56 | 64 | 72 | 80 | 88 | 96 |
+                104 | 112 | 120 | 128 | 136 | 144 | 152 | 160 | 168 | 176 | 184 |
+                192 | 200 | 208 | 216 | 224 | 232 | 240 | 248 | 328 | 336 => self.increment_x(reg),
+                _ => (),
+            }
         }
     }
 
     fn read_data(&mut self, cyc: u16, sl: i16, reg: &mut PPUReg, mem: &mut PPUMemory) {
-        match (cyc, sl, cyc % 8) {
-            // Fetches for next scanline
-            (320...336, -1...239, 1) => {
-                self.fetch_nametable((cyc - 320) / 8, (sl + 1) % 240, reg, mem)
-            }
-            (320...336, -1...239, 3) => {
-                self.fetch_attribute((cyc - 320) / 8, (sl + 1) % 240, reg, mem)
-            }
-            (320...336, -1...239, 5) => {
-                self.fetch_tile_pattern((cyc - 320) / 8, (sl + 1) % 240, reg, mem)
-            }
+        if sl == -1 {
+            match cyc {
+                // Fetches for next scanline
+                321 | 329 => self.fetch_nametable((cyc - 320) / 8, (sl + 1) % 240, reg, mem),
+                323 | 331 => self.fetch_attribute((cyc - 320) / 8, (sl + 1) % 240, reg, mem),
+                325 | 333 => self.fetch_tile_pattern((cyc - 320) / 8, (sl + 1) % 240, reg, mem),
 
-            // Fetches for this scanline
-            (0...256, 0...239, 1) => self.fetch_nametable((cyc + 16) / 8, sl, reg, mem),
-            (0...256, 0...239, 3) => self.fetch_attribute((cyc + 16) / 8, sl, reg, mem),
-            (0...256, 0...239, 5) => self.fetch_tile_pattern((cyc + 16) / 8, sl, reg, mem),
+                // The two garbage nametable fetches at the end of every scanline
+                337 | 339 => self.garbage_nametable_fetch(reg, mem),
+                _ => (),
+            }
+        }
+        else if sl < 240 {
+            match cyc {
+                //Normal fetches
+                1 | 9 | 17 | 25 | 33 | 41 | 49 | 57 | 65 | 73 | 81 | 89 | 97 |
+                105 | 113 | 121 | 129 | 137 | 145 | 153 | 161 | 169 | 177 | 185 |
+                193 | 201 | 209 | 217 | 225 | 233 | 241 | 249 => {
+                    self.fetch_nametable((cyc + 16) / 8, sl, reg, mem)
+                },
+                3 | 11 | 19 | 27 | 35 | 43 | 51 | 59 | 67 | 75 | 83 | 91 | 99 |
+                107 | 115 | 123 | 131 | 139 | 147 | 155 | 163 | 171 | 179 | 187 |
+                195 | 203 | 211 | 219 | 227 | 235 | 243 | 251 =>
+                    self.fetch_attribute((cyc + 16) / 8, sl, reg, mem),
+                5 | 13 | 21 | 29 | 37 | 45 | 53 | 61 | 69 | 77 | 85 | 93 | 101 |
+                109 | 117 | 125 | 133 | 141 | 149 | 157 | 165 | 173 | 181 | 189 |
+                197 | 205 | 213 | 221 | 229 | 237 | 245 | 253 =>
+                    self.fetch_tile_pattern((cyc + 16) / 8, sl, reg, mem),
 
-            // The two garbage nametable fetches at the end of every scanline
-            (337, -1...239, _) | (339, -1...239, _) => self.garbage_nametable_fetch(reg, mem),
+                // Fetches for next scanline
+                321 | 329 => self.fetch_nametable((cyc - 320) / 8, (sl + 1) % 240, reg, mem),
+                323 | 331 => self.fetch_attribute((cyc - 320) / 8, (sl + 1) % 240, reg, mem),
+                325 | 333 => self.fetch_tile_pattern((cyc - 320) / 8, (sl + 1) % 240, reg, mem),
 
-            _ => (),
+                // The two garbage nametable fetches at the end of every scanline
+                337 | 339 => self.garbage_nametable_fetch(reg, mem),
+                _ => (),
+            }
         }
     }
 

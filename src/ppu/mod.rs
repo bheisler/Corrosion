@@ -275,7 +275,7 @@ impl PPU {
     }
 
     fn run_cycle(&mut self, rendering_enabled: bool) -> bool {
-        if let -1...240 = self.sl {
+        if let -1...239 = self.sl {
             if rendering_enabled {
                 self.background_data.run_cycle(self.cyc, self.sl, &mut self.reg, &mut self.ppu_mem);
             }
