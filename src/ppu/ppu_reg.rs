@@ -104,8 +104,8 @@ pub struct PPUReg {
 
     // Normally the scroll values are stored in pieces in t and x. We need the whole values during
     // rendering though, so we keep them here to avoid complicated bit-hacking.
-    scroll_x: u8,
-    scroll_y: u8,
+    scroll_x: u16,
+    scroll_y: u16,
 
     /// A fake dynamic latch representing the capacitance of the wires in the
     /// PPU that we have to emulate.
@@ -133,11 +133,11 @@ impl PPUReg {
         self.oamaddr = self.oamaddr.wrapping_add(1);
     }
 
-    pub fn get_scroll_x(&self) -> u8 {
+    pub fn get_scroll_x(&self) -> u16 {
         self.scroll_x
     }
 
-    pub fn get_scroll_y(&self) -> u8 {
+    pub fn get_scroll_y(&self) -> u16 {
         self.scroll_y
     }
 
@@ -223,13 +223,13 @@ impl MemSegment for PPUReg {
                     AddrByte::High => {
                         self.set_coarse_x(val);
                         self.set_fine_x(val);
-                        self.scroll_x = val;
+                        self.scroll_x = val as u16;
                         self.address_latch = AddrByte::Low;
                     }
                     AddrByte::Low => {
                         self.set_coarse_y(val);
                         self.set_fine_y(val);
-                        self.scroll_y = val;
+                        self.scroll_y = val as u16;
                         self.address_latch = AddrByte::High;
                     }
                 }

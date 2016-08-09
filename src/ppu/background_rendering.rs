@@ -1,7 +1,4 @@
-#![allow(dead_code, unused_variables)] //Temporary
-
 use super::PaletteIndex;
-use super::PaletteSet;
 use super::TilePattern;
 use super::SCREEN_BUFFER_SIZE;
 use super::SCREEN_WIDTH;
@@ -63,12 +60,67 @@ impl Default for TileAttribute {
 pub struct BackgroundRenderer {
     idx: Box<[[u8; TILES_PER_LINE]; SCREEN_HEIGHT]>,
     tile: Box<[[TilePattern; TILES_PER_LINE]; SCREEN_HEIGHT]>,
-    attr: Box<[[TileAttribute; TILES_PER_LINE]; SCREEN_HEIGHT]>,
+    attr: Box<[[u8; TILES_PER_LINE]; SCREEN_HEIGHT]>,
+}
+
+fn draw_segment(pattern_line: &[TilePattern; TILES_PER_LINE],
+                attr_line: &[u8; TILES_PER_LINE],
+                pixel_line: &mut [PaletteIndex],
+                fine_x_scroll: usize,
+                start: usize,
+                stop: usize) {
+    for (pixel, item) in pixel_line.iter_mut().enumerate().take(stop).skip(start) {
+        let displayed_pixel = pixel + fine_x_scroll;
+        render_single_pixel(pattern_line, attr_line, displayed_pixel, item);
+    }
+}
+
+fn render_single_pixel(pattern_line: &[TilePattern],
+                       attr_line: &[u8],
+                       displayed_pixel: usize,
+                       item: &mut PaletteIndex) {
+    let tile_idx = displayed_pixel / 8;
+    let pattern = pattern_line[tile_idx];
+    let fine_x = displayed_pixel as u32 & 0x07;
+    let color_id = pattern.get_color_in_pattern(fine_x);
+
+    let palette_id = attr_line[tile_idx];
+
+    *item = PaletteIndex::from_packed(color_id | palette_id);
 }
 
 impl BackgroundRenderer {
-    pub fn render(&mut self, buffer: &mut [PaletteIndex; SCREEN_BUFFER_SIZE], start_px: usize, stop_px: usize, reg: &PPUReg) {
-        self.draw(buffer, reg, start_px, stop_px);
+    pub fn render(&mut self,
+                  buffer: &mut [PaletteIndex; SCREEN_BUFFER_SIZE],
+                  start: usize,
+                  stop: usize,
+                  reg: &PPUReg) {
+        let mut current_scanline = start / SCREEN_WIDTH;
+        let mut last_scanline_boundary = current_scanline * SCREEN_WIDTH;
+        let next_scanline = current_scanline + 1;
+        let mut next_scanline_boundary = next_scanline * SCREEN_WIDTH;
+
+        let mut current = start;
+        let fine_x_scroll = reg.scroll_x_fine() as usize;
+        while current < stop {
+            let segment_start = current - last_scanline_boundary;
+            let segment_end = cmp::min(next_scanline_boundary, stop) - last_scanline_boundary;
+
+            let pattern_line = &self.tile[current_scanline];
+            let attr_line = &self.attr[current_scanline];
+            let pixel_line = &mut buffer[last_scanline_boundary..next_scanline_boundary];
+
+            draw_segment(pattern_line,
+                         attr_line,
+                         pixel_line,
+                         fine_x_scroll,
+                         segment_start,
+                         segment_end);
+            current_scanline += 1;
+            last_scanline_boundary = next_scanline_boundary;
+            current = next_scanline_boundary;
+            next_scanline_boundary += SCREEN_WIDTH;
+        }
     }
 
     pub fn run_cycle(&mut self, cyc: u16, sl: i16, reg: &mut PPUReg, mem: &mut PPUMemory) {
@@ -84,9 +136,9 @@ impl BackgroundRenderer {
                 280 if sl == -1 => self.copy_vertical(reg),
                 256 => self.increment_y(reg),
                 257 => self.copy_horizontal(reg),
-                8 | 16 | 24 | 32 | 40 | 48 | 56 | 64 | 72 | 80 | 88 | 96 |
-                104 | 112 | 120 | 128 | 136 | 144 | 152 | 160 | 168 | 176 | 184 |
-                192 | 200 | 208 | 216 | 224 | 232 | 240 | 248 | 328 | 336 => self.increment_x(reg),
+                8 | 16 | 24 | 32 | 40 | 48 | 56 | 64 | 72 | 80 | 88 | 96 | 104 | 112 | 120 |
+                128 | 136 | 144 | 152 | 160 | 168 | 176 | 184 | 192 | 200 | 208 | 216 | 224 |
+                232 | 240 | 248 | 328 | 336 => self.increment_x(reg),
                 _ => (),
             }
         }
@@ -104,23 +156,18 @@ impl BackgroundRenderer {
                 337 | 339 => self.garbage_nametable_fetch(reg, mem),
                 _ => (),
             }
-        }
-        else if sl < 240 {
+        } else if sl < 240 {
             match cyc {
-                //Normal fetches
-                1 | 9 | 17 | 25 | 33 | 41 | 49 | 57 | 65 | 73 | 81 | 89 | 97 |
-                105 | 113 | 121 | 129 | 137 | 145 | 153 | 161 | 169 | 177 | 185 |
-                193 | 201 | 209 | 217 | 225 | 233 | 241 | 249 => {
-                    self.fetch_nametable((cyc + 16) / 8, sl, reg, mem)
-                },
-                3 | 11 | 19 | 27 | 35 | 43 | 51 | 59 | 67 | 75 | 83 | 91 | 99 |
-                107 | 115 | 123 | 131 | 139 | 147 | 155 | 163 | 171 | 179 | 187 |
-                195 | 203 | 211 | 219 | 227 | 235 | 243 | 251 =>
-                    self.fetch_attribute((cyc + 16) / 8, sl, reg, mem),
-                5 | 13 | 21 | 29 | 37 | 45 | 53 | 61 | 69 | 77 | 85 | 93 | 101 |
-                109 | 117 | 125 | 133 | 141 | 149 | 157 | 165 | 173 | 181 | 189 |
-                197 | 205 | 213 | 221 | 229 | 237 | 245 | 253 =>
-                    self.fetch_tile_pattern((cyc + 16) / 8, sl, reg, mem),
+                // Normal fetches
+                1 | 9 | 17 | 25 | 33 | 41 | 49 | 57 | 65 | 73 | 81 | 89 | 97 | 105 | 113 |
+                121 | 129 | 137 | 145 | 153 | 161 | 169 | 177 | 185 | 193 | 201 | 209 | 217 |
+                225 | 233 | 241 | 249 => self.fetch_nametable((cyc + 16) / 8, sl, reg, mem),
+                3 | 11 | 19 | 27 | 35 | 43 | 51 | 59 | 67 | 75 | 83 | 91 | 99 | 107 | 115 |
+                123 | 131 | 139 | 147 | 155 | 163 | 171 | 179 | 187 | 195 | 203 | 211 | 219 |
+                227 | 235 | 243 | 251 => self.fetch_attribute((cyc + 16) / 8, sl, reg, mem),
+                5 | 13 | 21 | 29 | 37 | 45 | 53 | 61 | 69 | 77 | 85 | 93 | 101 | 109 | 117 |
+                125 | 133 | 141 | 149 | 157 | 165 | 173 | 181 | 189 | 197 | 205 | 213 | 221 |
+                229 | 237 | 245 | 253 => self.fetch_tile_pattern((cyc + 16) / 8, sl, reg, mem),
 
                 // Fetches for next scanline
                 321 | 329 => self.fetch_nametable((cyc - 320) / 8, (sl + 1) % 240, reg, mem),
@@ -178,8 +225,12 @@ impl BackgroundRenderer {
 
     #[cfg_attr(rustfmt, rustfmt_skip)]
     fn fetch_attribute(&mut self, tile_x: u16, y: i16, reg: &PPUReg, mem: &mut PPUMemory) {
-        let attribute_addr = 0x23C0 | (reg.v & 0x0C00) | ((reg.v >> 4) & 0x38) | ((reg.v >> 2) & 0x07);
-        self.attr[y as usize][tile_x as usize] = TileAttribute::new(mem.read(attribute_addr));
+        let addr = 0x23C0 | (reg.v & 0x0C00) | ((reg.v >> 4) & 0x38) | ((reg.v >> 2) & 0x07);
+        let tile_attribute = TileAttribute::new(mem.read(addr));
+        let palette_id = tile_attribute.get_palette(
+            tile_x * 8 + reg.get_scroll_x(),
+            y as u16 + reg.get_scroll_y());
+        self.attr[y as usize][tile_x as usize] = palette_id << 3;
     }
 
     fn fetch_tile_pattern(&mut self, tile_x: u16, y: i16, reg: &PPUReg, mem: &mut PPUMemory) {
@@ -192,64 +243,6 @@ impl BackgroundRenderer {
     fn garbage_nametable_fetch(&mut self, reg: &PPUReg, mem: &mut PPUMemory) {
         let nametable_addr = 0x2000 | (reg.v & 0x0FFF);
         mem.read(nametable_addr);
-    }
-
-    fn draw(&mut self, buffer: &mut [PaletteIndex; SCREEN_BUFFER_SIZE], reg: &PPUReg, start: usize, stop: usize) {
-        let mut current_scanline = start / SCREEN_WIDTH;
-        let mut last_scanline_boundary = current_scanline * SCREEN_WIDTH;
-        let next_scanline = current_scanline + 1;
-        let mut next_scanline_boundary = next_scanline * SCREEN_WIDTH;
-
-        let mut current = start;
-        while current < stop {
-            let segment_start = current - last_scanline_boundary;
-            let segment_end = cmp::min(next_scanline_boundary, stop) - last_scanline_boundary;
-
-            self.draw_segment(reg,
-                buffer,
-                              current_scanline,
-                              last_scanline_boundary,
-                              next_scanline_boundary,
-                              segment_start,
-                              segment_end);
-            current_scanline += 1;
-            last_scanline_boundary = next_scanline_boundary;
-            current = next_scanline_boundary;
-            next_scanline_boundary += SCREEN_WIDTH;
-        }
-    }
-
-    #[allow(too_many_arguments)]
-    fn draw_segment(&mut self,
-                    reg: &PPUReg,
-                    buffer: &mut [PaletteIndex; SCREEN_BUFFER_SIZE],
-                    scanline: usize,
-                    line_start: usize,
-                    line_stop: usize,
-                    start: usize,
-                    stop: usize) {
-        let pattern_line = &self.tile[scanline];
-        let attr_line = &self.attr[scanline];
-        let pixel_line = &mut buffer[line_start..line_stop];
-
-        for (pixel, item) in pixel_line.iter_mut().enumerate().take(stop).skip(start) {
-            let fine_x_scroll = reg.scroll_x_fine();
-            let displayed_pixel = pixel + fine_x_scroll as usize;
-            let tile_idx = displayed_pixel / 8;
-            let pattern = pattern_line[tile_idx];
-            let fine_x = displayed_pixel as u32 & 0x07;
-            let color_id = pattern.get_color_in_pattern(fine_x);
-
-            let attr = attr_line[tile_idx];
-            let palette_id = attr.get_palette(pixel as u16 + reg.get_scroll_x() as u16,
-                                              scanline as u16 + reg.get_scroll_y() as u16);
-
-            *item = PaletteIndex::from_unpacked(
-                PaletteSet::Background,
-                palette_id,
-                color_id,
-            );
-        }
     }
 
     #[cfg(feature="mousepick")]
@@ -281,7 +274,7 @@ impl Default for BackgroundRenderer {
 
             let mut idx: [[u8; TILES_PER_LINE]; SCREEN_HEIGHT] = mem::uninitialized();
             let mut tiles: [[TilePattern; TILES_PER_LINE]; SCREEN_HEIGHT] = mem::uninitialized();
-            let mut attrs: [[TileAttribute; TILES_PER_LINE]; SCREEN_HEIGHT] = mem::uninitialized();
+            let mut attrs: [[u8; TILES_PER_LINE]; SCREEN_HEIGHT] = mem::uninitialized();
 
             for element in idx.iter_mut() {
                 let idx_line: [u8; TILES_PER_LINE] = [0; TILES_PER_LINE];
@@ -292,8 +285,7 @@ impl Default for BackgroundRenderer {
                 ptr::write(element, tile_line);
             }
             for element in attrs.iter_mut() {
-                let attr_line: [TileAttribute; TILES_PER_LINE] =
-                    [Default::default(); TILES_PER_LINE];
+                let attr_line: [u8; TILES_PER_LINE] = [0; TILES_PER_LINE];
                 ptr::write(element, attr_line);
             }
 

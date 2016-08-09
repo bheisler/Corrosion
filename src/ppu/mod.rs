@@ -142,15 +142,6 @@ pub enum StepResult {
     Continue,
 }
 
-#[cfg(feature="vectorize")]
-fn load_bool8ix16(array: &[u8], idx: usize) -> ::simd::bool8ix16 {
-    //the simd crate doesn't have a bool8ix16::load method for some reason, so we have to
-    //hack around that by transmuting to u8 and checking for non-equality with zero.
-    //bool8ix16 has a slightly unusual internal representation, so we can't just use
-    //bool8ix16::from_repr(i8x16)
-    ::simd::u8x16::load(array, idx).ne(::simd::u8x16::splat(0))
-}
-
 fn div_rem(num: u64, den: u64) -> (u64, u64) {
     (num / den, num % den)
 }
