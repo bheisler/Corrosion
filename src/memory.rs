@@ -120,7 +120,6 @@ impl MemSegment for CpuMemory {
 mod tests {
     use super::*;
     use std::rc::Rc;
-    use std::cell::RefCell;
     use std::cell::UnsafeCell;
     use mappers::{Mapper, MapperParams};
     use screen::DummyScreen;
