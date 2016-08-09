@@ -1,7 +1,6 @@
+#![feature(test)]
 #![feature(plugin)]
 #![plugin(clippy)]
-
-#![feature(test)]
 
 #![allow(new_without_default)]
 #![allow(match_same_arms)]
@@ -15,6 +14,7 @@ extern crate quick_error;
 pub extern crate sdl2;
 extern crate blip_buf;
 extern crate memmap;
+extern crate simd;
 
 pub mod cart;
 pub mod memory;
@@ -42,6 +42,7 @@ use ppu::PPU;
 use io::IO;
 
 use std::rc::Rc;
+use std::cell::UnsafeCell;
 use std::cell::RefCell;
 
 pub struct EmulatorBuilder {
@@ -74,7 +75,7 @@ impl EmulatorBuilder {
     }
 
     pub fn build(self) -> Emulator {
-        let cart: Rc<RefCell<Cart>> = Rc::new(RefCell::new(self.cart));
+        let cart: Rc<UnsafeCell<Cart>> = Rc::new(UnsafeCell::new(self.cart));
         let ppu = PPU::new(cart.clone(), self.screen);
         let apu = APU::new(self.audio_out);
         let mem = CpuMemory::new(ppu, apu, self.io, cart);

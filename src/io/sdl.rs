@@ -21,7 +21,6 @@ const RIGHT: u8 = 1 << 7;
 
 pub struct SdlIO {
     event_pump: Rc<RefCell<EventPump>>,
-    strobe: bool,
     controller1: ShiftRegister8,
     controller2: ShiftRegister8,
 }
@@ -30,7 +29,6 @@ impl SdlIO {
     pub fn new(pump: Rc<RefCell<EventPump>>) -> SdlIO {
         SdlIO {
             event_pump: pump,
-            strobe: false,
             controller1: ShiftRegister8::new(0),
             controller2: ShiftRegister8::new(0),
         }
@@ -46,12 +44,8 @@ impl MemSegment for SdlIO {
         }
     }
 
-    fn write(&mut self, idx: u16, val: u8) {
-        match idx {
-            0x4016 => self.strobe = val & 0x01 != 0,
-            0x4017 => (),
-            x => invalid_address!(x),
-        }
+    fn write(&mut self, _: u16, _: u8) {
+        // Do nothing
     }
 }
 
@@ -66,10 +60,6 @@ fn read_key(state: &KeyboardState, key: Scancode, val: u8) -> u8 {
 impl IO for SdlIO {
     #[cfg_attr(rustfmt, rustfmt_skip)]
     fn poll(&mut self) {
-        if !self.strobe {
-            return;
-        }
-
         let pump_ref = self.event_pump.borrow();
         let state = KeyboardState::new(&*pump_ref);
 

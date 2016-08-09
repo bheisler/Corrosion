@@ -1,30 +1,19 @@
 use memory::MemSegment;
-use cart::{Cart, ScreenMode};
+use cart::Cart;
 use std::rc::Rc;
-use std::cell::RefCell;
+use std::cell::UnsafeCell;
 use super::Color;
-use super::PaletteIndex;
 use super::TilePattern;
 
 /// Represents the PPU's memory map.
 pub struct PPUMemory {
-    cart: Rc<RefCell<Cart>>,
+    cart: Rc<UnsafeCell<Cart>>,
     vram: [u8; 0x0F00],
     palette: [Color; 0x20],
 }
 
-fn get_nametable_addrs(mode: ScreenMode) -> [u16; 4] {
-    match mode {
-        ScreenMode::Vertical => [0x2000, 0x2400, 0x2000, 0x2400],
-        ScreenMode::Horizontal => [0x2000, 0x2000, 0x2400, 0x2400],
-        ScreenMode::OneScreenLow => [0x2000, 0x2000, 0x2000, 0x2000],
-        ScreenMode::OneScreenHigh => [0x2400, 0x2400, 0x2400, 0x2400],
-        ScreenMode::FourScreen => [0x2000, 0x2400, 0x2800, 0x2C00],
-    }
-}
-
 impl PPUMemory {
-    pub fn new(cart: Rc<RefCell<Cart>>) -> PPUMemory {
+    pub fn new(cart: Rc<UnsafeCell<Cart>>) -> PPUMemory {
         PPUMemory {
             cart: cart,
             vram: [0u8; 0x0F00],
@@ -52,14 +41,20 @@ impl PPUMemory {
         let idx = idx & 0x0FFF;
         let nametable_num = (idx / 0x0400) as usize;
         let idx_in_nametable = idx % 0x400;
-        let mode = self.cart.borrow().get_mirroring_mode();
-        let translated = get_nametable_addrs(mode)[nametable_num] + idx_in_nametable;
+        let table : &[u16; 4] = unsafe { (*self.cart.get()).get_mirroring_table() };
+        let translated = table[nametable_num] + idx_in_nametable;
         translated as usize % self.vram.len()
     }
 
-    pub fn read_palette(&mut self, idx: PaletteIndex) -> Color {
-        let bits = self.read(idx.to_addr());
-        Color::from_bits_truncate(bits)
+    #[cfg(feature="vectorize")]
+    pub fn get_palettes(&self) -> (::simd::u8x16, ::simd::u8x16) {
+        let palette_bytes: &[u8; 0x20] = unsafe { ::std::mem::transmute(&self.palette) };
+        (::simd::u8x16::load(palette_bytes, 0), ::simd::u8x16::load(palette_bytes, 16))
+    }
+
+    #[cfg(not(feature="vectorize"))]
+    pub fn read_palette(&mut self, idx: super::PaletteIndex) -> Color {
+        self.palette[idx.to_index()]
     }
 
     pub fn read_tile_pattern(&mut self,
@@ -94,20 +89,10 @@ impl MemSegment for PPUMemory {
     fn read(&mut self, idx: u16) -> u8 {
         match idx {
             0x0000...0x1FFF => {
-                let mut cart = self.cart.borrow_mut();
-                cart.chr_read(idx)
+                unsafe { (*self.cart.get()).chr_read(idx) }
             }
             0x2000...0x3EFF => self.read_bypass_palette(idx),
-            0x3F00...0x3FFF => {
-                match (idx & 0x001F) as usize {
-                        0x10 => self.palette[0x00],
-                        0x14 => self.palette[0x04],
-                        0x18 => self.palette[0x08],
-                        0x1C => self.palette[0x0C],
-                        x => self.palette[x],
-                    }
-                    .bits()
-            }
+            0x3F00...0x3FFF => self.palette[(idx & 0x1F) as usize].bits(),
             x => invalid_address!(x),
         }
     }
@@ -115,8 +100,7 @@ impl MemSegment for PPUMemory {
     fn write(&mut self, idx: u16, val: u8) {
         match idx {
             0x0000...0x1FFF => {
-                let mut cart = self.cart.borrow_mut();
-                cart.chr_write(idx, val)
+                unsafe { (*self.cart.get()).chr_write(idx, val) }
             }
             0x2000...0x3EFF => {
                 let idx = self.translate_vram_address(idx);
@@ -124,13 +108,26 @@ impl MemSegment for PPUMemory {
             }
             0x3F00...0x3FFF => {
                 let val = Color::from_bits_truncate(val);
-                match (idx & 0x001F) as usize {
+                let idx = (idx & 0x001F) as usize;
+                // Do the palette mirroring on write since we read a lot more than we write.
+                // This is not strictly accurate - the PPU can actually render these colors
+                // in certain rare circumstances - but it's good enough.
+                match idx {
                     0x10 => self.palette[0x00] = val,
+                    0x00 => self.palette[0x10] = val,
+
                     0x14 => self.palette[0x04] = val,
+                    0x04 => self.palette[0x14] = val,
+
                     0x18 => self.palette[0x08] = val,
+                    0x08 => self.palette[0x18] = val,
+
                     0x1C => self.palette[0x0C] = val,
-                    x => self.palette[x] = val,
-                }
+                    0x0C => self.palette[0x1C] = val,
+
+                    _ => (),
+                };
+                self.palette[idx] = val;
             }
             x => invalid_address!(x),
         }

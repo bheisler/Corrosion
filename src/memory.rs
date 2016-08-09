@@ -9,7 +9,7 @@ use ppu::PPU;
 use apu::APU;
 use io::IO;
 use std::rc::Rc;
-use std::cell::RefCell;
+use std::cell::UnsafeCell;
 use std::ops::Range;
 
 pub trait MemSegment {
@@ -75,11 +75,11 @@ pub struct CpuMemory {
     pub ppu: PPU,
     pub apu: APU,
     pub io: Box<IO>,
-    cart: Rc<RefCell<Cart>>,
+    cart: Rc<UnsafeCell<Cart>>,
 }
 
 impl CpuMemory {
-    pub fn new(ppu: PPU, apu: APU, io: Box<IO>, cart: Rc<RefCell<Cart>>) -> CpuMemory {
+    pub fn new(ppu: PPU, apu: APU, io: Box<IO>, cart: Rc<UnsafeCell<Cart>>) -> CpuMemory {
         CpuMemory {
             ram: RAM::new(),
             ppu: ppu,
@@ -98,7 +98,7 @@ impl MemSegment for CpuMemory {
             0x4000...0x4015 => 0,
             0x4016...0x4017 => self.io.read(idx),
             0x4018...0x4019 => 0,
-            0x4020...0xFFFF => self.cart.borrow_mut().prg_read(idx),
+            0x4020...0xFFFF => unsafe { (*self.cart.get()).prg_read(idx) },
             x => invalid_address!(x),
         }
     }
@@ -110,7 +110,7 @@ impl MemSegment for CpuMemory {
             0x4000...0x4015 => self.apu.write(idx, val),
             0x4016 => self.io.write(idx, val),
             0x4017...0x4019 => self.apu.write(idx, val),
-            0x4020...0xFFFF => self.cart.borrow_mut().prg_write(idx, val),
+            0x4020...0xFFFF => unsafe { (*self.cart.get()).prg_write(idx, val) },
             x => invalid_address!(x),
         }
     }
@@ -120,7 +120,7 @@ impl MemSegment for CpuMemory {
 mod tests {
     use super::*;
     use std::rc::Rc;
-    use std::cell::RefCell;
+    use std::cell::UnsafeCell;
     use mappers::{Mapper, MapperParams};
     use screen::DummyScreen;
     use io::DummyIO;
@@ -132,7 +132,7 @@ mod tests {
         let nrom = Mapper::new(0,
                                MapperParams::simple(path, vec!(0u8; 0x4000), vec!(0u8; 0x4000)));
         let cart = ::cart::Cart::new(nrom);
-        let cart = Rc::new(RefCell::new(cart));
+        let cart = Rc::new(UnsafeCell::new(cart));
         let ppu = ::ppu::PPU::new(cart.clone(), Box::new(DummyScreen::default()));
         let apu = ::apu::APU::new(Box::new(DummyAudioOut));
         let io = DummyIO::new();

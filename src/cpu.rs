@@ -309,7 +309,7 @@ use disasm::Disassembler;
 /// number.
 /// Copied from `FCEUX` & `SprocketNES`.
 #[cfg_attr(rustfmt, rustfmt_skip)]
-static CYCLE_TABLE: [u8; 256] = [
+static CYCLE_TABLE: [u64; 256] = [
     /*0x00*/ 7,6,2,8,3,3,5,5,3,2,2,2,4,4,6,6,
     /*0x10*/ 2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7,
     /*0x20*/ 6,6,2,8,3,3,5,5,4,2,2,2,4,4,6,6,
@@ -419,6 +419,7 @@ pub struct CPU {
     pub mem: CpuMemory,
     cycle: u64,
     halted: bool,
+    io_strobe: bool,
 }
 
 impl MemSegment for CPU {
@@ -435,6 +436,12 @@ impl MemSegment for CPU {
                     self.irq();
                 }
                 val
+            }
+            0x4016 | 0x4017 => {
+                if self.io_strobe {
+                    self.mem.io.poll();
+                }
+                self.mem.read(idx)
             }
             _ => self.mem.read(idx),
         }
@@ -454,6 +461,13 @@ impl MemSegment for CPU {
             0x4000...0x4013 | 0x4015 | 0x4017 => {
                 self.run_apu();
                 self.mem.write(idx, val);
+            }
+            0x4016 => {
+                self.io_strobe = val & 0x01 != 0;
+                self.mem.write(idx, val);
+                if self.io_strobe {
+                    self.mem.io.poll();
+                }
             }
             _ => self.mem.write(idx, val),
         }
@@ -916,6 +930,7 @@ impl CPU {
             cycle: 0,
             mem: mem,
             halted: false,
+            io_strobe: false,
         }
     }
 
@@ -1096,8 +1111,6 @@ impl CPU {
             return;
         }
 
-        self.mem.io.poll();
-
         if self.mem.apu.requested_run_cycle() <= self.cycle {
             self.run_apu();
         }
@@ -1109,7 +1122,7 @@ impl CPU {
         self.trace();
         self.stack_dump();
         let opcode: u8 = self.load_incr_pc();
-        self.incr_cycle(CYCLE_TABLE[opcode as usize] as u64);
+        self.incr_cycle(CYCLE_TABLE[opcode as usize]);
         decode_opcode!(opcode, self);
     }
 

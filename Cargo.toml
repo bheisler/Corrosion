@@ -4,7 +4,8 @@ version = "0.1.0"
 authors = ["Brook Heisler <redattack34@gmail.com>"]
 
 [features]
-default = []
+default = ["vectorize"]
+vectorize = ["simd"]
 cputrace = []
 stacktrace = []
 mousepick = []
@@ -15,8 +16,14 @@ quick-error = "1.0"
 sdl2 = "0.17"
 blip_buf = "0.1.4"
 memmap = "0.3"
-clippy = "0.0.77"
+clippy = "0.0.79"
+simd = { git = "https://github.com/huonw/simd", optional = true }
 
 [dev-dependencies]
 sha1 = "0.2"
 rand = "0.3"
+
+[profile.bench]
+opt-level = 3
+debug = true
+lto = true

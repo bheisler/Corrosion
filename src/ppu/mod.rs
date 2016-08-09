@@ -2,7 +2,7 @@ use memory::MemSegment;
 use screen::Screen;
 use cart::Cart;
 use std::rc::Rc;
-use std::cell::RefCell;
+use std::cell::UnsafeCell;
 use std::default::Default;
 use std::cmp;
 
@@ -46,7 +46,7 @@ pub enum PaletteSet {
 }
 
 impl PaletteSet {
-    fn table(&self) -> u16 {
+    fn table(&self) -> u8 {
         match *self {
             PaletteSet::Background => 0x00,
             PaletteSet::Sprite => 0x10,
@@ -55,37 +55,38 @@ impl PaletteSet {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
+#[repr(C)]
 pub struct PaletteIndex {
-    pub set: PaletteSet,
-    pub palette_id: u8,
-    pub color_id: u8,
+    addr: u8,
 }
 
+const TRANSPARENT: PaletteIndex = PaletteIndex{ addr: 0x00 };
+
 impl PaletteIndex {
-    fn to_addr(self) -> u16 {
-        if self.is_transparent() {
-            0x3F00
-        } else {
-            let mut addr: u16 = 0x3F00;
-            addr |= self.set.table();
-            addr |= (self.palette_id as u16 & 0x03) << 2;
-            addr |= self.color_id as u16 & 0x03;
-            addr
+    pub fn from_packed(addr: u8) -> PaletteIndex {
+        PaletteIndex{ addr: addr }
+    }
+
+    pub fn from_unpacked( set: PaletteSet,
+        palette_id: u8,
+        color_id: u8 ) -> PaletteIndex {
+        if color_id == 0 {
+            return PaletteIndex{ addr: 0 }
         }
+        let mut addr: u8 = 0x00;
+        addr |= set.table();
+        addr |= (palette_id & 0x03) << 2;
+        addr |= color_id & 0x03;
+        PaletteIndex{ addr: addr }
+    }
+
+    #[cfg(not(feature="vectorize"))]
+    fn to_index(self) -> usize {
+        self.addr as usize
     }
 
     fn is_transparent(&self) -> bool {
-        self.color_id == 0
-    }
-}
-
-impl Default for PaletteIndex {
-    fn default() -> PaletteIndex {
-        PaletteIndex {
-            set: PaletteSet::Background,
-            palette_id: 0,
-            color_id: 0,
-        }
+        self.addr == 0
     }
 }
 
@@ -95,9 +96,11 @@ pub struct TilePattern {
     hi: u8,
 }
 
+pub const NO_TILE: TilePattern = TilePattern { lo: 0, hi : 0 };
+
 impl Default for TilePattern {
     fn default() -> TilePattern {
-        TilePattern { lo: 0, hi: 0 }
+        NO_TILE
     }
 }
 
@@ -118,6 +121,7 @@ pub struct PPU {
     ppu_mem: PPUMemory,
 
     screen: Box<Screen>,
+    palette_buffer: [PaletteIndex; SCREEN_BUFFER_SIZE],
     screen_buffer: [Color; SCREEN_BUFFER_SIZE],
 
     sprite_data: SpriteRenderer,
@@ -180,11 +184,13 @@ fn cyc_to_px(ppu_cyc: u64) -> usize {
 }
 
 impl PPU {
-    pub fn new(cart: Rc<RefCell<Cart>>, screen: Box<Screen>) -> PPU {
+    pub fn new(cart: Rc<UnsafeCell<Cart>>, screen: Box<Screen>) -> PPU {
         PPU {
             reg: Default::default(),
             ppudata_read_buffer: 0,
             ppu_mem: PPUMemory::new(cart),
+
+            palette_buffer: [TRANSPARENT; SCREEN_BUFFER_SIZE],
             screen_buffer: [Color::from_bits_truncate(0x00); SCREEN_BUFFER_SIZE],
             screen: screen,
 
@@ -210,21 +216,28 @@ impl PPU {
         let start_px = start_px % SCREEN_BUFFER_SIZE;
         let stop_px = start_px + delta_px;
 
+        let rendering_enabled = self.reg.ppumask.rendering_enabled();
+
         let mut hit_nmi = false;
         while self.global_cyc < stop {
             self.tick_cycle();
-            hit_nmi |= self.run_cycle();
+            self.run_cycle(rendering_enabled, &mut hit_nmi);
         }
 
         if self.reg.ppumask.contains( S_BCK ) {
-            self.background_data.render(start_px, stop_px, &self.reg);
+            self.background_data.render(&mut self.palette_buffer, start_px, stop_px, &self.reg);
+        }
+        else {
+            let slice = &mut self.palette_buffer[start_px..stop_px];
+            for dest in slice.iter_mut() {
+                *dest = TRANSPARENT;
+            }
         }
         if self.reg.ppumask.contains( S_SPR ) {
-            self.sprite_data.render(start_px, stop_px);
+            self.sprite_data.render(&mut self.palette_buffer, &mut self.reg, start_px, stop_px);
         }
 
-        self.mix(start_px, stop_px);
-        self.sprite0_test(start_px, stop_px);
+        self.colorize(start_px, stop_px);
 
         if hit_nmi {
             StepResult::NMI
@@ -252,18 +265,24 @@ impl PPU {
         }
     }
 
-    fn run_cycle(&mut self) -> bool {
-        self.sprite_data.run_cycle(self.cyc, self.sl, &mut self.reg, &mut self.ppu_mem);
-        self.background_data.run_cycle(self.cyc, self.sl, &mut self.reg, &mut self.ppu_mem);
+    fn run_cycle(&mut self, rendering_enabled: bool, hit_nmi: &mut bool) {
+        if let -1...239 = self.sl {
+            if rendering_enabled {
+                self.background_data.run_cycle(self.cyc, self.sl, &mut self.reg, &mut self.ppu_mem);
+            }
+        }
         match (self.cyc, self.sl) {
             (_, -1) => self.prerender_scanline(),
-            (_, 0...239) => (), //Visible scanline
+
+            //Visible scanlines
+            (0, 0...239) => self.sprite_data.sprite_eval(self.sl as u16, &self.reg, &mut self.ppu_mem),
+            (_, 0...239) => (),
+
             (_, 240) => (), //Post-render idle scanline
-            (1, 241) => return self.start_vblank(),
+            (1, 241) => self.start_vblank( hit_nmi ),
             (_, 241...260) => (), //VBlank lines
             _ => (),
         }
-        false
     }
 
     fn prerender_scanline(&mut self) {
@@ -275,55 +294,56 @@ impl PPU {
         }
     }
 
-    fn start_vblank(&mut self) -> bool {
+    fn start_vblank(&mut self, hit_nmi: &mut bool) {
         self.next_vblank_ppu_cyc += CYCLES_PER_FRAME;
         self.next_vblank_cpu_cyc = ppu_to_cpu_cyc(self.next_vblank_ppu_cyc);
 
         let buf = &self.screen_buffer;
         self.screen.draw(buf);
 
-        self.background_data.clear();
-        self.sprite_data.clear();
-
         if self.frame > 0 {
             self.reg.ppustat.insert(VBLANK);
-            self.reg.ppuctrl.generate_vblank_nmi()
-        } else {
-            false
+            *hit_nmi |= self.reg.ppuctrl.generate_vblank_nmi();
         }
     }
 
-    fn mix(&mut self, start: usize, stop: usize) {
-        let background = self.background_data.buffer();
-        let (sprite, priority, _) = self.sprite_data.buffers();
+    #[cfg(feature="vectorize")]
+    fn colorize(&mut self, start:usize, stop: usize) {
+        use std::mem;
+        use std::cmp;
+        use simd::u8x16;
+        use simd::x86::ssse3::Ssse3U8x16;
 
-        for px in start..stop {
-            let (priority_px, sprite_px) = (priority[px], sprite[px]);
-            let background_px = background[px];
+        let (background_pal, sprite_pal) = self.ppu_mem.get_palettes();
+        let index_bytes : &[u8; SCREEN_BUFFER_SIZE] = unsafe{ mem::transmute( &self.palette_buffer ) };
+        let color_bytes : &mut [u8; SCREEN_BUFFER_SIZE] = unsafe{ mem::transmute( &mut self.screen_buffer ) };
 
-            let pal_idx = match (background_px, priority_px, sprite_px) {
-                (bck, _, spr) if spr.is_transparent() => bck,
-                (bck, _, spr) if bck.is_transparent() => spr,
-                (_, SpritePriority::Foreground, spr) => spr,
-                (bck, SpritePriority::Background, _) => bck,
-            };
+        let mut start = start;
 
-            self.screen_buffer[px] = self.ppu_mem.read_palette(pal_idx);
+        while start < stop {
+            start = cmp::min(start, SCREEN_BUFFER_SIZE - 16);
+            let palette_idx = u8x16::load( index_bytes, start );
+
+            let table: u8x16 = palette_idx >> 4;
+            let use_sprite_table = table.ne(u8x16::splat(0));
+            let color_id = palette_idx & u8x16::splat(0b0000_1111);
+
+            let background_shuf = background_pal.shuffle_bytes(color_id);
+            let sprite_shuf = sprite_pal.shuffle_bytes(color_id);
+
+            let final_color = use_sprite_table.select( sprite_shuf, background_shuf);
+            final_color.store(&mut *color_bytes, start);
+            start += 16;
         }
     }
 
-    fn sprite0_test(&mut self, start: usize, stop:usize) {
-        let background = self.background_data.buffer();
-        let (_, _, sprite0) = self.sprite_data.buffers();
+    #[cfg(not(feature="vectorize"))]
+    fn colorize(&mut self, start: usize, stop: usize ) {
+        let color_slice = self.screen_buffer[start...stop];
+        let index_slice = self.palette_buffer[start...stop];
 
-        let background_slice = &background[start..stop];
-        let sprite0_slice = &sprite0[start..stop];
-
-        for (bck, spr) in background_slice.iter().zip(sprite0_slice.iter()) {
-            if *spr && !bck.is_transparent() {
-                self.reg.ppustat.insert(SPRITE_0);
-                return;
-            }
+        for (src, dest) in color_slice.iter().zip_with(index_slice.iter_mut()) {
+            *dest = self.ppu_mem.read_palette(src);
         }
     }
 
@@ -403,7 +423,7 @@ mod tests {
     use super::*;
     use mappers::create_test_mapper;
     use std::rc::Rc;
-    use std::cell::RefCell;
+    use std::cell::UnsafeCell;
     use cart::{Cart, ScreenMode};
     use screen::DummyScreen;
     use ppu::ppu_reg::PPUCtrl;
@@ -416,13 +436,13 @@ mod tests {
     pub fn create_test_ppu_with_rom(chr_rom: Vec<u8>) -> PPU {
         let mapper = create_test_mapper(vec![0u8; 0x1000], chr_rom, ScreenMode::FourScreen);
         let cart = Cart::new(mapper);
-        PPU::new(Rc::new(RefCell::new(cart)), Box::new(DummyScreen::default()))
+        PPU::new(Rc::new(UnsafeCell::new(cart)), Box::new(DummyScreen::default()))
     }
 
     pub fn create_test_ppu_with_mirroring(mode: ScreenMode) -> PPU {
         let mapper = create_test_mapper(vec![0u8; 0x1000], vec![0u8; 0x1000], mode);
         let cart = Cart::new(mapper);
-        PPU::new(Rc::new(RefCell::new(cart)), Box::new(DummyScreen::default()))
+        PPU::new(Rc::new(UnsafeCell::new(cart)), Box::new(DummyScreen::default()))
     }
 
     #[test]
