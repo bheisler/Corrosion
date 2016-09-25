@@ -36,7 +36,6 @@ pub mod disasm;
 
 use cart::Cart;
 use cpu::CPU;
-use memory::CpuMemory;
 use apu::APU;
 use ppu::PPU;
 use io::IO;
@@ -78,8 +77,7 @@ impl EmulatorBuilder {
         let cart: Rc<UnsafeCell<Cart>> = Rc::new(UnsafeCell::new(self.cart));
         let ppu = PPU::new(cart.clone(), self.screen);
         let apu = APU::new(self.audio_out);
-        let mem = CpuMemory::new(ppu, apu, self.io, cart);
-        let mut cpu = CPU::new(mem);
+        let mut cpu = CPU::new(ppu, apu, self.io, cart);
         cpu.init();
 
         Emulator{ cpu: cpu }
@@ -101,10 +99,10 @@ impl Emulator {
 
     #[cfg(feature="mousepick")]
     pub fn mouse_pick(&self, px_x: i32, px_y: i32) {
-        self.cpu.mem.ppu.mouse_pick(px_x, px_y);
+        self.cpu.ppu.mouse_pick(px_x, px_y);
     }
 
     pub fn rendering_enabled(&self) -> bool {
-        self.cpu.mem.ppu.rendering_enabled()
+        self.cpu.ppu.rendering_enabled()
     }
 }

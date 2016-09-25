@@ -1,6 +1,5 @@
 #![macro_use]
 
-const OAMDMA: u16 = 0x4014;
 const NMI_VECTOR: u16 = 0xFFFA;
 const RESET_VECTOR: u16 = 0xFFFC;
 const IRQ_VECTOR: u16 = 0xFFFE;
@@ -298,9 +297,15 @@ macro_rules! decode_opcode {
     } }
 }
 
-use memory::CpuMemory;
+use memory::RAM;
 use memory::MemSegment;
 use ppu::StepResult;
+use ppu::PPU;
+use apu::APU;
+use io::IO;
+use cart::Cart;
+use std::rc::Rc;
+use std::cell::UnsafeCell;
 
 #[cfg(feature="cputrace")]
 use disasm::Disassembler;
@@ -416,7 +421,11 @@ struct Registers {
 
 pub struct CPU {
     regs: Registers,
-    pub mem: CpuMemory,
+    pub ram: RAM,
+    pub ppu: PPU,
+    pub apu: APU,
+    pub io: Box<IO>,
+    cart: Rc<UnsafeCell<Cart>>,
     cycle: u64,
     halted: bool,
     io_strobe: bool,
@@ -425,13 +434,15 @@ pub struct CPU {
 impl MemSegment for CPU {
     fn read(&mut self, idx: u16) -> u8 {
         match idx {
-            0x2000...0x2008 => {
+            0x0000...0x1FFF => self.ram.read(idx),
+            0x2000...0x3FFF => {
                 self.run_ppu();
-                self.mem.read(idx)
+                self.ppu.read(idx)
             }
-            OAMDMA => 0, //No idea what this should return. PPU dynamic latch garbage, maybe?
+            0x4000...0x4013 | 0x4018...0x4019 => 0, //No idea what this should return.
+            0x4014 => 0, //No idea what this should return. PPU dynamic latch garbage, maybe?
             0x4015 => {
-                let (irq, val) = self.mem.apu.read_status(self.cycle);
+                let (irq, val) = self.apu.read_status(self.cycle);
                 if let IrqInterrupt::IRQ = irq {
                     self.irq();
                 }
@@ -439,37 +450,40 @@ impl MemSegment for CPU {
             }
             0x4016 | 0x4017 => {
                 if self.io_strobe {
-                    self.mem.io.poll();
+                    self.io.poll();
                 }
-                self.mem.read(idx)
+                self.io.read(idx)
             }
-            _ => self.mem.read(idx),
+            0x4020...0xFFFF => unsafe { (*self.cart.get()).prg_read(idx) },
+            x => invalid_address!(x),
         }
 
     }
 
     fn write(&mut self, idx: u16, val: u8) {
         match idx {
-            0x2000...0x2008 => {
+            0x0000...0x1FFF => self.ram.write(idx, val),
+            0x2000...0x3FFF => {
                 self.run_ppu();
-                self.mem.write(idx, val);
+                self.ppu.write(idx, val);
             }
-            OAMDMA => {
+            0x4014 => {
                 self.run_ppu();
                 self.dma_transfer(val);
             }
             0x4000...0x4013 | 0x4015 | 0x4017 => {
                 self.run_apu();
-                self.mem.write(idx, val);
+                self.apu.write(idx, val);
             }
             0x4016 => {
                 self.io_strobe = val & 0x01 != 0;
-                self.mem.write(idx, val);
+                self.io.write(idx, val);
                 if self.io_strobe {
-                    self.mem.io.poll();
+                    self.io.poll();
                 }
             }
-            _ => self.mem.write(idx, val),
+            0x4020...0xFFFF => unsafe { (*self.cart.get()).prg_write(idx, val) },
+            x => invalid_address!(x),
         }
     }
 }
@@ -917,7 +931,7 @@ impl CPU {
         self.halted = true;
     }
 
-    pub fn new(mem: CpuMemory) -> CPU {
+    pub fn new(ppu: PPU, apu: APU, io: Box<IO>, cart: Rc<UnsafeCell<Cart>>) -> CPU {
         CPU {
             regs: Registers {
                 a: 0,
@@ -928,7 +942,11 @@ impl CPU {
                 pc: 0,
             },
             cycle: 0,
-            mem: mem,
+            ram: Default::default(),
+            ppu: ppu,
+            apu: apu,
+            io: io,
+            cart: cart,
             halted: false,
             io_strobe: false,
         }
@@ -1100,8 +1118,8 @@ impl CPU {
     fn unofficial(&self) {}
 
     pub fn run_frame(&mut self) {
-        let frame = self.mem.ppu.frame();
-        while frame == self.mem.ppu.frame() {
+        let frame = self.ppu.frame();
+        while frame == self.ppu.frame() {
             self.step();
         }
     }
@@ -1111,11 +1129,11 @@ impl CPU {
             return;
         }
 
-        if self.mem.apu.requested_run_cycle() <= self.cycle {
+        if self.apu.requested_run_cycle() <= self.cycle {
             self.run_apu();
         }
 
-        if self.mem.ppu.requested_run_cycle() <= self.cycle {
+        if self.ppu.requested_run_cycle() <= self.cycle {
             self.run_ppu();
         }
 
@@ -1127,14 +1145,14 @@ impl CPU {
     }
 
     fn run_apu(&mut self) {
-        let irq = self.mem.apu.run_to(self.cycle);
+        let irq = self.apu.run_to(self.cycle);
         if let IrqInterrupt::IRQ = irq {
             self.irq();
         }
     }
 
     fn run_ppu(&mut self) {
-        let nmi = self.mem.ppu.run_to(self.cycle);
+        let nmi = self.ppu.run_to(self.cycle);
         if let StepResult::NMI = nmi {
             self.nmi();
         }
@@ -1151,7 +1169,7 @@ impl CPU {
         for x in 0x0000..0x0100 {
             let addr = page | x as u16;
             let byte = self.read(addr);
-            self.mem.ppu.write(0x2004, byte);
+            self.ppu.write(0x2004, byte);
         }
     }
 
@@ -1176,5 +1194,85 @@ impl CPU {
     #[cfg(feature="cputrace")]
     pub fn get_pc(&self) -> u16 {
         self.regs.pc
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::rc::Rc;
+    use std::cell::UnsafeCell;
+    use mappers::{Mapper, MapperParams};
+    use screen::DummyScreen;
+    use io::DummyIO;
+    use audio::DummyAudioOut;
+    use memory::MemSegment;
+
+    fn create_test_cpu() -> CPU {
+        let path_buf = ::std::path::PathBuf::new();
+        let path = path_buf.as_path();
+        let nrom = Mapper::new(0,
+                               MapperParams::simple(path, vec!(0u8; 0x4000), vec!(0u8; 0x4000)));
+        let cart = ::cart::Cart::new(nrom);
+        let cart = Rc::new(UnsafeCell::new(cart));
+        let ppu = ::ppu::PPU::new(cart.clone(), Box::new(DummyScreen::default()));
+        let apu = ::apu::APU::new(Box::new(DummyAudioOut));
+        let io = DummyIO::new();
+        CPU::new(ppu, apu, Box::new(io), cart)
+    }
+
+    #[test]
+    fn can_read_write_ram_through_memory() {
+        let mut cpu = create_test_cpu();
+
+        cpu.write(0x0000, 0x24);
+        assert_eq!(cpu.read(0x0000), 0x24);
+
+        cpu.write(0x0799, 0x25);
+        assert_eq!(cpu.read(0x0799), 0x25);
+    }
+
+    #[test]
+    fn test_ram_mirroring() {
+        let mut cpu = create_test_cpu();
+
+        cpu.write(0x0800, 12);
+        assert_eq!(cpu.read(0x0000), 12);
+
+        cpu.write(0x1952, 12);
+        assert_eq!(cpu.read(0x0152), 12);
+    }
+
+    #[test]
+    fn can_read_write_prg_ram_through_memory() {
+        let mut cpu = create_test_cpu();
+
+        cpu.write(0x6111, 0x24);
+        assert_eq!(cpu.read(0x6111), 0x24);
+
+        cpu.write(0x6799, 0x25);
+        assert_eq!(cpu.read(0x6799), 0x25);
+    }
+
+    #[test]
+    fn can_read_write_to_ppu_registers_through_memory() {
+        let mut cpu = create_test_cpu();
+
+        // We're relying on the PPU dynamic latch effect to get the right answers
+        cpu.write(0x2000, 0x45);
+        assert_eq!(cpu.ppu.read(0x2000), 0x45);
+
+        cpu.write(0x2000, 0x48);
+        assert_eq!(cpu.read(0x2000), 0x48);
+    }
+
+    #[test]
+    fn test_read_w_reads_low_byte_first() {
+        let mut cpu = create_test_cpu();
+
+        cpu.write(0x1000, 0xCD);
+        cpu.write(0x1001, 0xAB);
+
+        assert_eq!(cpu.read_w(0x1000), 0xABCD);
     }
 }
