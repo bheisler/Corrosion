@@ -55,11 +55,17 @@ quick_error! {
 }
 
 impl Cart {
-    pub fn prg_read(&mut self, idx: u16) -> u8 {
-        self.mapper.prg_read(idx)
+    pub fn prg_rom_read(&mut self, idx: u16) -> u8 {
+        self.mapper.prg_rom_read(idx)
     }
-    pub fn prg_write(&mut self, idx: u16, val: u8) {
-        self.mapper.prg_write(idx, val)
+    pub fn prg_rom_write(&mut self, idx: u16, val: u8) {
+        self.mapper.prg_rom_write(idx, val)
+    }
+    pub fn prg_ram_read(&mut self, idx: u16) -> u8 {
+        self.mapper.prg_ram_read(idx)
+    }
+    pub fn prg_ram_write(&mut self, idx: u16, val: u8) {
+        self.mapper.prg_ram_write(idx, val)
     }
     pub fn chr_read(&mut self, idx: u16) -> u8 {
         self.mapper.chr_read(idx)

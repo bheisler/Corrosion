@@ -76,7 +76,7 @@ pub fn new(params: MapperParams) -> Box<Mapper> {
         regs: Regs {
             control: Ctrl {
                 mode: PrgMode::FixLast,
-                mirroring: super::standard_mapping_tables( ScreenMode::OneScreenLow ),
+                mirroring: super::standard_mapping_tables(ScreenMode::OneScreenLow),
             },
             chr_0: 0,
             chr_1: 0,
@@ -91,9 +91,8 @@ pub fn new(params: MapperParams) -> Box<Mapper> {
 }
 
 impl Mapper for MMC1 {
-    fn prg_read(&mut self, idx: u16) -> u8 {
+    fn prg_rom_read(&mut self, idx: u16) -> u8 {
         let bank = match idx {
-            0x6000...0x7FFF => return self.prg_ram.read(prg_ram_addr(idx)),
             0x8000...0xBFFF => self.first_bank(),
             0xC000...0xFFFF => self.second_bank(),
             x => invalid_address!(x),
@@ -102,18 +101,13 @@ impl Mapper for MMC1 {
         self.prg_rom[address]
     }
 
-    fn prg_write(&mut self, idx: u16, val: u8) {
-        if 0x6000 <= idx && idx <= 0x7FFF {
-            self.prg_ram.write(prg_ram_addr(idx), val);
-            return;
-        }
-
+    fn prg_rom_write(&mut self, idx: u16, val: u8) {
         if val & 0b1000_0000 != 0 {
             self.accumulator = 0;
             self.write_counter = 0;
             self.regs.control = Ctrl {
                 mode: PrgMode::FixLast,
-                mirroring: super::standard_mapping_tables( ScreenMode::OneScreenLow ),
+                mirroring: super::standard_mapping_tables(ScreenMode::OneScreenLow),
             };
             return;
         }
@@ -141,7 +135,7 @@ impl Mapper for MMC1 {
                     };
                     self.regs.control = Ctrl {
                         mode: mode,
-                        mirroring: super::standard_mapping_tables( mirroring ),
+                        mirroring: super::standard_mapping_tables(mirroring),
                     };
                 }
                 0xA000...0xBFFF => self.regs.chr_0 = self.accumulator,
@@ -152,6 +146,14 @@ impl Mapper for MMC1 {
             self.accumulator = 0;
             self.write_counter = 0;
         }
+    }
+
+    fn prg_ram_read(&mut self, idx: u16) -> u8 {
+        self.prg_ram.read(prg_ram_addr(idx))
+    }
+
+    fn prg_ram_write(&mut self, idx: u16, val: u8) {
+        self.prg_ram.write(prg_ram_addr(idx), val);
     }
 
     fn chr_read(&mut self, idx: u16) -> u8 {

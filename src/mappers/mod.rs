@@ -4,7 +4,6 @@ mod battery;
 mod mapper000;
 mod mmc1;
 
-use super::memory::MemSegment;
 use std::path::Path;
 use cart::ScreenMode;
 
@@ -25,8 +24,12 @@ fn standard_mapping_tables(mode: ScreenMode) -> &'static [u16; 4] {
 }
 
 pub trait Mapper {
-    fn prg_read(&mut self, idx: u16) -> u8;
-    fn prg_write(&mut self, idx: u16, val: u8);
+    fn prg_rom_read(&mut self, idx: u16) -> u8;
+    fn prg_rom_write(&mut self, idx: u16, val: u8);
+
+    fn prg_ram_read(&mut self, idx: u16) -> u8;
+    fn prg_ram_write(&mut self, idx: u16, val: u8);
+
     fn chr_read(&mut self, idx: u16) -> u8;
     fn chr_write(&mut self, idx: u16, val: u8);
 
@@ -69,15 +72,6 @@ impl Mapper {
             1 => mmc1::new(params),
             m => panic!("Unsupported Mapper: {}", m),
         }
-    }
-}
-
-impl MemSegment for Mapper {
-    fn read(&mut self, idx: u16) -> u8 {
-        self.prg_read(idx)
-    }
-    fn write(&mut self, idx: u16, val: u8) {
-        self.prg_write(idx, val)
     }
 }
 

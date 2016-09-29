@@ -454,7 +454,8 @@ impl MemSegment for CPU {
                 }
                 self.io.read(idx)
             }
-            0x4020...0xFFFF => unsafe { (*self.cart.get()).prg_read(idx) },
+            0x6000...0x7FFF => unsafe { (*self.cart.get()).prg_ram_read(idx) },
+            0x4020...0xFFFF => unsafe { (*self.cart.get()).prg_rom_read(idx) },
             x => invalid_address!(x),
         }
 
@@ -482,7 +483,8 @@ impl MemSegment for CPU {
                     self.io.poll();
                 }
             }
-            0x4020...0xFFFF => unsafe { (*self.cart.get()).prg_write(idx, val) },
+            0x6000...0x7FFF => unsafe { (*self.cart.get()).prg_ram_write(idx, val) },
+            0x4020...0xFFFF => unsafe { (*self.cart.get()).prg_rom_write(idx, val) },
             x => invalid_address!(x),
         }
     }
