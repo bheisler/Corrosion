@@ -230,7 +230,7 @@ impl BackgroundRenderer {
         let palette_id = tile_attribute.get_palette(
             tile_x * 8 + reg.get_scroll_x(),
             y as u16 + reg.get_scroll_y());
-        self.attr[y as usize][tile_x as usize] = palette_id << 3;
+        self.attr[y as usize][tile_x as usize] = palette_id << 2;
     }
 
     fn fetch_tile_pattern(&mut self, tile_x: u16, y: i16, reg: &PPUReg, mem: &mut PPUMemory) {
