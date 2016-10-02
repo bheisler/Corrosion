@@ -6,7 +6,7 @@ use std::path::Path;
 use std::io;
 
 use cart::ines::{Rom, RomError};
-use mappers::{Mapper, MapperParams};
+use mappers::{Mapper, MapperParams, RomBank};
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum ScreenMode {
@@ -55,10 +55,10 @@ quick_error! {
 }
 
 impl Cart {
-    pub fn prg_rom_read(&mut self, idx: u16) -> u8 {
+    pub fn prg_rom_read(&mut self, idx: u16) -> &RomBank {
         self.mapper.prg_rom_read(idx)
     }
-    pub fn prg_rom_write(&mut self, idx: u16, val: u8) {
+    pub fn prg_rom_write(&mut self, idx: u16, val: u8) -> &mut RomBank {
         self.mapper.prg_rom_write(idx, val)
     }
     pub fn prg_ram_read(&mut self, idx: u16) -> u8 {
@@ -66,7 +66,7 @@ impl Cart {
     }
     pub fn prg_ram_write(&mut self, idx: u16, val: u8) {
         self.mapper.prg_ram_write(idx, val)
-    }
+}
     pub fn chr_read(&mut self, idx: u16) -> u8 {
         self.mapper.chr_read(idx)
     }
