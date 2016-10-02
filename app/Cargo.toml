@@ -11,5 +11,5 @@ corrosion = { path = "..", features = [] }
 stopwatch = "0.0.6"
 
 [profile.release]
-lto = true
-debug = true
+#lto = true
+#debug = true

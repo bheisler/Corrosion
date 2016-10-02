@@ -1,7 +1,9 @@
 #![feature(test)]
 #![feature(plugin)]
-#![plugin(clippy)]
+//#![plugin(clippy)]
 
+#![allow(unused_features)]
+#![allow(unknown_lints)]
 #![allow(new_without_default)]
 #![allow(match_same_arms)]
 
