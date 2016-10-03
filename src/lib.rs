@@ -35,9 +35,6 @@ mod util;
 #[cfg(test)]
 mod tests;
 
-#[cfg(feature="cputrace")]
-pub mod disasm;
-
 use cart::Cart;
 use cpu::CPU;
 use apu::APU;

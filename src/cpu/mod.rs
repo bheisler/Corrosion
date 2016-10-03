@@ -1,5 +1,8 @@
 #![macro_use]
 
+#[cfg(feature="cputrace")]
+pub mod disasm;
+
 const NMI_VECTOR: u16 = 0xFFFA;
 const RESET_VECTOR: u16 = 0xFFFC;
 const IRQ_VECTOR: u16 = 0xFFFE;
