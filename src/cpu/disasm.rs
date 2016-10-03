@@ -22,18 +22,11 @@ pub struct Instruction {
     pub bytes: Vec<u8>,
     pub str: String,
     pub unofficial: bool,
+    pub address: u16,
 }
 
+#[cfg(feature="cputrace")]
 impl<'a> Disassembler<'a> {
-    pub fn new(cpu: &'a mut CPU) -> Disassembler {
-        Disassembler {
-            pc: cpu.get_pc(),
-            cpu: cpu,
-            bytes: vec![],
-            unofficial: false,
-        }
-    }
-
     // Addressing modes
     fn immediate(&mut self) -> PartialInstruction {
         PartialInstruction { pattern: format!("$$$ #${:02X}", self.read_incr_pc()) }
@@ -116,6 +109,66 @@ impl<'a> Disassembler<'a> {
     }
     fn accumulator(&mut self) -> PartialInstruction {
         PartialInstruction { pattern: format!("$$$ A") }
+    }
+
+    fn read_safe_w_zero_page(&mut self, zp_idx: u8) -> u16 {
+        let low = self.read_safe(zp_idx as u16) as u16;
+        let high = self.read_safe(zp_idx.wrapping_add(1) as u16) as u16;
+        (high << 8) | low
+    }
+}
+
+#[cfg(not(feature="cputrace"))]
+impl<'a> Disassembler<'a> {
+    // Addressing modes
+    fn immediate(&mut self) -> PartialInstruction {
+        PartialInstruction { pattern: format!("$$$ #${:02X}", self.read_incr_pc()) }
+    }
+    fn absolute(&mut self) -> PartialInstruction {
+        let arg = self.read_w_incr_pc();
+        PartialInstruction { pattern: format!("$$$ ${:04X}", arg) }
+    }
+    fn absolute_x(&mut self) -> PartialInstruction {
+        let arg = self.read_w_incr_pc();
+        PartialInstruction { pattern: format!("$$$ ${:04X},X", arg) }
+    }
+    fn absolute_y(&mut self) -> PartialInstruction {
+        let arg = self.read_w_incr_pc();
+        PartialInstruction { pattern: format!("$$$ ${:04X},Y", arg) }
+    }
+    fn zero_page(&mut self) -> PartialInstruction {
+        let arg = self.read_incr_pc();
+        PartialInstruction { pattern: format!("$$$ ${:02X}", arg) }
+    }
+    fn zero_page_x(&mut self) -> PartialInstruction {
+        let arg = self.read_incr_pc();
+        PartialInstruction { pattern: format!("$$$ ${:02X},X", arg) }
+    }
+    fn zero_page_y(&mut self) -> PartialInstruction {
+        let arg = self.read_incr_pc();
+        PartialInstruction { pattern: format!("$$$ ${:02X},Y", arg) }
+    }
+    fn indirect_x(&mut self) -> PartialInstruction {
+        let arg = self.read_incr_pc();
+        PartialInstruction { pattern: format!("$$$ (${:02X},X)", arg) }
+    }
+    fn indirect_y(&mut self) -> PartialInstruction {
+        let arg = self.read_incr_pc();
+        PartialInstruction { pattern: format!("$$$ (${:02X}),Y", arg) }
+    }
+    fn accumulator(&mut self) -> PartialInstruction {
+        PartialInstruction { pattern: format!("$$$ A") }
+    }
+}
+
+impl<'a> Disassembler<'a> {
+    pub fn new(cpu: &'a mut CPU) -> Disassembler {
+        Disassembler {
+            pc: cpu.get_pc(),
+            cpu: cpu,
+            bytes: vec![],
+            unofficial: false,
+        }
     }
 
     // Instructions
@@ -345,14 +398,31 @@ impl<'a> Disassembler<'a> {
         "KIL".to_string()
     }
 
-    pub fn decode(mut self) -> Instruction {
+    fn decode_instruction(&mut self) -> Instruction {
+        let address = self.pc;
         let opcode = self.read_incr_pc();
         let str: String = decode_opcode!(opcode, self);
-        Instruction {
-            bytes: self.bytes,
+        let instr = Instruction {
+            bytes: self.bytes.clone(),
             str: str,
             unofficial: self.unofficial,
+            address: address,
+        };
+        self.bytes.clear();
+        self.unofficial = false;
+        instr
+    }
+
+    pub fn decode(mut self) -> Instruction {
+        self.decode_instruction()
+    }
+    pub fn decode_function(mut self, entry_point: u16, exit_point: u16) -> Vec<Instruction> {
+        let mut instructions: Vec<Instruction> = vec![];
+        self.pc = entry_point;
+        while self.pc <= exit_point {
+            instructions.push(self.decode_instruction());
         }
+        instructions
     }
 
     fn unofficial(&mut self) {
@@ -387,12 +457,6 @@ impl<'a> Disassembler<'a> {
     fn read_safe_w(&mut self, idx: u16) -> u16 {
         let low = self.read_safe(idx) as u16;
         let high = self.read_safe(idx + 1) as u16;
-        (high << 8) | low
-    }
-
-    fn read_safe_w_zero_page(&mut self, zp_idx: u8) -> u16 {
-        let low = self.read_safe(zp_idx as u16) as u16;
-        let high = self.read_safe(zp_idx.wrapping_add(1) as u16) as u16;
         (high << 8) | low
     }
 }

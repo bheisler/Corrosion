@@ -1,8 +1,5 @@
 #![macro_use]
 
-#[cfg(feature="cputrace")]
-pub mod disasm;
-
 const NMI_VECTOR: u16 = 0xFFFA;
 const RESET_VECTOR: u16 = 0xFFFC;
 const IRQ_VECTOR: u16 = 0xFFFE;
@@ -300,6 +297,12 @@ macro_rules! decode_opcode {
     } }
 }
 
+#[cfg(feature="disasm")]
+pub mod disasm;
+
+#[cfg(feature="function_disasm")]
+mod nes_analyst;
+
 use memory::RAM;
 use memory::MemSegment;
 use ppu::StepResult;
@@ -310,8 +313,11 @@ use cart::Cart;
 use std::rc::Rc;
 use std::cell::UnsafeCell;
 
-#[cfg(feature="cputrace")]
-use disasm::Disassembler;
+#[cfg(feature="disasm")]
+use cpu::disasm::Disassembler;
+
+#[cfg(feature="function_disasm")]
+use cpu::nes_analyst::Analyst;
 
 /// The number of cycles that each machine operation takes. Indexed by opcode
 /// number.
@@ -534,6 +540,38 @@ impl CPU {
     #[cfg(not(feature="stacktrace"))]
     fn stack_dump(&self) {}
 
+    #[cfg(feature="function_disasm")]
+    fn disasm_function(&mut self) {
+        let entry_point = self.regs.pc;
+        if entry_point < 0x8000 {
+            return;
+        }
+
+        let exit_point = Analyst::new(self).find_exit_point(entry_point);
+        let function = Disassembler::new(self).decode_function(entry_point, exit_point);
+        println!("Disassembly of function at {:04X} -> {:04X}", entry_point, exit_point);
+        for opcode in function.into_iter() {
+            println!(
+                "{:04X}:{:9} {}{:30}",
+                opcode.address,
+                opcode.bytes.iter()
+                    .map(|byte| format!("{:02X}", byte))
+                    .fold(None as Option<String>, |opt, right| {
+                        match opt {
+                            Some(left) => Some(left + " " + &right),
+                            None => Some(right),
+                        }
+                    } ).unwrap(),
+                if opcode.unofficial { "*" } else { " " },
+                opcode.str
+            );
+        }
+        println!("");
+    }
+
+    #[cfg(not(feature="function_disasm"))]
+    fn disasm_function(&self) {}
+
     // Addressing modes
     fn immediate(&mut self) -> ImmediateAddressingMode {
         ImmediateAddressingMode
@@ -755,25 +793,30 @@ impl CPU {
     // Jumps
     fn jmp(&mut self) {
         self.regs.pc = self.load_w_incr_pc();
+        self.disasm_function();
     }
     fn jmpi(&mut self) {
         let arg = self.load_w_incr_pc();
         self.regs.pc = self.read_w_same_page(arg);
+        self.disasm_function();
     }
     fn jsr(&mut self) {
         let target = self.load_w_incr_pc();
         let return_addr = self.regs.pc - 1;
         self.regs.pc = target;
         self.stack_push_w(return_addr);
+        self.disasm_function();
     }
     fn rts(&mut self) {
         self.regs.pc = self.stack_pop_w().wrapping_add(1);
+        self.disasm_function();
     }
     fn rti(&mut self) {
         let status = self.stack_pop();
         self.regs.p = Status::from_bits_truncate(status);
         self.regs.p.insert(U);
         self.regs.pc = self.stack_pop_w();
+        self.disasm_function();
     }
     fn brk(&mut self) {
         self.regs.pc -= 1;
@@ -784,6 +827,7 @@ impl CPU {
         let mut status = self.regs.p;
         status.insert(B);
         self.stack_push(status.bits());
+        self.disasm_function();
     }
 
     // Branches
@@ -959,6 +1003,7 @@ impl CPU {
 
     pub fn init(&mut self) {
         self.regs.pc = self.read_w(RESET_VECTOR);
+        self.disasm_function();
     }
 
     fn nmi(&mut self) {
@@ -1196,7 +1241,7 @@ impl CPU {
         self.regs.y
     }
 
-    #[cfg(feature="cputrace")]
+    #[cfg(feature="disasm")]
     pub fn get_pc(&self) -> u16 {
         self.regs.pc
     }
