@@ -41,7 +41,7 @@ impl PPUMemory {
         let idx = idx & 0x0FFF;
         let nametable_num = (idx / 0x0400) as usize;
         let idx_in_nametable = idx % 0x400;
-        let table : &[u16; 4] = unsafe { (*self.cart.get()).get_mirroring_table() };
+        let table: &[u16; 4] = unsafe { (*self.cart.get()).get_mirroring_table() };
         let translated = table[nametable_num] + idx_in_nametable;
         translated as usize % self.vram.len()
     }
@@ -88,9 +88,7 @@ impl PPUMemory {
 impl MemSegment for PPUMemory {
     fn read(&mut self, idx: u16) -> u8 {
         match idx {
-            0x0000...0x1FFF => {
-                unsafe { (*self.cart.get()).chr_read(idx) }
-            }
+            0x0000...0x1FFF => unsafe { (*self.cart.get()).chr_read(idx) },
             0x2000...0x3EFF => self.read_bypass_palette(idx),
             0x3F00...0x3FFF => self.palette[(idx & 0x1F) as usize].bits(),
             x => invalid_address!(x),
@@ -99,9 +97,7 @@ impl MemSegment for PPUMemory {
 
     fn write(&mut self, idx: u16, val: u8) {
         match idx {
-            0x0000...0x1FFF => {
-                unsafe { (*self.cart.get()).chr_write(idx, val) }
-            }
+            0x0000...0x1FFF => unsafe { (*self.cart.get()).chr_write(idx, val) },
             0x2000...0x3EFF => {
                 let idx = self.translate_vram_address(idx);
                 self.vram[idx] = val;

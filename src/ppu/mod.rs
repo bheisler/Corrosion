@@ -339,11 +339,11 @@ impl PPU {
 
     #[cfg(not(feature="vectorize"))]
     fn colorize(&mut self, start: usize, stop: usize ) {
-        let color_slice = self.screen_buffer[start...stop];
-        let index_slice = self.palette_buffer[start...stop];
+        let color_slice = &mut self.screen_buffer[start..stop];
+        let index_slice = &self.palette_buffer[start..stop];
 
-        for (src, dest) in color_slice.iter().zip_with(index_slice.iter_mut()) {
-            *dest = self.ppu_mem.read_palette(src);
+        for (src, dest) in index_slice.iter().zip(color_slice.iter_mut()) {
+            *dest = self.ppu_mem.read_palette(*src);
         }
     }
 

@@ -16,6 +16,8 @@ extern crate quick_error;
 pub extern crate sdl2;
 extern crate blip_buf;
 extern crate memmap;
+
+#[cfg(feature="vectorize")]
 extern crate simd;
 
 pub mod cart;
