@@ -11,12 +11,12 @@ stacktrace = []
 mousepick = []
 
 [dependencies]
-bitflags = "0.5"
-quick-error = "1.0"
-sdl2 = "0.17"
+bitflags = "0.7"
+quick-error = "1.1"
+sdl2 = "0.23"
 blip_buf = "0.1.4"
-memmap = "0.3"
-#clippy = "0.0.79"
+memmap = "0.4"
+clippy = "0.0.92"
 simd = { git = "https://github.com/huonw/simd", optional = true }
 
 [dev-dependencies]

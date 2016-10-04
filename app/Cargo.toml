@@ -8,7 +8,7 @@ mousepick = ["corrosion/mousepick"]
 
 [dependencies]
 corrosion = { path = "..", features = [] }
-stopwatch = "0.0.6"
+stopwatch = "0.0.7"
 
 [profile.release]
 #lto = true

@@ -1,6 +1,6 @@
 #![feature(test)]
 #![feature(plugin)]
-//#![plugin(clippy)]
+#![plugin(clippy)]
 
 #![allow(unused_features)]
 #![allow(unknown_lints)]
