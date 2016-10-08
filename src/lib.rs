@@ -1,11 +1,19 @@
 #![feature(test)]
 #![feature(plugin)]
+
 #![plugin(clippy)]
+
+#![cfg(feature="jit")]
+#![plugin(dynasm)]
 
 #![allow(unused_features)]
 #![allow(unknown_lints)]
 #![allow(new_without_default)]
 #![allow(match_same_arms)]
+
+#[cfg(feature="jit")]
+#[macro_use]
+extern crate dynasmrt;
 
 #[macro_use]
 extern crate bitflags;
@@ -78,7 +86,8 @@ impl EmulatorBuilder {
         let cart: Rc<UnsafeCell<Cart>> = Rc::new(UnsafeCell::new(self.cart));
         let ppu = PPU::new(cart.clone(), self.screen);
         let apu = APU::new(self.audio_out);
-        let mut cpu = CPU::new(ppu, apu, self.io, cart);
+        let dispatcher = cpu::dispatcher::Dispatcher::new();
+        let mut cpu = CPU::new(ppu, apu, self.io, cart, Rc::new(UnsafeCell::new(dispatcher)));
         cpu.init();
 
         Emulator{ cpu: cpu }

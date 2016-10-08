@@ -444,7 +444,7 @@ impl<'a> Disassembler<'a> {
     }
 
     fn read_w_incr_pc(&mut self) -> u16 {
-        ((self.read_incr_pc() as u16) << 0) | ((self.read_incr_pc() as u16) << 8)
+        self.read_incr_pc() as u16 | ((self.read_incr_pc() as u16) << 8)
     }
 
     fn read_safe(&mut self, idx: u16) -> u8 {

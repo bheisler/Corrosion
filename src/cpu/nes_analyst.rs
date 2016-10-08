@@ -9,6 +9,11 @@ pub struct Analyst<'a> {
     found_exit_point: bool,
 }
 
+pub struct BlockAnalysis {
+    pub entry_point: u16,
+    pub exit_point: u16,
+}
+
 impl<'a> Analyst<'a> {
     pub fn new(cpu: &'a mut CPU) -> Analyst<'a> {
         Analyst {
@@ -21,13 +26,20 @@ impl<'a> Analyst<'a> {
     }
 
     pub fn find_exit_point(mut self, entry_point: u16) -> u16 {
+        self.analyze(entry_point).exit_point
+    }
+
+    pub fn analyze(mut self, entry_point: u16) -> BlockAnalysis {
         self.entry_point = entry_point;
         self.pc = entry_point;
         while !self.found_exit_point {
             let opcode = self.read_incr_pc();
             decode_opcode!(opcode, self);
         }
-        self.pc - 1
+        BlockAnalysis {
+            entry_point: entry_point,
+            exit_point: self.pc - 1,
+        }
     }
 
     // Addressing modes
@@ -216,7 +228,7 @@ impl<'a> Analyst<'a> {
     }
 
     fn read_w_incr_pc(&mut self) -> u16 {
-        ((self.read_incr_pc() as u16) << 0) | ((self.read_incr_pc() as u16) << 8)
+        self.read_incr_pc() as u16 | ((self.read_incr_pc() as u16) << 8)
     }
 
     fn read_safe(&mut self, idx: u16) -> u8 {

@@ -303,6 +303,14 @@ pub mod disasm;
 #[cfg(feature="function_disasm")]
 mod nes_analyst;
 
+#[cfg(all(target_arch="x86_64", feature="jit"))]
+pub mod x86_64_compiler;
+
+#[cfg(all(target_arch="x86_64", feature="jit"))]
+pub use cpu::x86_64_compiler as compiler;
+
+pub mod dispatcher;
+
 use memory::RAM;
 use memory::MemSegment;
 use ppu::StepResult;
@@ -312,12 +320,14 @@ use io::IO;
 use cart::Cart;
 use std::rc::Rc;
 use std::cell::UnsafeCell;
+use cpu::dispatcher::Dispatcher;
 
 #[cfg(feature="disasm")]
 use cpu::disasm::Disassembler;
 
-#[cfg(feature="function_disasm")]
+#[cfg(any(feature="function_disasm", feature="jit"))]
 use cpu::nes_analyst::Analyst;
+
 
 /// The number of cycles that each machine operation takes. Indexed by opcode
 /// number.
@@ -435,6 +445,7 @@ pub struct CPU {
     pub apu: APU,
     pub io: Box<IO>,
     cart: Rc<UnsafeCell<Cart>>,
+    dispatcher: Rc<UnsafeCell<Dispatcher>>,
     cycle: u64,
     halted: bool,
     io_strobe: bool,
@@ -540,7 +551,7 @@ impl CPU {
     #[cfg(not(feature="stacktrace"))]
     fn stack_dump(&self) {}
 
-    #[cfg(feature="function_disasm")]
+    #[cfg(any(feature="function_disasm", feature="jit"))]
     fn disasm_function(&mut self) {
         let entry_point = self.regs.pc;
         if entry_point < 0x8000 {
@@ -980,7 +991,7 @@ impl CPU {
         self.halted = true;
     }
 
-    pub fn new(ppu: PPU, apu: APU, io: Box<IO>, cart: Rc<UnsafeCell<Cart>>) -> CPU {
+    pub fn new(ppu: PPU, apu: APU, io: Box<IO>, cart: Rc<UnsafeCell<Cart>>, dispatcher: Rc<UnsafeCell<Dispatcher>>) -> CPU {
         CPU {
             regs: Registers {
                 a: 0,
@@ -996,6 +1007,7 @@ impl CPU {
             apu: apu,
             io: io,
             cart: cart,
+            dispatcher: dispatcher,
             halted: false,
             io_strobe: false,
         }
@@ -1004,6 +1016,8 @@ impl CPU {
     pub fn init(&mut self) {
         self.regs.pc = self.read_w(RESET_VECTOR);
         self.disasm_function();
+        let target = self.regs.pc;
+        unsafe { (*self.dispatcher.get()).jump(target, self) }
     }
 
     fn nmi(&mut self) {
@@ -1257,6 +1271,7 @@ mod tests {
     use io::DummyIO;
     use audio::DummyAudioOut;
     use memory::MemSegment;
+    use cpu::dispatcher::Dispatcher;
 
     fn create_test_cpu() -> CPU {
         let path_buf = ::std::path::PathBuf::new();
@@ -1268,7 +1283,8 @@ mod tests {
         let ppu = ::ppu::PPU::new(cart.clone(), Box::new(DummyScreen::default()));
         let apu = ::apu::APU::new(Box::new(DummyAudioOut));
         let io = DummyIO::new();
-        CPU::new(ppu, apu, Box::new(io), cart)
+        let dispatcher = Rc::new(UnsafeCell::new(Dispatcher::new()));
+        CPU::new(ppu, apu, Box::new(io), cart, dispatcher)
     }
 
     #[test]
