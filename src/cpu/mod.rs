@@ -429,7 +429,7 @@ impl Status {
     }
 }
 
-struct Registers {
+pub struct Registers {
     a: u8,
     x: u8,
     y: u8,
@@ -439,7 +439,7 @@ struct Registers {
 }
 
 pub struct CPU {
-    regs: Registers,
+    pub regs: Registers,
     pub ram: RAM,
     pub ppu: PPU,
     pub apu: APU,
@@ -805,11 +805,13 @@ impl CPU {
     fn jmp(&mut self) {
         self.regs.pc = self.load_w_incr_pc();
         self.disasm_function();
+        unsafe { (*self.dispatcher.get()).jump(self) }
     }
     fn jmpi(&mut self) {
         let arg = self.load_w_incr_pc();
         self.regs.pc = self.read_w_same_page(arg);
         self.disasm_function();
+        unsafe { (*self.dispatcher.get()).jump(self) }
     }
     fn jsr(&mut self) {
         let target = self.load_w_incr_pc();
@@ -817,10 +819,12 @@ impl CPU {
         self.regs.pc = target;
         self.stack_push_w(return_addr);
         self.disasm_function();
+        unsafe { (*self.dispatcher.get()).jump(self) }
     }
     fn rts(&mut self) {
         self.regs.pc = self.stack_pop_w().wrapping_add(1);
         self.disasm_function();
+        unsafe { (*self.dispatcher.get()).jump(self) }
     }
     fn rti(&mut self) {
         let status = self.stack_pop();
@@ -828,6 +832,7 @@ impl CPU {
         self.regs.p.insert(U);
         self.regs.pc = self.stack_pop_w();
         self.disasm_function();
+        unsafe { (*self.dispatcher.get()).jump(self) }
     }
     fn brk(&mut self) {
         self.regs.pc -= 1;
@@ -839,6 +844,7 @@ impl CPU {
         status.insert(B);
         self.stack_push(status.bits());
         self.disasm_function();
+        unsafe { (*self.dispatcher.get()).jump(self) }
     }
 
     // Branches
@@ -1014,10 +1020,10 @@ impl CPU {
     }
 
     pub fn init(&mut self) {
-        self.regs.pc = self.read_w(RESET_VECTOR);
+        //self.regs.pc = self.read_w(RESET_VECTOR);
+        self.regs.pc = 0xC000;
         self.disasm_function();
-        let target = self.regs.pc;
-        unsafe { (*self.dispatcher.get()).jump(target, self) }
+        //unsafe { (*self.dispatcher.get()).jump(target, self) }
     }
 
     fn nmi(&mut self) {

@@ -35,9 +35,10 @@ impl Dispatcher {
         self.table[addr as usize].as_ref().unwrap()
     }
 
-    pub fn jump(&mut self, addr: u16, cpu: &mut CPU) {
-        let executable = self.get_block(addr, cpu).code;
-        executable(cpu as *mut CPU);
+    pub fn jump(&mut self, cpu: &mut CPU) {
+        let addr = cpu.regs.pc;
+        let executable = &self.get_block(addr, cpu).code;
+        executable.call(cpu as *mut CPU);
     }
 
     fn get_block(&mut self, addr: u16, cpu: &mut CPU) -> &Block {
