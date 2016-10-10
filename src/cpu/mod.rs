@@ -311,7 +311,6 @@ pub use cpu::x86_64_compiler as compiler;
 
 pub mod dispatcher;
 
-use memory::RAM;
 use memory::MemSegment;
 use ppu::StepResult;
 use ppu::PPU;
@@ -440,7 +439,7 @@ pub struct Registers {
 
 pub struct CPU {
     pub regs: Registers,
-    pub ram: RAM,
+    pub ram: [u8; 0x0800],
     pub ppu: PPU,
     pub apu: APU,
     pub io: Box<IO>,
@@ -454,7 +453,7 @@ pub struct CPU {
 impl MemSegment for CPU {
     fn read(&mut self, idx: u16) -> u8 {
         match idx {
-            0x0000...0x1FFF => self.ram.read(idx),
+            0x0000...0x1FFF => self.ram[(idx % 0x800) as usize],
             0x2000...0x3FFF => {
                 self.run_ppu();
                 self.ppu.read(idx)
@@ -483,7 +482,7 @@ impl MemSegment for CPU {
 
     fn write(&mut self, idx: u16, val: u8) {
         match idx {
-            0x0000...0x1FFF => self.ram.write(idx, val),
+            0x0000...0x1FFF => self.ram[(idx % 0x800) as usize] = val,
             0x2000...0x3FFF => {
                 self.run_ppu();
                 self.ppu.write(idx, val);
@@ -1008,7 +1007,7 @@ impl CPU {
                 pc: 0,
             },
             cycle: 0,
-            ram: Default::default(),
+            ram: [0; 0x800],
             ppu: ppu,
             apu: apu,
             io: io,

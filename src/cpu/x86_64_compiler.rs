@@ -16,10 +16,17 @@ pub struct ExecutableBlock {
 impl ExecutableBlock {
     pub fn call(&self, cpu: *mut CPU) {
         let offset = self.offset;
-        let f: extern "win64" fn(*mut CPU, *mut Registers) -> () =
+        let f: extern "win64" fn(*mut CPU, *mut Registers, *mut [u8; 0x800]) -> () =
             unsafe { mem::transmute(self.buffer.ptr(offset)) };
         let regs = unsafe { &mut (*cpu).regs };
-        f(cpu, regs as _);
+        let ram = unsafe { &mut (*cpu).ram };
+        f(cpu, regs as _, ram as _);
+
+        unsafe {
+            assert_eq!(612, (*cpu).cycle);
+            assert_eq!(12, (*cpu).regs.a);
+            assert_eq!(0xDE, (*cpu).read(123));
+        }
     }
 }
 
@@ -34,8 +41,9 @@ macro_rules! unimplemented {
 }
 
 dynasm!(ops
-    ; .alias cpu, rcx
-    ; .alias regs, rdx
+    ; .alias cpu, rbx
+    ; .alias regs, rcx
+    ; .alias ram, rdx
     ; .alias temp, r8b
     ; .alias n_a, r9b
     ; .alias n_x, r10b
@@ -91,10 +99,14 @@ macro_rules! store_registers {
 macro_rules! prologue {
     ($ops:ident) => {{
         dynasm!{$ops
+            ; push rbx
             ; push r12
             ; push r13
             ; push r14
             ; push r15
+            ; mov rbx, rcx //Move the CPU pointer to the CPU pointer register
+            ; mov rcx, rdx //Move the registers pointer to the regs pointer register
+            ; mov rdx, r8  //Move the RAM pointer to the RAM pointer register
         }
         load_registers!($ops);
     }};
@@ -108,6 +120,7 @@ macro_rules! epilogue {
             ; pop r14
             ; pop r13
             ; pop r12
+            ; pop rbx
             ; ret
         }
     }};
@@ -153,7 +166,6 @@ impl<'a> Compiler<'a> {
         let start = self.asm.offset();
         let mut asm = self.asm;
 
-        // TODO: Add way to call back to rust code
         // TODO: Implement the rest of the operations
 
         // TODO: Handle flags
