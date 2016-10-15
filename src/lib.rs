@@ -1,5 +1,7 @@
 #![feature(test)]
 #![feature(plugin)]
+#![feature(asm)]
+#![feature(naked_functions)]
 
 #![plugin(clippy)]
 

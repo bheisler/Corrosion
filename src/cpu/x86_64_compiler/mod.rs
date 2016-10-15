@@ -21,12 +21,6 @@ impl ExecutableBlock {
         let regs = unsafe { &mut (*cpu).regs };
         let ram = unsafe { &mut (*cpu).ram };
         f(cpu, regs as _, ram as _);
-
-        unsafe {
-            assert_eq!(612, (*cpu).cycle);
-            assert_eq!(12, (*cpu).regs.a);
-            assert_eq!(0xDE, (*cpu).read(123));
-        }
     }
 }
 
@@ -40,11 +34,11 @@ macro_rules! unimplemented {
     };
 }
 
-dynasm!(ops
+dynasm!(this
     ; .alias cpu, rbx
     ; .alias regs, rcx
     ; .alias ram, rdx
-    ; .alias temp, r8b
+    ; .alias arg, r8b
     ; .alias n_a, r9b
     ; .alias n_x, r10b
     ; .alias n_y, r11b
@@ -62,8 +56,8 @@ struct Compiler<'a> {
 }
 
 macro_rules! load_registers {
-    ($ops:ident) => {{
-        dynasm!($ops
+    ($this:ident) => {{
+        dynasm!($this.asm
             ; xor r8, r8
             ; xor r9, r9
             ; mov n_a, BYTE regs => Registers.a
@@ -83,8 +77,8 @@ macro_rules! load_registers {
 }
 
 macro_rules! store_registers {
-    ($ops:ident) => {{
-        dynasm!($ops
+    ($this:ident) => {{
+        dynasm!($this.asm
             ; mov BYTE regs => Registers.a, n_a
             ; mov BYTE regs => Registers.x, n_x
             ; mov BYTE regs => Registers.y, n_y
@@ -97,8 +91,8 @@ macro_rules! store_registers {
 }
 
 macro_rules! prologue {
-    ($ops:ident) => {{
-        dynasm!{$ops
+    ($this:ident) => {{
+        dynasm!{$this.asm
             ; push rbx
             ; push r12
             ; push r13
@@ -108,14 +102,14 @@ macro_rules! prologue {
             ; mov rcx, rdx //Move the registers pointer to the regs pointer register
             ; mov rdx, r8  //Move the RAM pointer to the RAM pointer register
         }
-        load_registers!($ops);
+        load_registers!($this);
     }};
 }
 
 macro_rules! epilogue {
-    ($ops:ident) => {{
-        store_registers!($ops);
-        dynasm!{$ops
+    ($this:ident) => {{
+        store_registers!($this);
+        dynasm!{$this.asm
             ; pop r15
             ; pop r14
             ; pop r13
@@ -126,8 +120,17 @@ macro_rules! epilogue {
     }};
 }
 
+macro_rules! call_naked {
+    ($this:ident, $addr:expr) => {dynasm!($this.asm
+        ; push rax
+        ; mov rax, QWORD $addr as _
+        ; call rax
+        ; pop rax
+    );};
+}
+
 macro_rules! call_extern {
-    ($ops:ident, $addr:expr) => {dynasm!($ops
+    ($this:ident, $addr:expr) => {dynasm!($this.asm
         ; push rax
         ; push rcx
         ; push rdx
@@ -149,6 +152,50 @@ macro_rules! call_extern {
     );};
 }
 
+#[naked]
+extern "C" fn set_zero_flag() {
+    unsafe {
+        asm!("
+            cmp r8b, 0
+            jz 1f
+            and r12b, 0FDH
+            jmp 2f
+        1:
+            or r12b, 2H
+        2:
+            ret
+            "
+        :
+        :
+        : "r12"
+        : "intel");
+    };
+}
+
+#[naked]
+extern "C" fn set_sign_flag() {
+    unsafe {
+        asm!("
+            test r8b, 80H
+            jz 1f
+            or r12b, 80H
+            jmp 2f
+        1:
+            and r12b, 7FH
+        2:
+            ret
+            "
+        :
+        :
+        : "r12"
+        : "intel");
+    };
+}
+
+mod addressing_modes;
+
+use self::addressing_modes::AddressingMode;
+
 impl<'a> Compiler<'a> {
     fn new(cpu: &'a mut CPU) -> Compiler<'a> {
         Compiler {
@@ -164,122 +211,104 @@ impl<'a> Compiler<'a> {
         let analysis = Analyst::new(self.cpu).analyze(addr);
 
         let start = self.asm.offset();
-        let mut asm = self.asm;
 
         // TODO: Implement the rest of the operations
 
-        // TODO: Handle flags
         // TODO: Count CPU cycles
         // TODO: Implement interrupts
 
-        prologue!(asm);
+        // TODO: Centralize the flag operations
 
-        // while self.pc < analysis.exit_point {
-        // let opcode = self.read_incr_pc();
-        // decode_opcode!(opcode, self);
-        // }
+        prologue!(self);
 
-        epilogue!(asm);
+        while self.pc < analysis.exit_point {
+            let opcode = self.read_incr_pc();
+            decode_opcode!(opcode, self);
+        }
+
+        epilogue!(self);
 
         ExecutableBlock {
             offset: start,
-            buffer: asm.finalize().unwrap(),
+            buffer: self.asm.finalize().unwrap(),
         }
     }
 
-    // Addressing modes
-    fn immediate(&mut self) -> u8 {
-        self.read_incr_pc();
-        unimplemented!(immediate);
-    }
-    fn absolute(&mut self) -> u8 {
-        self.read_w_incr_pc();
-        unimplemented!(absolute);
-    }
-    fn absolute_x(&mut self) -> u8 {
-        self.read_w_incr_pc();
-        unimplemented!(absolute_x);
-    }
-    fn absolute_y(&mut self) -> u8 {
-        self.read_w_incr_pc();
-        unimplemented!(absolute_y);
-    }
-    fn zero_page(&mut self) -> u8 {
-        self.read_incr_pc();
-        unimplemented!(zero_page);
-    }
-    fn zero_page_x(&mut self) -> u8 {
-        self.read_incr_pc();
-        unimplemented!(zero_page_x);
-    }
-    fn zero_page_y(&mut self) -> u8 {
-        self.read_incr_pc();
-        unimplemented!(zero_page_y);
-    }
-    fn indirect_x(&mut self) -> u8 {
-        self.read_incr_pc();
-        unimplemented!(indirect_x);
-    }
-    fn indirect_y(&mut self) -> u8 {
-        self.read_incr_pc();
-        unimplemented!(indirect_y);
-    }
-    fn accumulator(&mut self) -> u8 {
-        unimplemented!(accumulator);
-    }
-
-    // Instructions
     // Stores
-    fn stx(&mut self, _: u8) {
-        unimplemented!(stx);
+    fn stx<M: AddressingMode>(&mut self, mode: M) {
+        dynasm!{self.asm
+            ; mov arg, n_x
+            ;; mode.write_from_arg(self)
+        }
     }
-    fn sty(&mut self, _: u8) {
-        unimplemented!(sty);
+    fn sty<M: AddressingMode>(&mut self, mode: M) {
+        dynasm!{self.asm
+            ; mov arg, n_y
+            ;; mode.write_from_arg(self)
+        }
     }
-    fn sta(&mut self, _: u8) {
-        unimplemented!(sta);
+    fn sta<M: AddressingMode>(&mut self, mode: M) {
+        dynasm!{self.asm
+            ; mov arg, n_a
+            ;; mode.write_from_arg(self)
+        }
     }
 
     // Loads
-    fn ldx(&mut self, _: u8) {
-        unimplemented!(ldx);
+    fn ldx<M: AddressingMode>(&mut self, mode: M) {
+        dynasm!{self.asm
+            ;; mode.read_to_arg(self)
+            ; mov n_x, arg
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+        }
     }
-    fn lda(&mut self, _: u8) {
-        unimplemented!(lda);
+    fn lda<M: AddressingMode>(&mut self, mode: M) {
+        dynasm!{self.asm
+            ;; mode.read_to_arg(self)
+            ; mov n_a, arg
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+        }
     }
-    fn ldy(&mut self, _: u8) {
-        unimplemented!(ldy);
+    fn ldy<M: AddressingMode>(&mut self, mode: M) {
+        dynasm!{self.asm
+            ;; mode.read_to_arg(self)
+            ; mov n_y, arg
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+        }
     }
 
     // Logic/Math Ops
-    fn bit(&mut self, _: u8) {
+    fn bit<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(bit);
     }
-    fn and(&mut self, _: u8) {
+    fn and<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(and);
     }
-    fn ora(&mut self, _: u8) {
+    fn ora<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(ora);
     }
-    fn eor(&mut self, _: u8) {
+    fn eor<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(eor);
     }
-    fn adc(&mut self, _: u8) {
+    fn adc<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(adc);
     }
-    fn sbc(&mut self, _: u8) {
+    fn sbc<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(sbc);
     }
-    fn cmp(&mut self, _: u8) {
+    fn cmp<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(cmp);
     }
-    fn cpx(&mut self, _: u8) {
+    fn cpx<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(cpx);
     }
-    fn cpy(&mut self, _: u8) {
+    fn cpy<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(cpy);
     }
-    fn inc(&mut self, _: u8) {
+    fn inc<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(inc);
     }
     fn iny(&mut self) {
@@ -288,7 +317,7 @@ impl<'a> Compiler<'a> {
     fn inx(&mut self) {
         unimplemented!(inx);
     }
-    fn dec(&mut self, _: u8) {
+    fn dec<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(dec);
     }
     fn dey(&mut self) {
@@ -297,16 +326,16 @@ impl<'a> Compiler<'a> {
     fn dex(&mut self) {
         unimplemented!(dex);
     }
-    fn lsr(&mut self, _: u8) {
+    fn lsr<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(lsr);
     }
-    fn asl(&mut self, _: u8) {
+    fn asl<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(asl);
     }
-    fn ror(&mut self, _: u8) {
+    fn ror<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(ror);
     }
-    fn rol(&mut self, _: u8) {
+    fn rol<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(rol);
     }
 
@@ -320,8 +349,12 @@ impl<'a> Compiler<'a> {
         unimplemented!(jmpi);
     }
     fn jsr(&mut self) {
-        self.read_w_incr_pc();
-        unimplemented!(jsr);
+        let target = self.read_w_incr_pc();
+        let ret_addr = self.pc - 1;
+        dynasm!(self.asm
+            ;; self.stack_push_w(ret_addr)
+            ; mov n_pc, WORD target as _
+        )
     }
     fn rts(&mut self) {
         unimplemented!(rts);
@@ -433,35 +466,42 @@ impl<'a> Compiler<'a> {
     }
 
     // Unofficial instructions
-    fn u_nop(&mut self, _: u8) {
+    fn u_nop<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(u_nop);
     }
-    fn lax(&mut self, _: u8) {
+    fn lax<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(lax);
     }
-    fn sax(&mut self, _: u8) {
+    fn sax<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(sax);
     }
-    fn dcp(&mut self, _: u8) {
+    fn dcp<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(dcp);
     }
-    fn isc(&mut self, _: u8) {
+    fn isc<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(isc);
     }
-    fn slo(&mut self, _: u8) {
+    fn slo<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(slo);
     }
-    fn rla(&mut self, _: u8) {
+    fn rla<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(rla);
     }
-    fn sre(&mut self, _: u8) {
+    fn sre<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(sre);
     }
-    fn rra(&mut self, _: u8) {
+    fn rra<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(rra);
     }
     fn kil(&mut self) {
         unimplemented!(kil);
+    }
+
+    fn stack_push_w(&mut self, val: u16) {
+        dynasm!( self.asm
+            ; sub n_sp, BYTE 2
+            ; mov WORD [ram + r13 + 0x101], WORD val as _
+        )
     }
 
     fn relative_addr(&self, disp: u8) -> u16 {
@@ -472,20 +512,12 @@ impl<'a> Compiler<'a> {
 
     fn read_incr_pc(&mut self) -> u8 {
         let pc = self.pc;
-        let val: u8 = self.read_safe(pc);
+        let val: u8 = self.cpu.read(pc);
         self.pc = self.pc.wrapping_add(1);
         val
     }
 
     fn read_w_incr_pc(&mut self) -> u16 {
         self.read_incr_pc() as u16 | ((self.read_incr_pc() as u16) << 8)
-    }
-
-    fn read_safe(&mut self, idx: u16) -> u8 {
-        match idx {
-            0x2000...0x3FFF => 0xFF,
-            0x4000...0x401F => 0xFF,
-            _ => self.cpu.read(idx),
-        }
     }
 }
