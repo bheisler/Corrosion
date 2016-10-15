@@ -5,8 +5,9 @@ use cpu::Registers;
 use cpu::nes_analyst::Analyst;
 use std::mem;
 use memory::MemSegment;
+use std::collections::HashMap;
 
-use dynasmrt::{AssemblyOffset, DynasmApi, DynasmLabelApi, ExecutableBuffer};
+use dynasmrt::{AssemblyOffset, DynasmApi, DynasmLabelApi, ExecutableBuffer, DynamicLabel};
 
 const CARRY: u8 = 0b0000_0001;
 const ZERO: u8 = 0b0000_0010;
@@ -54,13 +55,6 @@ dynasm!(this
     ; .alias n_pc, r14w
     ; .alias cyc, r15
 );
-
-struct Compiler<'a> {
-    asm: ::dynasmrt::Assembler,
-    cpu: &'a mut CPU,
-
-    pc: u16,
-}
 
 macro_rules! load_registers {
     ($this:ident) => {{
@@ -203,6 +197,16 @@ mod addressing_modes;
 
 use self::addressing_modes::AddressingMode;
 
+
+struct Compiler<'a> {
+    asm: ::dynasmrt::Assembler,
+    cpu: &'a mut CPU,
+
+    pc: u16,
+
+    branch_targets: HashMap<u16, DynamicLabel>,
+}
+
 impl<'a> Compiler<'a> {
     fn new(cpu: &'a mut CPU) -> Compiler<'a> {
         Compiler {
@@ -210,6 +214,8 @@ impl<'a> Compiler<'a> {
             cpu: cpu,
 
             pc: 0,
+
+            branch_targets: HashMap::new(),
         }
     }
 
@@ -229,11 +235,17 @@ impl<'a> Compiler<'a> {
         prologue!(self);
 
         while self.pc < analysis.exit_point {
+            let temp_pc = self.pc;
+            if analysis.instructions.get(&temp_pc).unwrap().is_branch_target {
+                let target_label = self.get_dynamic_label(temp_pc);
+                dynasm!{self.asm
+                    ; => target_label
+                }
+            }
+
             let opcode = self.read_incr_pc();
             decode_opcode!(opcode, self);
         }
-
-        epilogue!(self);
 
         ExecutableBlock {
             offset: start,
@@ -351,6 +363,7 @@ impl<'a> Compiler<'a> {
         let target = self.read_w_incr_pc();
         dynasm!(self.asm
             ; mov n_pc, WORD target as _
+            ;; epilogue!(self)
         )
     }
     fn jmpi(&mut self) {
@@ -363,6 +376,7 @@ impl<'a> Compiler<'a> {
         dynasm!(self.asm
             ;; self.stack_push_w(ret_addr)
             ; mov n_pc, WORD target as _
+            ;; epilogue!(self)
         )
     }
     fn rts(&mut self) {
@@ -379,36 +393,60 @@ impl<'a> Compiler<'a> {
 
     // Branches
     fn bcs(&mut self) {
-        self.branch();
-        unimplemented!(bcs);
+        let target_label = self.get_branch_target_label();
+        dynasm!{self.asm
+            ; test n_p, CARRY as _
+            ; jnz => target_label
+        }
     }
     fn bcc(&mut self) {
-        self.branch();
-        unimplemented!(bcc);
+        let target_label = self.get_branch_target_label();
+        dynasm!{self.asm
+            ; test n_p, CARRY as _
+            ; jz => target_label
+        }
     }
     fn beq(&mut self) {
-        self.branch();
-        unimplemented!(beq);
+        let target_label = self.get_branch_target_label();
+        dynasm!{self.asm
+            ; test n_p, ZERO as _
+            ; jnz => target_label
+        }
     }
     fn bne(&mut self) {
-        self.branch();
-        unimplemented!(bne);
+        let target_label = self.get_branch_target_label();
+        dynasm!{self.asm
+            ; test n_p, ZERO as _
+            ; jz => target_label
+        }
     }
     fn bvs(&mut self) {
-        self.branch();
-        unimplemented!(bvs);
+        let target_label = self.get_branch_target_label();
+        dynasm!{self.asm
+            ; test n_p, OVERFLOW as _
+            ; jnz => target_label
+        }
     }
     fn bvc(&mut self) {
-        self.branch();
-        unimplemented!(bvc);
+        let target_label = self.get_branch_target_label();
+        dynasm!{self.asm
+            ; test n_p, OVERFLOW as _
+            ; jz => target_label
+        }
     }
     fn bmi(&mut self) {
-        self.branch();
-        unimplemented!(bmi);
+        let target_label = self.get_branch_target_label();
+        dynasm!{self.asm
+            ; test n_p, SIGN as _
+            ; jnz => target_label
+        }
     }
     fn bpl(&mut self) {
-        self.branch();
-        unimplemented!(bpl);
+        let target_label = self.get_branch_target_label();
+        dynasm!{self.asm
+            ; test n_p, SIGN as _
+            ; jz => target_label
+        }
     }
 
     fn branch(&mut self) {
@@ -538,5 +576,22 @@ impl<'a> Compiler<'a> {
 
     fn read_w_incr_pc(&mut self) -> u16 {
         self.read_incr_pc() as u16 | ((self.read_incr_pc() as u16) << 8)
+    }
+
+    fn get_branch_target_label(&mut self) -> DynamicLabel {
+        let arg = self.read_incr_pc();
+        let target = self.relative_addr(arg);
+        self.get_dynamic_label(target)
+    }
+
+    fn get_dynamic_label(&mut self, address: u16) -> DynamicLabel {
+        match self.branch_targets.get(&address).cloned() {
+            Some(label) => label,
+            None => {
+                let label = self.asm.new_dynamic_label();
+                self.branch_targets.insert( address, label.clone());
+                label
+            },
+        }
     }
 }

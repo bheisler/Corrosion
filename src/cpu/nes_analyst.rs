@@ -1,5 +1,6 @@
 use memory::MemSegment;
 use cpu::CPU;
+use std::collections::HashMap;
 
 pub struct Analyst<'a> {
     entry_point: u16,
@@ -7,11 +8,25 @@ pub struct Analyst<'a> {
     cpu: &'a mut CPU,
     furthest_branch: u16,
     found_exit_point: bool,
+
+    instructions: HashMap<u16, InstructionAnalysis>,
+}
+
+pub struct InstructionAnalysis {
+    pub is_branch_target: bool,
+}
+
+impl Default for InstructionAnalysis {
+    fn default() -> InstructionAnalysis {
+        InstructionAnalysis { is_branch_target: false }
+    }
 }
 
 pub struct BlockAnalysis {
     pub entry_point: u16,
     pub exit_point: u16,
+
+    pub instructions: HashMap<u16, InstructionAnalysis>,
 }
 
 impl<'a> Analyst<'a> {
@@ -22,6 +37,8 @@ impl<'a> Analyst<'a> {
             cpu: cpu,
             furthest_branch: 0,
             found_exit_point: false,
+
+            instructions: HashMap::new(),
         }
     }
 
@@ -32,13 +49,19 @@ impl<'a> Analyst<'a> {
     pub fn analyze(mut self, entry_point: u16) -> BlockAnalysis {
         self.entry_point = entry_point;
         self.pc = entry_point;
+
         while !self.found_exit_point {
+            // Ensure that every instruction has an entry
+            let temp_pc = self.pc;
+            self.get_instr_analysis(temp_pc);
+
             let opcode = self.read_incr_pc();
             decode_opcode!(opcode, self);
         }
         BlockAnalysis {
             entry_point: entry_point,
             exit_point: self.pc - 1,
+            instructions: self.instructions,
         }
     }
 
@@ -175,6 +198,7 @@ impl<'a> Analyst<'a> {
     fn branch(&mut self) {
         let arg = self.read_incr_pc();
         let target = self.relative_addr(arg);
+        self.get_instr_analysis(target).is_branch_target = true;
         if target > self.furthest_branch {
             self.furthest_branch = target;
         }
@@ -225,6 +249,10 @@ impl<'a> Analyst<'a> {
         let val: u8 = self.read_safe(pc);
         self.pc = self.pc.wrapping_add(1);
         val
+    }
+
+    fn get_instr_analysis(&mut self, addr: u16) -> &mut InstructionAnalysis {
+        self.instructions.entry(addr).or_insert(Default::default())
     }
 
     fn read_w_incr_pc(&mut self) -> u16 {
