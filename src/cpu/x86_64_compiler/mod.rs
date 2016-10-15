@@ -8,6 +8,13 @@ use memory::MemSegment;
 
 use dynasmrt::{AssemblyOffset, DynasmApi, DynasmLabelApi, ExecutableBuffer};
 
+const CARRY: u8 = 0b0000_0001;
+const ZERO: u8 = 0b0000_0010;
+const SUPPRESS_IRQ: u8 = 0b0000_0100;
+const DECIMAL: u8 = 0b0000_1000;
+const OVERFLOW: u8 = 0b0100_0000;
+const SIGN: u8 = 0b1000_0000;
+
 pub struct ExecutableBlock {
     offset: AssemblyOffset,
     buffer: ExecutableBuffer,
@@ -341,8 +348,10 @@ impl<'a> Compiler<'a> {
 
     // Jumps
     fn jmp(&mut self) {
-        self.read_w_incr_pc();
-        unimplemented!(jmp);
+        let target = self.read_w_incr_pc();
+        dynasm!(self.asm
+            ; mov n_pc, WORD target as _
+        )
     }
     fn jmpi(&mut self) {
         self.read_w_incr_pc();
@@ -422,26 +431,36 @@ impl<'a> Compiler<'a> {
     }
 
     // Misc
-    fn nop(&mut self) {
-        unimplemented!(nop);
-    }
+    fn nop(&mut self) {}
     fn sec(&mut self) {
-        unimplemented!(sec);
+        dynasm!{self.asm
+            ; or n_p, BYTE CARRY as _
+        }
     }
     fn clc(&mut self) {
-        unimplemented!(clc);
+        dynasm!{self.asm
+            ; and n_p, BYTE (!CARRY) as _
+        }
     }
     fn sei(&mut self) {
-        unimplemented!(sei);
+        dynasm!{self.asm
+            ; or n_p, BYTE SUPPRESS_IRQ as _
+        }
     }
     fn sed(&mut self) {
-        unimplemented!(sed);
+        dynasm!{self.asm
+            ; or n_p, BYTE DECIMAL as _
+        }
     }
     fn cld(&mut self) {
-        unimplemented!(cld);
+        dynasm!{self.asm
+            ; and n_p, BYTE (!DECIMAL) as _
+        }
     }
     fn clv(&mut self) {
-        unimplemented!(clv);
+        dynasm!{self.asm
+            ; and n_p, BYTE (!OVERFLOW) as _
+        }
     }
     fn tax(&mut self) {
         unimplemented!(tax);
