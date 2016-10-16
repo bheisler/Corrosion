@@ -13,6 +13,7 @@ const CARRY: u8 = 0b0000_0001;
 const ZERO: u8 = 0b0000_0010;
 const SUPPRESS_IRQ: u8 = 0b0000_0100;
 const DECIMAL: u8 = 0b0000_1000;
+const BREAK : u8 = 0b0001_0000;
 const OVERFLOW: u8 = 0b0100_0000;
 const SIGN: u8 = 0b1000_0000;
 
@@ -354,32 +355,106 @@ impl<'a> Compiler<'a> {
     fn sbc<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(sbc);
     }
-    fn cmp<M: AddressingMode>(&mut self, _: M) {
-        unimplemented!(cmp);
+    fn cmp<M: AddressingMode>(&mut self, mode: M) {
+        dynasm!{self.asm
+            ;; mode.read_to_arg(self)
+
+            ; cmp arg, n_a
+            ; jnc >clear
+            ; or n_p, BYTE CARRY as _
+            ; jmp >next
+            ; clear:
+            ; and n_p, BYTE (!CARRY) as _
+            ; next:
+
+            ; sub arg, n_a
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+        }
     }
-    fn cpx<M: AddressingMode>(&mut self, _: M) {
-        unimplemented!(cpx);
+    fn cpx<M: AddressingMode>(&mut self, mode: M) {
+        dynasm!{self.asm
+            ;; mode.read_to_arg(self)
+
+            ; cmp arg, n_x
+            ; jnc >clear
+            ; or n_p, BYTE CARRY as _
+            ; jmp >next
+            ; clear:
+            ; and n_p, BYTE (!CARRY) as _
+            ; next:
+
+            ; sub arg, n_x
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+        }
     }
-    fn cpy<M: AddressingMode>(&mut self, _: M) {
-        unimplemented!(cpy);
+    fn cpy<M: AddressingMode>(&mut self, mode: M) {
+        dynasm!{self.asm
+            ;; mode.read_to_arg(self)
+
+            ; cmp arg, n_y
+            ; jnc >clear
+            ; or n_p, BYTE CARRY as _
+            ; jmp >next
+            ; clear:
+            ; and n_p, BYTE (!CARRY) as _
+            ; next:
+
+            ; sub arg, n_y
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+        }
     }
-    fn inc<M: AddressingMode>(&mut self, _: M) {
-        unimplemented!(inc);
+    fn inc<M: AddressingMode>(&mut self, mode: M) {
+        dynasm!{self.asm
+            ;; mode.read_to_arg(self)
+            ; inc arg
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+            ;; mode.write_from_arg(self)
+        }
     }
     fn iny(&mut self) {
-        unimplemented!(iny);
+        dynasm!{self.asm
+            ; inc n_y
+            ; mov arg, n_y
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+        }
     }
     fn inx(&mut self) {
-        unimplemented!(inx);
+        dynasm!{self.asm
+            ; inc n_x
+            ; mov arg, n_x
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+        }
     }
-    fn dec<M: AddressingMode>(&mut self, _: M) {
-        unimplemented!(dec);
+    fn dec<M: AddressingMode>(&mut self, mode: M) {
+        dynasm!{self.asm
+            ;; mode.read_to_arg(self)
+            ; dec arg
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+            ;; mode.write_from_arg(self)
+        }
     }
     fn dey(&mut self) {
-        unimplemented!(dey);
+        dynasm!{self.asm
+            ; dec n_y
+            ; mov arg, n_y
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+        }
     }
     fn dex(&mut self) {
-        unimplemented!(dex);
+        dynasm!{self.asm
+            ; dec n_x
+            ; mov arg, n_x
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+        }
     }
     fn lsr<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(lsr);
@@ -499,7 +574,12 @@ impl<'a> Compiler<'a> {
 
     // Stack
     fn plp(&mut self) {
-        unimplemented!(plp);
+        dynasm!{self.asm
+            ; mov n_p, BYTE [ram + r13 + 0x101]
+            ; inc n_sp
+            ; or n_p, BYTE 0b0010_0000
+            ; and n_p, BYTE (!BREAK) as _
+        }
     }
     fn php(&mut self) {
         dynasm!{self.asm
@@ -539,6 +619,11 @@ impl<'a> Compiler<'a> {
             ; or n_p, BYTE SUPPRESS_IRQ as _
         }
     }
+    fn cli(&mut self) {
+        dynasm!{self.asm
+            ; and n_p, BYTE (!SUPPRESS_IRQ) as _
+        }
+    }
     fn sed(&mut self) {
         dynasm!{self.asm
             ; or n_p, BYTE DECIMAL as _
@@ -555,25 +640,52 @@ impl<'a> Compiler<'a> {
         }
     }
     fn tax(&mut self) {
-        unimplemented!(tax);
+        dynasm!{self.asm
+            ; mov n_x, n_a
+            ; mov arg, n_a
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+        }
     }
     fn tay(&mut self) {
-        unimplemented!(tay);
+        dynasm!{self.asm
+            ; mov n_y, n_a
+            ; mov arg, n_a
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+        }
     }
     fn tsx(&mut self) {
-        unimplemented!(tsx);
+        dynasm!{self.asm
+            ; mov n_x, n_sp
+            ; mov arg, n_sp
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+        }
     }
     fn txa(&mut self) {
-        unimplemented!(txa);
+        dynasm!{self.asm
+            ; mov n_a, n_x
+            ; mov arg, n_x
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+        }
     }
     fn txs(&mut self) {
-        unimplemented!(txs);
+        dynasm!{self.asm
+            ; mov n_sp, n_x
+            ; mov arg, n_x
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+        }
     }
     fn tya(&mut self) {
-        unimplemented!(tya);
-    }
-    fn cli(&mut self) {
-        unimplemented!(cli);
+        dynasm!{self.asm
+            ; mov n_a, n_y
+            ; mov arg, n_y
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+        }
     }
 
     // Unofficial instructions
