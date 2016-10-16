@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(unneeded_field_pattern)]
 
 use cpu::CPU;
 use cpu::Registers;
@@ -234,7 +234,7 @@ impl<'a> Compiler<'a> {
 
         prologue!(self);
 
-        while self.pc < analysis.exit_point {
+        while self.pc <= analysis.exit_point {
             let temp_pc = self.pc;
             if analysis.instructions.get(&temp_pc).unwrap().is_branch_target {
                 let target_label = self.get_dynamic_label(temp_pc);
@@ -300,17 +300,53 @@ impl<'a> Compiler<'a> {
     }
 
     // Logic/Math Ops
-    fn bit<M: AddressingMode>(&mut self, _: M) {
-        unimplemented!(bit);
+    fn bit<M: AddressingMode>(&mut self, mode: M) {
+        dynasm!{self.asm
+            ;; mode.read_to_arg(self)
+
+            //Set the sign flag
+            ;; call_naked!(self, set_sign_flag)
+
+            //Set the overflow flag
+            ; test arg, BYTE 0b0100_0000
+            ; jz >clear
+            ; or n_p, BYTE OVERFLOW as _
+            ; jmp >next
+            ; clear:
+            ; and n_p, BYTE (!OVERFLOW) as _
+            ; next:
+
+            //Set the zero flag
+            ; and arg, n_a
+            ;; call_naked!(self, set_zero_flag)
+        }
     }
-    fn and<M: AddressingMode>(&mut self, _: M) {
-        unimplemented!(and);
+    fn and<M: AddressingMode>(&mut self, mode: M) {
+        dynasm!{self.asm
+            ;; mode.read_to_arg(self)
+            ; and arg, n_a
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+            ; mov n_a, arg
+        }
     }
-    fn ora<M: AddressingMode>(&mut self, _: M) {
-        unimplemented!(ora);
+    fn ora<M: AddressingMode>(&mut self, mode: M) {
+        dynasm!{self.asm
+            ;; mode.read_to_arg(self)
+            ; or arg, n_a
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+            ; mov n_a, arg
+        }
     }
-    fn eor<M: AddressingMode>(&mut self, _: M) {
-        unimplemented!(eor);
+    fn eor<M: AddressingMode>(&mut self, mode: M) {
+        dynasm!{self.asm
+            ;; mode.read_to_arg(self)
+            ; xor arg, n_a
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+            ; mov n_a, arg
+        }
     }
     fn adc<M: AddressingMode>(&mut self, _: M) {
         unimplemented!(adc);
@@ -380,7 +416,14 @@ impl<'a> Compiler<'a> {
         )
     }
     fn rts(&mut self) {
-        unimplemented!(rts);
+        dynasm!{self.asm
+            ; add n_sp, BYTE 2
+            ; mov ax, WORD [ram + r13 + 0xFF]
+            ; xchg al, ah
+            ; inc ax
+            ; mov n_pc, ax
+            ;; epilogue!(self)
+        }
     }
     fn rti(&mut self) {
         unimplemented!(rti);
@@ -459,13 +502,24 @@ impl<'a> Compiler<'a> {
         unimplemented!(plp);
     }
     fn php(&mut self) {
-        unimplemented!(php);
+        dynasm!{self.asm
+            ; mov arg, n_p
+            ; or arg, BYTE 0b0011_0000
+            ; dec n_sp
+            ; mov BYTE [ram + r13 + 0x101], arg
+        }
     }
     fn pla(&mut self) {
-        unimplemented!(pla);
+        dynasm!{self.asm
+            ; mov n_a, BYTE [ram + r13 + 0x101]
+            ; inc n_sp
+        }
     }
     fn pha(&mut self) {
-        unimplemented!(pha);
+        dynasm!{self.asm
+            ; dec n_sp
+            ; mov BYTE [ram + r13 + 0x101], n_a
+        }
     }
 
     // Misc
@@ -555,9 +609,12 @@ impl<'a> Compiler<'a> {
     }
 
     fn stack_push_w(&mut self, val: u16) {
+        let low = (val & 0x00FF) as u8;
+        let high = ((val & 0xFF00) >> 8) as u8;
         dynasm!( self.asm
             ; sub n_sp, BYTE 2
-            ; mov WORD [ram + r13 + 0x101], WORD val as _
+            ; mov BYTE [ram + r13 + 0x101], BYTE high as _
+            ; mov BYTE [ram + r13 + 0x102], BYTE low as _
         )
     }
 
