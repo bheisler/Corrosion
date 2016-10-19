@@ -131,29 +131,6 @@ macro_rules! call_naked {
     );};
 }
 
-macro_rules! call_extern {
-    ($this:ident, $addr:expr) => {dynasm!($this.asm
-        ; push rax
-        ; push rcx
-        ; push rdx
-        ; push r8
-        ; push r9
-        ; push r10
-        ; push r11
-        ; sub rsp, 0x20
-        ; mov rax, QWORD $addr as _
-        ; call rax
-        ; add rsp, 0x20
-        ; pop r11
-        ; pop r10
-        ; pop r9
-        ; pop r8
-        ; pop rdx
-        ; pop rcx
-        ; pop rax
-    );};
-}
-
 #[naked]
 extern "C" fn set_zero_flag() {
     unsafe {
@@ -349,12 +326,56 @@ impl<'a> Compiler<'a> {
             ; mov n_a, arg
         }
     }
-    fn adc<M: AddressingMode>(&mut self, _: M) {
-        unimplemented!(adc);
+    fn adc<M: AddressingMode>(&mut self, mode: M) {
+        dynasm!{self.asm
+            ;; mode.read_to_arg(self)
+            ;; self.do_adc()
+        }
     }
-    fn sbc<M: AddressingMode>(&mut self, _: M) {
-        unimplemented!(sbc);
+    fn sbc<M: AddressingMode>(&mut self, mode: M) {
+        dynasm!{self.asm
+            ;; mode.read_to_arg(self)
+            ;  not arg
+            ;; self.do_adc()
+        }
     }
+    fn do_adc(&mut self) {
+        dynasm!{self.asm
+            ; dec rsp
+            ; mov [rsp], arg //Save original arg
+            ; add r8w, r9w //Add arg + a
+            ; test n_p, CARRY as _
+            ; jz >next
+            ; inc r8w // add the carry flag
+            ; next:
+
+            //Set carry based on result
+            ; cmp r8w, 0xFF
+            ; jl >next
+            ; or n_p, CARRY as _
+            ; next:
+
+            //Calculate the overflow flag
+            ; mov al, n_a
+            ; xor al, [rsp]
+            ; test al, 0x80
+            ; jnz >clear_overflow
+            ; mov al, n_a
+            ; xor al, arg
+            ; test al, 0x80
+            ; jz >clear_overflow
+            ; or n_p, OVERFLOW as _
+            ; jmp >next
+            ; clear_overflow:
+            ; and n_p, (!OVERFLOW) as _
+            ; next:
+            ; mov n_a, arg
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+            ; inc rsp
+        }
+    }
+
     fn cmp<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
             ;; mode.read_to_arg(self)
@@ -494,14 +515,20 @@ impl<'a> Compiler<'a> {
         dynasm!{self.asm
             ; add n_sp, BYTE 2
             ; mov ax, WORD [ram + r13 + 0xFF]
-            ; xchg al, ah
             ; inc ax
             ; mov n_pc, ax
             ;; epilogue!(self)
         }
     }
     fn rti(&mut self) {
-        unimplemented!(rti);
+        dynasm!{self.asm
+            ; mov n_p, BYTE [ram + r13 + 0x101]
+            ; inc n_sp
+            ; or n_p, BYTE 0b0010_0000
+            ; add n_sp, BYTE 2
+            ; mov n_pc, WORD [ram + r13 + 0xFF]
+            ;; epilogue!(self)
+        }
     }
     fn brk(&mut self) {
         unimplemented!(brk);
@@ -725,8 +752,8 @@ impl<'a> Compiler<'a> {
         let high = ((val & 0xFF00) >> 8) as u8;
         dynasm!( self.asm
             ; sub n_sp, BYTE 2
-            ; mov BYTE [ram + r13 + 0x101], BYTE high as _
-            ; mov BYTE [ram + r13 + 0x102], BYTE low as _
+            ; mov BYTE [ram + r13 + 0x101], BYTE low as _
+            ; mov BYTE [ram + r13 + 0x102], BYTE high as _
         )
     }
 
