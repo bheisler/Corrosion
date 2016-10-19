@@ -477,17 +477,83 @@ impl<'a> Compiler<'a> {
             ;; call_naked!(self, set_sign_flag)
         }
     }
-    fn lsr<M: AddressingMode>(&mut self, _: M) {
-        unimplemented!(lsr);
+    fn lsr<M: AddressingMode>(&mut self, mode: M) {
+        dynasm!{self.asm
+            ;; mode.read_to_arg(self)
+            ; test arg, BYTE 0x01
+            ; jz >clear_carry
+            ; or n_p, CARRY as _
+            ; jmp >next
+            ; clear_carry:
+            ; and n_p, (!CARRY) as _
+            ; next:
+            ; shr arg, BYTE 1
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+            ;; mode.write_from_arg(self)
+        }
     }
-    fn asl<M: AddressingMode>(&mut self, _: M) {
-        unimplemented!(asl);
+    fn asl<M: AddressingMode>(&mut self, mode: M) {
+        dynasm!{self.asm
+            ;; mode.read_to_arg(self)
+            ; test arg, BYTE 0x80
+            ; jz >clear_carry
+            ; or n_p, CARRY as _
+            ; jmp >next
+            ; clear_carry:
+            ; and n_p, (!CARRY) as _
+            ; next:
+            ; shl arg, BYTE 1
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+            ;; mode.write_from_arg(self)
+        }
     }
-    fn ror<M: AddressingMode>(&mut self, _: M) {
-        unimplemented!(ror);
+    fn ror<M: AddressingMode>(&mut self, mode: M) {
+        dynasm!{self.asm
+            ;; mode.read_to_arg(self)
+            ; mov al, arg //save original arg
+            ; shr arg, BYTE 1
+            ; test n_p, CARRY as _
+            ; jz >next
+            ; or arg, BYTE 0x80
+            ; next:
+
+            ; test al, BYTE 0x01
+            ; jz >clear_carry
+            ; or n_p, CARRY as _
+            ; jmp >next
+            ; clear_carry:
+            ; and n_p, (!CARRY) as _
+            ; next:
+
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+            ;; mode.write_from_arg(self)
+        }
     }
-    fn rol<M: AddressingMode>(&mut self, _: M) {
-        unimplemented!(rol);
+    fn rol<M: AddressingMode>(&mut self, mode: M) {
+        dynasm!{self.asm
+            ;; mode.read_to_arg(self)
+            ; mov al, arg //save original arg
+            ; shl arg, BYTE 1
+            ; test n_p, CARRY as _
+            ; jz >next
+            ; or arg, BYTE 0x01
+            ; next:
+
+            ; test al, BYTE 0x80
+            ; jz >clear_carry
+            ; or n_p, CARRY as _
+            ; jmp >next
+            ; clear_carry:
+            ; and n_p, (!CARRY) as _
+            ; next:
+
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+            ;; mode.write_from_arg(self)
+        }
     }
 
     // Jumps
