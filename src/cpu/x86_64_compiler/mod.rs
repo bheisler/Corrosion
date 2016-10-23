@@ -25,11 +25,10 @@ pub struct ExecutableBlock {
 impl ExecutableBlock {
     pub fn call(&self, cpu: *mut CPU) {
         let offset = self.offset;
-        let f: extern "win64" fn(*mut CPU, *mut Registers, *mut [u8; 0x800]) -> () =
+        let f: extern "win64" fn(*mut CPU, *mut [u8; 0x800]) -> () =
             unsafe { mem::transmute(self.buffer.ptr(offset)) };
-        let regs = unsafe { &mut (*cpu).regs };
         let ram = unsafe { &mut (*cpu).ram };
-        f(cpu, regs as _, ram as _);
+        f(cpu, ram as _);
     }
 }
 
@@ -43,11 +42,13 @@ macro_rules! unimplemented {
     };
 }
 
+//rcx and sub-sections thereof are the general-purpose scratch register.
+//Sometimes r8 and rax are used as scratch registers as well
 dynasm!(this
     ; .alias cpu, rbx
-    ; .alias regs, rcx
     ; .alias ram, rdx
     ; .alias arg, r8b
+    ; .alias arg_w, r8w
     ; .alias n_a, r9b
     ; .alias n_x, r10b
     ; .alias n_y, r11b
@@ -60,19 +61,20 @@ dynasm!(this
 macro_rules! load_registers {
     ($this:ident) => {{
         dynasm!($this.asm
+            ; lea rcx, cpu => CPU.regs
             ; xor r8, r8
             ; xor r9, r9
-            ; mov n_a, BYTE regs => Registers.a
+            ; mov n_a, BYTE rcx => Registers.a
             ; xor r10, r10
-            ; mov n_x, BYTE regs => Registers.x
+            ; mov n_x, BYTE rcx => Registers.x
             ; xor r11, r11
-            ; mov n_y, BYTE regs => Registers.y
+            ; mov n_y, BYTE rcx => Registers.y
             ; xor r12, r12
-            ; mov n_p, BYTE regs => Registers.p
+            ; mov n_p, BYTE rcx => Registers.p
             ; xor r13, r13
-            ; mov n_sp, BYTE regs => Registers.sp
+            ; mov n_sp, BYTE rcx => Registers.sp
             ; xor r14, r14
-            ; mov n_pc, WORD regs => Registers.pc
+            ; mov n_pc, WORD rcx => Registers.pc
             ; mov cyc, QWORD cpu => CPU.cycle
         );
     }};
@@ -81,12 +83,13 @@ macro_rules! load_registers {
 macro_rules! store_registers {
     ($this:ident) => {{
         dynasm!($this.asm
-            ; mov BYTE regs => Registers.a, n_a
-            ; mov BYTE regs => Registers.x, n_x
-            ; mov BYTE regs => Registers.y, n_y
-            ; mov BYTE regs => Registers.p, n_p
-            ; mov BYTE regs => Registers.sp, n_sp
-            ; mov WORD regs => Registers.pc, n_pc
+            ; lea rcx, cpu => CPU.regs
+            ; mov BYTE rcx => Registers.a, n_a
+            ; mov BYTE rcx => Registers.x, n_x
+            ; mov BYTE rcx => Registers.y, n_y
+            ; mov BYTE rcx => Registers.p, n_p
+            ; mov BYTE rcx => Registers.sp, n_sp
+            ; mov WORD rcx => Registers.pc, n_pc
             ; mov QWORD cpu => CPU.cycle, cyc
         );
     }};
@@ -101,8 +104,7 @@ macro_rules! prologue {
             ; push r14
             ; push r15
             ; mov rbx, rcx //Move the CPU pointer to the CPU pointer register
-            ; mov rcx, rdx //Move the registers pointer to the regs pointer register
-            ; mov rdx, r8  //Move the RAM pointer to the RAM pointer register
+            //Leave the RAM pointer in the RAM pointer register
         }
         load_registers!($this);
     }};
@@ -171,10 +173,10 @@ extern "C" fn set_sign_flag() {
     };
 }
 
+#[macro_use]
 mod addressing_modes;
 
 use self::addressing_modes::AddressingMode;
-
 
 struct Compiler<'a> {
     asm: ::dynasmrt::Assembler,
@@ -565,8 +567,36 @@ impl<'a> Compiler<'a> {
         )
     }
     fn jmpi(&mut self) {
-        self.read_w_incr_pc();
-        unimplemented!(jmpi);
+        let mut target = self.read_w_incr_pc();
+        if target <= 0x1FFF {
+            target %= 0x800;
+        }
+        let page = target & 0xFF00;
+        let page_idx = target as u8;
+
+        let lo_addr = target;
+        let hi_addr = page | page_idx.wrapping_add(1) as u16;
+
+        if target <= 0x1FFF {
+            dynasm!{self.asm
+                ; mov al, BYTE [ram + lo_addr as _]
+                ; mov ah, BYTE [ram + hi_addr as _]
+                ; mov n_pc, ax
+            }
+        }
+        else {
+            dynasm!{self.asm
+                ; mov rdx, QWORD hi_addr as _
+                ;; call_read!(self)
+                ; mov al, arg
+                ; mov ah, al
+                ; mov rdx, QWORD lo_addr as _
+                ;; call_read!(self)
+                ; mov al, arg
+                ; mov n_pc, ax
+            }
+        }
+        epilogue!(self);
     }
     fn jsr(&mut self) {
         let target = self.read_w_incr_pc();
