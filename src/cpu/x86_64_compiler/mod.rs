@@ -812,35 +812,53 @@ impl<'a> Compiler<'a> {
     }
 
     // Unofficial instructions
-    fn u_nop<M: AddressingMode>(&mut self, _: M) {
-        unimplemented!(u_nop);
+    fn u_nop<M: AddressingMode>(&mut self, mode: M) {
+        mode.read_to_arg(self)
     }
-    fn lax<M: AddressingMode>(&mut self, _: M) {
-        unimplemented!(lax);
+    fn lax<M: AddressingMode>(&mut self, mode: M) {
+        dynasm!{self.asm
+            ;; mode.read_to_arg(self)
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
+            ; mov n_a, arg
+            ; mov n_x, arg
+        }
     }
-    fn sax<M: AddressingMode>(&mut self, _: M) {
-        unimplemented!(sax);
+    fn sax<M: AddressingMode>(&mut self, mode: M) {
+        dynasm!{self.asm
+            ; mov arg, n_a
+            ; and arg, n_x
+            ;; mode.write_from_arg(self)
+        }
     }
-    fn dcp<M: AddressingMode>(&mut self, _: M) {
-        unimplemented!(dcp);
+    fn dcp<M: AddressingMode>(&mut self, mode: M) {
+        self.dec(mode);
+        self.cmp(mode);
     }
-    fn isc<M: AddressingMode>(&mut self, _: M) {
-        unimplemented!(isc);
+    fn isc<M: AddressingMode>(&mut self, mode: M) {
+        self.inc(mode);
+        self.sbc(mode);
     }
-    fn slo<M: AddressingMode>(&mut self, _: M) {
-        unimplemented!(slo);
+    fn slo<M: AddressingMode>(&mut self, mode: M) {
+        self.asl(mode);
+        self.ora(mode);
     }
-    fn rla<M: AddressingMode>(&mut self, _: M) {
-        unimplemented!(rla);
+    fn rla<M: AddressingMode>(&mut self, mode: M) {
+        self.rol(mode);
+        self.and(mode);
     }
-    fn sre<M: AddressingMode>(&mut self, _: M) {
-        unimplemented!(sre);
+    fn sre<M: AddressingMode>(&mut self, mode: M) {
+        self.lsr(mode);
+        self.eor(mode);
     }
-    fn rra<M: AddressingMode>(&mut self, _: M) {
-        unimplemented!(rra);
+    fn rra<M: AddressingMode>(&mut self, mode: M) {
+        self.ror(mode);
+        self.adc(mode);
     }
     fn kil(&mut self) {
-        unimplemented!(kil);
+        dynasm!{self.asm
+            ; mov cpu => CPU.halted, BYTE true as _
+        }
     }
 
     fn stack_push_w(&mut self, val: u16) {

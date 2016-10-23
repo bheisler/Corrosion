@@ -95,7 +95,7 @@ macro_rules! fast_write {
         ; next:
     );};
 }
-pub trait AddressingMode {
+pub trait AddressingMode: Copy {
     fn read_to_arg(&self, comp: &mut Compiler);
     fn write_from_arg(&self, comp: &mut Compiler);
 }
