@@ -1,8 +1,8 @@
 #![macro_use]
 
-const NMI_VECTOR: u16 = 0xFFFA;
-const RESET_VECTOR: u16 = 0xFFFC;
-const IRQ_VECTOR: u16 = 0xFFFE;
+pub const NMI_VECTOR: u16 = 0xFFFA;
+pub const RESET_VECTOR: u16 = 0xFFFC;
+pub const IRQ_VECTOR: u16 = 0xFFFE;
 const STACK_PAGE: u16 = 0x0100;
 
 pub enum IrqInterrupt {
@@ -1174,7 +1174,7 @@ impl CPU {
             self.run_ppu();
         }
 
-        if self.regs.pc >= 0x4020 && cfg!(feature="jit") {
+        if self.regs.pc >= 0x4020 && cfg!(feature="jit") && false {
             self.disasm_function();
             unsafe { (*self.dispatcher.get()).jump(self) }
         }

@@ -3,6 +3,7 @@
 use cpu::CPU;
 use cpu::Registers;
 use cpu::nes_analyst::Analyst;
+use cpu::IRQ_VECTOR;
 use std::mem;
 use memory::MemSegment;
 use std::collections::HashMap;
@@ -676,12 +677,7 @@ impl<'a> Compiler<'a> {
     }
     fn brk(&mut self) {
         let return_addr = self.pc - 1;
-        let target = self.read_w(IRQ_VECTOR);
-        self.regs.pc = target;
-        self.stack_push_w(return_addr);
-        let mut status = self.regs.p;
-        status.insert(B);
-        self.stack_push(status.bits());
+        let target = self.cpu.read_w(IRQ_VECTOR);
         dynasm!{ self.asm
             ; mov n_pc, target as _
             ;; self.stack_push_w(return_addr)

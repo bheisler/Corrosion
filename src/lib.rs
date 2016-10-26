@@ -4,8 +4,6 @@
 #![feature(naked_functions)]
 
 #![plugin(clippy)]
-
-#![cfg(feature="jit")]
 #![plugin(dynasm)]
 
 #![allow(unused_features)]

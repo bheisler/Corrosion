@@ -462,24 +462,38 @@ impl<'a> Disassembler<'a> {
 
     pub fn trace(mut self) {
         let opcode = self.decode_instruction();
-        println!(
-            "{:04X}  {:9}{}{:30}  A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}",
-            self.cpu.regs.pc,
-            opcode.bytes.iter()
-                .map(|byte| format!("{:02X}", byte))
-                .fold(None as Option<String>, |opt, right| {
-                    match opt {
-                        Some(left) => Some(left + " " + &right),
-                        None => Some(right),
-                    }
-                } ).unwrap(),
-            if opcode.unofficial { "*" } else { " " },
-            opcode.str,
-            self.cpu.regs.a,
-            self.cpu.regs.x,
-            self.cpu.regs.y,
-            self.cpu.regs.p.bits(),
-            self.cpu.regs.sp,
-        );
+
+        let cyc = (self.cpu.cycle * 3) % 341;
+        let mut sl = ((((self.cpu.cycle as isize) * 3) / 341) + 241) % 262;
+        if sl == 261 {
+            sl = -1;
+        }
+
+        println!("{:04X}  {:9}{}{:30}  A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:3} \
+                  SL:{}",
+                 self.cpu.regs.pc,
+                 opcode.bytes
+                     .iter()
+                     .map(|byte| format!("{:02X}", byte))
+                     .fold(None as Option<String>, |opt, right| {
+                         match opt {
+                             Some(left) => Some(left + " " + &right),
+                             None => Some(right),
+                         }
+                     })
+                     .unwrap(),
+                 if opcode.unofficial {
+                     "*"
+                 } else {
+                     " "
+                 },
+                 opcode.str,
+                 self.cpu.regs.a,
+                 self.cpu.regs.x,
+                 self.cpu.regs.y,
+                 self.cpu.regs.p.bits(),
+                 self.cpu.regs.sp,
+                 cyc,
+                 sl);
     }
 }

@@ -4,14 +4,14 @@ version = "0.1.0"
 authors = ["Brook Heisler <redattack34@gmail.com>"]
 
 [features]
-default = ["jit"]
+default = ["jit", "cputrace"]
 vectorize = ["simd"]
 cputrace = ["disasm"]
 stacktrace = []
 mousepick = []
 function_disasm = ["disasm"]
 disasm = []
-jit = ["dynasm", "dynasmrt"]
+jit = ["dynasmrt"]
 
 [dependencies]
 bitflags = "0.7"
@@ -21,7 +21,7 @@ blip_buf = "0.1.4"
 memmap = "0.4"
 clippy = "0.0.92"
 simd = { git = "https://github.com/huonw/simd", optional = true }
-dynasm = { version = "0.0.4", optional = true }
+dynasm = { version = "0.0.4" }
 dynasmrt = { version = "0.0.4", optional = true }
 
 [dev-dependencies]
