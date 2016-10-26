@@ -76,6 +76,5 @@ impl MappingTable {
             self.mappings[page] = cur_bank;
             cur_bank += 1;
         }
-        println!("{:?}", self.mappings);
     }
 }

@@ -110,6 +110,41 @@ macro_rules! prologue {
     }};
 }
 
+#[cfg(feature="cputrace")]
+macro_rules! call_trace {
+    ($this:ident) => {dynasm!($this.asm
+        ; mov n_pc, WORD $this.pc as _
+        ;; store_registers!($this)
+        ; push rax
+        ; push rcx
+        ; push rdx
+        ; push r9
+        ; push r10
+        ; push r11
+        ; mov rax, QWORD ::cpu::x86_64_compiler::trace as _
+        ; mov rcx, rbx //Pointer to CPU is first arg
+        ; sub rsp, 0x20
+        ; call rax
+        ; add rsp, 0x20
+        ; pop r11
+        ; pop r10
+        ; pop r9
+        ; pop rdx
+        ; pop rcx
+        ; pop rax
+    );};
+}
+
+#[cfg(not(feature="cputrace"))]
+macro_rules! call_trace {
+    ($this:ident) => {};
+}
+
+#[cfg(feature="cputrace")]
+pub extern "win64" fn trace(cpu: *mut CPU) {
+    unsafe { (*cpu).trace() }
+}
+
 macro_rules! epilogue {
     ($this:ident) => {{
         store_registers!($this);
@@ -205,12 +240,8 @@ impl<'a> Compiler<'a> {
 
         let start = self.asm.offset();
 
-        // TODO: Implement the rest of the operations
-
         // TODO: Count CPU cycles
         // TODO: Implement interrupts
-
-        // TODO: Centralize the flag operations
 
         prologue!(self);
 
@@ -223,6 +254,8 @@ impl<'a> Compiler<'a> {
                 }
             }
 
+            self.do_call_trace();
+
             let opcode = self.read_incr_pc();
             decode_opcode!(opcode, self);
         }
@@ -231,6 +264,10 @@ impl<'a> Compiler<'a> {
             offset: start,
             buffer: self.asm.finalize().unwrap(),
         }
+    }
+
+    fn do_call_trace(&mut self) {
+        call_trace!(self);
     }
 
     // Stores
@@ -330,12 +367,14 @@ impl<'a> Compiler<'a> {
     }
     fn adc<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
+            ; xor r8, r8
             ;; mode.read_to_arg(self)
             ;; self.do_adc()
         }
     }
     fn sbc<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
+            ; xor r8, r8
             ;; mode.read_to_arg(self)
             ;  not arg
             ;; self.do_adc()
@@ -353,7 +392,10 @@ impl<'a> Compiler<'a> {
 
             //Set carry based on result
             ; cmp r8w, 0xFF
-            ; jl >next
+            ; jg >set_carry
+            ; and n_p, (!CARRY) as _
+            ; jmp >next
+            ; set_carry:
             ; or n_p, CARRY as _
             ; next:
 
@@ -382,15 +424,17 @@ impl<'a> Compiler<'a> {
         dynasm!{self.asm
             ;; mode.read_to_arg(self)
 
-            ; cmp arg, n_a
-            ; jnc >clear
+            ; cmp n_a, arg
+            ; jb >clear
             ; or n_p, BYTE CARRY as _
             ; jmp >next
             ; clear:
             ; and n_p, BYTE (!CARRY) as _
             ; next:
 
-            ; sub arg, n_a
+            ; mov cl, n_a
+            ; sub cl, arg
+            ; mov arg, cl
             ;; call_naked!(self, set_zero_flag)
             ;; call_naked!(self, set_sign_flag)
         }
@@ -399,15 +443,17 @@ impl<'a> Compiler<'a> {
         dynasm!{self.asm
             ;; mode.read_to_arg(self)
 
-            ; cmp arg, n_x
-            ; jnc >clear
+            ; cmp n_x, arg
+            ; jb >clear
             ; or n_p, BYTE CARRY as _
             ; jmp >next
             ; clear:
             ; and n_p, BYTE (!CARRY) as _
             ; next:
 
-            ; sub arg, n_x
+            ; mov cl, n_x
+            ; sub cl, arg
+            ; mov arg, cl
             ;; call_naked!(self, set_zero_flag)
             ;; call_naked!(self, set_sign_flag)
         }
@@ -416,15 +462,17 @@ impl<'a> Compiler<'a> {
         dynasm!{self.asm
             ;; mode.read_to_arg(self)
 
-            ; cmp arg, n_y
-            ; jnc >clear
+            ; cmp n_y, arg
+            ; jb >clear
             ; or n_p, BYTE CARRY as _
             ; jmp >next
             ; clear:
             ; and n_p, BYTE (!CARRY) as _
             ; next:
 
-            ; sub arg, n_y
+            ; mov cl, n_y
+            ; sub cl, arg
+            ; mov arg, cl
             ;; call_naked!(self, set_zero_flag)
             ;; call_naked!(self, set_sign_flag)
         }
@@ -627,7 +675,22 @@ impl<'a> Compiler<'a> {
         }
     }
     fn brk(&mut self) {
-        unimplemented!(brk);
+        let return_addr = self.pc - 1;
+        let target = self.read_w(IRQ_VECTOR);
+        self.regs.pc = target;
+        self.stack_push_w(return_addr);
+        let mut status = self.regs.p;
+        status.insert(B);
+        self.stack_push(status.bits());
+        dynasm!{ self.asm
+            ; mov n_pc, target as _
+            ;; self.stack_push_w(return_addr)
+            ; mov arg, n_p
+            ; or arg, BYTE 0b0011_0000
+            ; dec n_sp
+            ; mov BYTE [ram + r13 + 0x101], arg
+            ;; epilogue!(self)
+        }
     }
 
     fn unofficial(&self) {}
@@ -716,6 +779,9 @@ impl<'a> Compiler<'a> {
         dynasm!{self.asm
             ; mov n_a, BYTE [ram + r13 + 0x101]
             ; inc n_sp
+            ; mov arg, n_a
+            ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
         }
     }
     fn pha(&mut self) {
@@ -797,9 +863,6 @@ impl<'a> Compiler<'a> {
     fn txs(&mut self) {
         dynasm!{self.asm
             ; mov n_sp, n_x
-            ; mov arg, n_x
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
         }
     }
     fn tya(&mut self) {

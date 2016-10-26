@@ -67,9 +67,9 @@ macro_rules! call_write {
         ; mov rax, QWORD ::cpu::x86_64_compiler::addressing_modes::write_memory as _
         ; mov rcx, rbx //Pointer to CPU is first arg
         //Conveniently, we already have the value in r8
-        ; sub rsp, 0x20
+        ; sub rsp, 0x28
         ; call rax
-        ; add rsp, 0x20
+        ; add rsp, 0x28
         ; pop r11
         ; pop r10
         ; pop r9
@@ -139,16 +139,15 @@ struct ZeroPageXAddressingMode {
 impl AddressingMode for ZeroPageXAddressingMode {
     fn read_to_arg(&self, comp: &mut Compiler) {
         dynasm!{comp.asm
-            ; mov rcx, DWORD self.addr as _
-            ; add rcx, r10
+            ; mov rcx, self.addr as _
+            ; add cl, n_x
             ; mov arg, [ram + rcx]
         }
     }
     fn write_from_arg(&self, comp: &mut Compiler) {
-        let offset = self.addr as usize;
         dynasm!{comp.asm
-            ; mov rcx, DWORD self.addr as _
-            ; add rcx, r10
+            ; mov rcx, self.addr as _
+            ; add cl, n_x
             ; mov [ram + rcx], arg
         }
     }
@@ -162,15 +161,14 @@ impl AddressingMode for ZeroPageYAddressingMode {
     fn read_to_arg(&self, comp: &mut Compiler) {
         dynasm!{comp.asm
             ; mov rcx, DWORD self.addr as _
-            ; add rcx, r11
+            ; add cl, n_y
             ; mov arg, [ram + rcx]
         }
     }
     fn write_from_arg(&self, comp: &mut Compiler) {
-        let offset = self.addr as usize;
         dynasm!{comp.asm
             ; mov rcx, DWORD self.addr as _
-            ; add rcx, r11
+            ; add cl, n_y
             ; mov [ram + rcx], arg
         }
     }
@@ -189,7 +187,7 @@ impl AddressingMode for AbsoluteAddressingMode {
             }
         } else {
             dynasm!{comp.asm
-                ; mov rcx, QWORD self.addr as _
+                ; mov rcx, self.addr as _
                 ;; call_read!(comp)
             }
         }
@@ -203,7 +201,7 @@ impl AddressingMode for AbsoluteAddressingMode {
             }
         } else {
             dynasm!{comp.asm
-                ; mov rcx, QWORD self.addr as _
+                ; mov rcx, self.addr as _
                 ;; call_write!(comp)
             }
         }
@@ -226,7 +224,7 @@ impl AddressingMode for AbsoluteXAddressingMode {
             }
         } else {
             dynasm!{comp.asm
-                ; mov rcx, QWORD self.addr as _
+                ; mov rcx, self.addr as _
                 ; add rcx, r10
                 ;; call_read!(comp)
             }
@@ -244,7 +242,7 @@ impl AddressingMode for AbsoluteXAddressingMode {
                 }
         } else {
             dynasm!{comp.asm
-                    ; mov rcx, QWORD self.addr as _
+                    ; mov rcx, self.addr as _
                     ; add rcx, r10
                     ;; call_write!(comp)
                 }
@@ -268,7 +266,7 @@ impl AddressingMode for AbsoluteYAddressingMode {
             }
         } else {
             dynasm!{comp.asm
-                ; mov rcx, QWORD self.addr as _
+                ; mov rcx, self.addr as _
                 ; add rcx, r11
                 ;; call_read!(comp)
             }
@@ -286,7 +284,7 @@ impl AddressingMode for AbsoluteYAddressingMode {
                 }
         } else {
             dynasm!{comp.asm
-                    ; mov rcx, QWORD self.addr as _
+                    ; mov rcx, self.addr as _
                     ; add rcx, r11
                     ;; call_write!(comp)
                 }
@@ -348,13 +346,12 @@ struct IndirectYAddressingMode {
 impl IndirectYAddressingMode {
     fn calc_addr(&self, comp: &mut Compiler) {
         dynasm!{comp.asm
-            ; xor rcx, rcx
-            ; mov cl, self.addr as _
+            ; mov rcx, self.addr as _
             ; mov al, BYTE [ram + rcx]
             ; inc cl
             ; mov ah, BYTE [ram + rcx]
             ; mov cx, ax
-            ; add cx, self.addr as _
+            ; add cx, r11w
         }
     }
 }
@@ -394,8 +391,8 @@ impl<'a> Compiler<'a> {
     pub fn absolute_x(&mut self) -> AbsoluteXAddressingMode {
         AbsoluteXAddressingMode { addr: self.read_w_incr_pc() }
     }
-    pub fn absolute_y(&mut self) -> AbsoluteXAddressingMode {
-        AbsoluteXAddressingMode { addr: self.read_w_incr_pc() }
+    pub fn absolute_y(&mut self) -> AbsoluteYAddressingMode {
+        AbsoluteYAddressingMode { addr: self.read_w_incr_pc() }
     }
     pub fn zero_page(&mut self) -> ZeroPageAddressingMode {
         ZeroPageAddressingMode { addr: self.read_incr_pc() }

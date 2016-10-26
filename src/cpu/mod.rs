@@ -300,7 +300,7 @@ macro_rules! decode_opcode {
 #[cfg(feature="disasm")]
 pub mod disasm;
 
-#[cfg(feature="function_disasm")]
+#[cfg(any(feature="function_disasm", feature="jit"))]
 mod nes_analyst;
 
 #[cfg(all(target_arch="x86_64", feature="jit"))]
@@ -410,7 +410,7 @@ impl AddressingMode for MemoryAddressingMode {
 }
 
 bitflags! {
-    flags Status : u8 {
+    pub flags Status : u8 {
         const C = 0b0000_0001, //Carry flag
         const Z = 0b0000_0010, //Zero flag
         const I = 0b0000_0100, //Suppress IRQ
@@ -429,12 +429,12 @@ impl Status {
 }
 
 pub struct Registers {
-    a: u8,
-    x: u8,
-    y: u8,
-    p: Status,
-    sp: u8,
-    pc: u16,
+    pub a: u8,
+    pub x: u8,
+    pub y: u8,
+    pub p: Status,
+    pub sp: u8,
+    pub pc: u16,
 }
 
 pub struct CPU {
@@ -445,8 +445,8 @@ pub struct CPU {
     pub io: Box<IO>,
     cart: Rc<UnsafeCell<Cart>>,
     dispatcher: Rc<UnsafeCell<Dispatcher>>,
-    cycle: u64,
-    halted: bool,
+    pub cycle: u64,
+    pub halted: bool,
     io_strobe: bool,
 }
 
@@ -512,25 +512,7 @@ impl MemSegment for CPU {
 impl CPU {
     #[cfg(feature="cputrace")]
     fn trace(&mut self) {
-        let opcode = Disassembler::new(self).decode();
-        println!(
-            "${:04X}:{:9} {}{:30}  A:{:02X} X:{:02X} Y:{:02X} S:{:02X}",
-            self.regs.pc,
-            opcode.bytes.iter()
-                .map(|byte| format!("{:02X}", byte))
-                .fold(None as Option<String>, |opt, right| {
-                    match opt {
-                        Some(left) => Some(left + " " + &right),
-                        None => Some(right),
-                    }
-                } ).unwrap(),
-            if opcode.unofficial { "*" } else { " " },
-            opcode.str,
-            self.regs.a,
-            self.regs.x,
-            self.regs.y,
-            self.regs.sp,
-        );
+        Disassembler::new(self).trace();
     }
 
     #[cfg(not(feature="cputrace"))]
@@ -550,7 +532,7 @@ impl CPU {
     #[cfg(not(feature="stacktrace"))]
     fn stack_dump(&self) {}
 
-    #[cfg(any(feature="function_disasm", feature="jit"))]
+    #[cfg(feature="function_disasm")]
     fn disasm_function(&mut self) {
         let entry_point = self.regs.pc;
         if entry_point < 0x8000 {
@@ -1240,21 +1222,6 @@ impl CPU {
 
     pub fn cycle(&self) -> u64 {
         self.cycle
-    }
-
-    #[cfg(feature="cputrace")]
-    pub fn get_x(&self) -> u8 {
-        self.regs.x
-    }
-
-    #[cfg(feature="cputrace")]
-    pub fn get_y(&self) -> u8 {
-        self.regs.y
-    }
-
-    #[cfg(feature="disasm")]
-    pub fn get_pc(&self) -> u16 {
-        self.regs.pc
     }
 }
 

@@ -20,9 +20,6 @@ pub fn new(params: MapperParams) -> Box<Mapper> {
     let mut prg_rom_table = MappingTable::new(params.prg_rom);
     let bank_count = prg_rom_table.bank_count();
     for page in 0..8 {
-        println!("Mapping page {:04X} to bank {}",
-                 (page * 0x1000) + 0x8000,
-                 page % bank_count);
         prg_rom_table.map_page(page, page % bank_count);
     }
 

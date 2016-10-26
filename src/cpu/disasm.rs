@@ -37,7 +37,7 @@ impl<'a> Disassembler<'a> {
     }
     fn absolute_x(&mut self) -> PartialInstruction {
         let arg = self.read_w_incr_pc();
-        let target = arg.wrapping_add(self.cpu.get_x() as u16);
+        let target = arg.wrapping_add(self.cpu.regs.x as u16);
         PartialInstruction {
             pattern: format!("$$$ ${:04X},X @ {:04X} = {:02X}",
                              arg,
@@ -47,7 +47,7 @@ impl<'a> Disassembler<'a> {
     }
     fn absolute_y(&mut self) -> PartialInstruction {
         let arg = self.read_w_incr_pc();
-        let target = arg.wrapping_add(self.cpu.get_y() as u16);
+        let target = arg.wrapping_add(self.cpu.regs.y as u16);
         PartialInstruction {
             pattern: format!("$$$ ${:04X},Y @ {:04X} = {:02X}",
                              arg,
@@ -63,7 +63,7 @@ impl<'a> Disassembler<'a> {
     }
     fn zero_page_x(&mut self) -> PartialInstruction {
         let arg = self.read_incr_pc();
-        let target = arg.wrapping_add(self.cpu.get_x());
+        let target = arg.wrapping_add(self.cpu.regs.x);
         PartialInstruction {
             pattern: format!("$$$ ${:02X},X @ {:02X} = {:02X}",
                              arg,
@@ -73,7 +73,7 @@ impl<'a> Disassembler<'a> {
     }
     fn zero_page_y(&mut self) -> PartialInstruction {
         let arg = self.read_incr_pc();
-        let target = arg.wrapping_add(self.cpu.get_y());
+        let target = arg.wrapping_add(self.cpu.regs.y);
         PartialInstruction {
             pattern: format!("$$$ ${:02X},Y @ {:02X} = {:02X}",
                              arg,
@@ -83,7 +83,7 @@ impl<'a> Disassembler<'a> {
     }
     fn indirect_x(&mut self) -> PartialInstruction {
         let arg = self.read_incr_pc();
-        let zp_idx = arg.wrapping_add(self.cpu.get_x());
+        let zp_idx = arg.wrapping_add(self.cpu.regs.x);
         let ptr = self.read_safe_w_zero_page(zp_idx);
         let target = self.read_safe(ptr);
         PartialInstruction {
@@ -97,7 +97,7 @@ impl<'a> Disassembler<'a> {
     fn indirect_y(&mut self) -> PartialInstruction {
         let arg = self.read_incr_pc();
         let base_ptr = self.read_safe_w_zero_page(arg);
-        let ptr = base_ptr.wrapping_add(self.cpu.get_y() as u16);
+        let ptr = base_ptr.wrapping_add(self.cpu.regs.y as u16);
         let target = self.read_safe(ptr);
         PartialInstruction {
             pattern: format!("$$$ (${:02X}),Y = {:04X} @ {:04X} = {:02X}",
@@ -164,7 +164,7 @@ impl<'a> Disassembler<'a> {
 impl<'a> Disassembler<'a> {
     pub fn new(cpu: &'a mut CPU) -> Disassembler {
         Disassembler {
-            pc: cpu.get_pc(),
+            pc: cpu.regs.pc,
             cpu: cpu,
             bytes: vec![],
             unofficial: false,
@@ -458,5 +458,28 @@ impl<'a> Disassembler<'a> {
         let low = self.read_safe(idx) as u16;
         let high = self.read_safe(idx + 1) as u16;
         (high << 8) | low
+    }
+
+    pub fn trace(mut self) {
+        let opcode = self.decode_instruction();
+        println!(
+            "{:04X}  {:9}{}{:30}  A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}",
+            self.cpu.regs.pc,
+            opcode.bytes.iter()
+                .map(|byte| format!("{:02X}", byte))
+                .fold(None as Option<String>, |opt, right| {
+                    match opt {
+                        Some(left) => Some(left + " " + &right),
+                        None => Some(right),
+                    }
+                } ).unwrap(),
+            if opcode.unofficial { "*" } else { " " },
+            opcode.str,
+            self.cpu.regs.a,
+            self.cpu.regs.x,
+            self.cpu.regs.y,
+            self.cpu.regs.p.bits(),
+            self.cpu.regs.sp,
+        );
     }
 }
