@@ -332,7 +332,7 @@ use cpu::nes_analyst::Analyst;
 /// number.
 /// Copied from `FCEUX` & `SprocketNES`.
 #[cfg_attr(rustfmt, rustfmt_skip)]
-static CYCLE_TABLE: [u64; 256] = [
+pub static CYCLE_TABLE: [u64; 256] = [
     /*0x00*/ 7,6,2,8,3,3,5,5,3,2,2,2,4,4,6,6,
     /*0x10*/ 2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7,
     /*0x20*/ 6,6,2,8,3,3,5,5,4,2,2,2,4,4,6,6,
@@ -1174,7 +1174,7 @@ impl CPU {
             self.run_ppu();
         }
 
-        if self.regs.pc >= 0x4020 && cfg!(feature="jit") && false {
+        if self.regs.pc >= 0x4020 && cfg!(feature="jit") {
             self.disasm_function();
             unsafe { (*self.dispatcher.get()).jump(self) }
         }

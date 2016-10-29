@@ -3,10 +3,13 @@
 use cpu::CPU;
 use cpu::Registers;
 use cpu::nes_analyst::Analyst;
+use cpu::nes_analyst::BlockAnalysis;
 use cpu::IRQ_VECTOR;
+use cpu::CYCLE_TABLE;
 use std::mem;
 use memory::MemSegment;
 use std::collections::HashMap;
+use self::addressing_modes::NoTickMode;
 
 use dynasmrt::{AssemblyOffset, DynasmApi, DynasmLabelApi, ExecutableBuffer, DynamicLabel};
 
@@ -176,11 +179,9 @@ extern "C" fn set_zero_flag() {
             cmp r8b, 0
             jz 1f
             and r12b, 0FDH
-            jmp 2f
+            ret
         1:
             or r12b, 2H
-        2:
-            ret
             "
         :
         :
@@ -196,11 +197,9 @@ extern "C" fn set_sign_flag() {
             test r8b, 80H
             jz 1f
             or r12b, 80H
-            jmp 2f
+            ret
         1:
             and r12b, 7FH
-        2:
-            ret
             "
         :
         :
@@ -241,23 +240,17 @@ impl<'a> Compiler<'a> {
 
         let start = self.asm.offset();
 
-        // TODO: Count CPU cycles
         // TODO: Implement interrupts
 
         prologue!(self);
 
         while self.pc <= analysis.exit_point {
-            let temp_pc = self.pc;
-            if analysis.instructions.get(&temp_pc).unwrap().is_branch_target {
-                let target_label = self.get_dynamic_label(temp_pc);
-                dynasm!{self.asm
-                    ; => target_label
-                }
-            }
+            self.emit_branch_target(&analysis);
 
             self.do_call_trace();
 
             let opcode = self.read_incr_pc();
+            self.emit_cycle_count(opcode);
             decode_opcode!(opcode, self);
         }
 
@@ -265,6 +258,23 @@ impl<'a> Compiler<'a> {
             offset: start,
             buffer: self.asm.finalize().unwrap(),
         }
+    }
+
+    fn emit_branch_target(&mut self, analysis: &BlockAnalysis) {
+        let temp_pc = self.pc;
+        if analysis.instructions.get(&temp_pc).unwrap().is_branch_target {
+            let target_label = self.get_dynamic_label(temp_pc);
+            dynasm!{self.asm
+                ; => target_label
+            }
+        }
+    }
+
+    fn emit_cycle_count(&mut self, opcode: u8) {
+        let cycles = CYCLE_TABLE[opcode as usize];
+        dynasm!(self.asm
+            ; add cyc, cycles as _
+        )
     }
 
     fn do_call_trace(&mut self) {
@@ -294,15 +304,14 @@ impl<'a> Compiler<'a> {
     // Loads
     fn ldx<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
-            ;; mode.read_to_arg(self)
+            ;; mode.read_to_arg(self, true)
             ; mov n_x, arg
             ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
         }
     }
     fn lda<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
-            ;; mode.read_to_arg(self)
+            ;; mode.read_to_arg(self, true)
             ; mov n_a, arg
             ;; call_naked!(self, set_zero_flag)
             ;; call_naked!(self, set_sign_flag)
@@ -310,7 +319,7 @@ impl<'a> Compiler<'a> {
     }
     fn ldy<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
-            ;; mode.read_to_arg(self)
+            ;; mode.read_to_arg(self, true)
             ; mov n_y, arg
             ;; call_naked!(self, set_zero_flag)
             ;; call_naked!(self, set_sign_flag)
@@ -320,7 +329,7 @@ impl<'a> Compiler<'a> {
     // Logic/Math Ops
     fn bit<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
-            ;; mode.read_to_arg(self)
+            ;; mode.read_to_arg(self, false)
 
             //Set the sign flag
             ;; call_naked!(self, set_sign_flag)
@@ -341,7 +350,7 @@ impl<'a> Compiler<'a> {
     }
     fn and<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
-            ;; mode.read_to_arg(self)
+            ;; mode.read_to_arg(self, true)
             ; and arg, n_a
             ;; call_naked!(self, set_zero_flag)
             ;; call_naked!(self, set_sign_flag)
@@ -350,7 +359,7 @@ impl<'a> Compiler<'a> {
     }
     fn ora<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
-            ;; mode.read_to_arg(self)
+            ;; mode.read_to_arg(self, true)
             ; or arg, n_a
             ;; call_naked!(self, set_zero_flag)
             ;; call_naked!(self, set_sign_flag)
@@ -359,7 +368,7 @@ impl<'a> Compiler<'a> {
     }
     fn eor<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
-            ;; mode.read_to_arg(self)
+            ;; mode.read_to_arg(self, true)
             ; xor arg, n_a
             ;; call_naked!(self, set_zero_flag)
             ;; call_naked!(self, set_sign_flag)
@@ -369,14 +378,14 @@ impl<'a> Compiler<'a> {
     fn adc<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
             ; xor r8, r8
-            ;; mode.read_to_arg(self)
+            ;; mode.read_to_arg(self, true)
             ;; self.do_adc()
         }
     }
     fn sbc<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
             ; xor r8, r8
-            ;; mode.read_to_arg(self)
+            ;; mode.read_to_arg(self, true)
             ;  not arg
             ;; self.do_adc()
         }
@@ -415,15 +424,15 @@ impl<'a> Compiler<'a> {
             ; and n_p, (!OVERFLOW) as _
             ; next:
             ; mov n_a, arg
+            ; inc rsp
             ;; call_naked!(self, set_zero_flag)
             ;; call_naked!(self, set_sign_flag)
-            ; inc rsp
         }
     }
 
     fn cmp<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
-            ;; mode.read_to_arg(self)
+            ;; mode.read_to_arg(self, true)
 
             ; cmp n_a, arg
             ; jb >clear
@@ -442,7 +451,7 @@ impl<'a> Compiler<'a> {
     }
     fn cpx<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
-            ;; mode.read_to_arg(self)
+            ;; mode.read_to_arg(self, false)
 
             ; cmp n_x, arg
             ; jb >clear
@@ -461,7 +470,7 @@ impl<'a> Compiler<'a> {
     }
     fn cpy<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
-            ;; mode.read_to_arg(self)
+            ;; mode.read_to_arg(self, false)
 
             ; cmp n_y, arg
             ; jb >clear
@@ -480,7 +489,7 @@ impl<'a> Compiler<'a> {
     }
     fn inc<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
-            ;; mode.read_to_arg(self)
+            ;; mode.read_to_arg(self, false)
             ; inc arg
             ;; call_naked!(self, set_zero_flag)
             ;; call_naked!(self, set_sign_flag)
@@ -505,7 +514,7 @@ impl<'a> Compiler<'a> {
     }
     fn dec<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
-            ;; mode.read_to_arg(self)
+            ;; mode.read_to_arg(self, false)
             ; dec arg
             ;; call_naked!(self, set_zero_flag)
             ;; call_naked!(self, set_sign_flag)
@@ -530,7 +539,7 @@ impl<'a> Compiler<'a> {
     }
     fn lsr<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
-            ;; mode.read_to_arg(self)
+            ;; mode.read_to_arg(self, false)
             ; test arg, BYTE 0x01
             ; jz >clear_carry
             ; or n_p, CARRY as _
@@ -546,7 +555,7 @@ impl<'a> Compiler<'a> {
     }
     fn asl<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
-            ;; mode.read_to_arg(self)
+            ;; mode.read_to_arg(self, false)
             ; test arg, BYTE 0x80
             ; jz >clear_carry
             ; or n_p, CARRY as _
@@ -562,7 +571,7 @@ impl<'a> Compiler<'a> {
     }
     fn ror<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
-            ;; mode.read_to_arg(self)
+            ;; mode.read_to_arg(self, false)
             ; mov al, arg //save original arg
             ; shr arg, BYTE 1
             ; test n_p, CARRY as _
@@ -585,7 +594,7 @@ impl<'a> Compiler<'a> {
     }
     fn rol<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
-            ;; mode.read_to_arg(self)
+            ;; mode.read_to_arg(self, false)
             ; mov al, arg //save original arg
             ; shl arg, BYTE 1
             ; test n_p, CARRY as _
@@ -693,65 +702,92 @@ impl<'a> Compiler<'a> {
 
     // Branches
     fn bcs(&mut self) {
-        let target_label = self.get_branch_target_label();
+        let (target_label, cycle) = self.get_branch_target_label();
         dynasm!{self.asm
             ; test n_p, CARRY as _
-            ; jnz => target_label
+            ; jz >next
+            ; inc cyc
+            ;; self.branch_page_cycle(cycle)
+            ; jmp => target_label
+            ; next:
         }
     }
     fn bcc(&mut self) {
-        let target_label = self.get_branch_target_label();
+        let (target_label, cycle) = self.get_branch_target_label();
         dynasm!{self.asm
             ; test n_p, CARRY as _
-            ; jz => target_label
+            ; jnz >next
+            ; inc cyc
+            ;; self.branch_page_cycle(cycle)
+            ; jmp => target_label
+            ; next:
         }
     }
     fn beq(&mut self) {
-        let target_label = self.get_branch_target_label();
+        let (target_label, cycle) = self.get_branch_target_label();
         dynasm!{self.asm
             ; test n_p, ZERO as _
-            ; jnz => target_label
+            ; jz >next
+            ; inc cyc
+            ;; self.branch_page_cycle(cycle)
+            ; jmp => target_label
+            ; next:
         }
     }
     fn bne(&mut self) {
-        let target_label = self.get_branch_target_label();
+        let (target_label, cycle) = self.get_branch_target_label();
         dynasm!{self.asm
             ; test n_p, ZERO as _
-            ; jz => target_label
+            ; jnz >next
+            ; inc cyc
+            ;; self.branch_page_cycle(cycle)
+            ; jmp => target_label
+            ; next:
         }
     }
     fn bvs(&mut self) {
-        let target_label = self.get_branch_target_label();
+        let (target_label, cycle) = self.get_branch_target_label();
         dynasm!{self.asm
             ; test n_p, OVERFLOW as _
-            ; jnz => target_label
+            ; jz >next
+            ; inc cyc
+            ;; self.branch_page_cycle(cycle)
+            ; jmp => target_label
+            ; next:
         }
     }
     fn bvc(&mut self) {
-        let target_label = self.get_branch_target_label();
+        let (target_label, cycle) = self.get_branch_target_label();
         dynasm!{self.asm
             ; test n_p, OVERFLOW as _
-            ; jz => target_label
+            ; jnz >next
+            ; inc cyc
+            ;; self.branch_page_cycle(cycle)
+            ; jmp => target_label
+            ; next:
         }
     }
     fn bmi(&mut self) {
-        let target_label = self.get_branch_target_label();
+        let (target_label, cycle) = self.get_branch_target_label();
         dynasm!{self.asm
             ; test n_p, SIGN as _
-            ; jnz => target_label
+            ; jz >next
+            ; inc cyc
+            ;; self.branch_page_cycle(cycle)
+            ; jmp => target_label
+            ; next:
         }
     }
     fn bpl(&mut self) {
-        let target_label = self.get_branch_target_label();
+        let (target_label, cycle) = self.get_branch_target_label();
         dynasm!{self.asm
             ; test n_p, SIGN as _
-            ; jz => target_label
+            ; jnz >next
+            ; inc cyc
+            ;; self.branch_page_cycle(cycle)
+            ; jmp => target_label
+            ; next:
         }
-    }
-
-    fn branch(&mut self) {
-        let arg = self.read_incr_pc();
-        let target = self.relative_addr(arg);
     }
 
     // Stack
@@ -872,11 +908,11 @@ impl<'a> Compiler<'a> {
 
     // Unofficial instructions
     fn u_nop<M: AddressingMode>(&mut self, mode: M) {
-        mode.read_to_arg(self)
+        mode.read_to_arg(self, true);
     }
     fn lax<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
-            ;; mode.read_to_arg(self)
+            ;; mode.read_to_arg(self, true)
             ;; call_naked!(self, set_zero_flag)
             ;; call_naked!(self, set_sign_flag)
             ; mov n_a, arg
@@ -891,26 +927,32 @@ impl<'a> Compiler<'a> {
         }
     }
     fn dcp<M: AddressingMode>(&mut self, mode: M) {
+        let mode = NoTickMode{ mode: mode };
         self.dec(mode);
         self.cmp(mode);
     }
     fn isc<M: AddressingMode>(&mut self, mode: M) {
+        let mode = NoTickMode{ mode: mode };
         self.inc(mode);
         self.sbc(mode);
     }
     fn slo<M: AddressingMode>(&mut self, mode: M) {
+        let mode = NoTickMode{ mode: mode };
         self.asl(mode);
         self.ora(mode);
     }
     fn rla<M: AddressingMode>(&mut self, mode: M) {
+        let mode = NoTickMode{ mode: mode };
         self.rol(mode);
         self.and(mode);
     }
     fn sre<M: AddressingMode>(&mut self, mode: M) {
+        let mode = NoTickMode{ mode: mode };
         self.lsr(mode);
         self.eor(mode);
     }
     fn rra<M: AddressingMode>(&mut self, mode: M) {
+        let mode = NoTickMode{ mode: mode };
         self.ror(mode);
         self.adc(mode);
     }
@@ -947,10 +989,20 @@ impl<'a> Compiler<'a> {
         self.read_incr_pc() as u16 | ((self.read_incr_pc() as u16) << 8)
     }
 
-    fn get_branch_target_label(&mut self) -> DynamicLabel {
+    fn get_branch_target_label(&mut self) -> (DynamicLabel, bool) {
         let arg = self.read_incr_pc();
         let target = self.relative_addr(arg);
-        self.get_dynamic_label(target)
+
+        let label = self.get_dynamic_label(target);
+        let do_page_cycle = (self.pc & 0xFF00) != (target & 0xFF00);
+        (label, do_page_cycle)
+    }
+    fn branch_page_cycle(&mut self, do_page_cycle: bool) {
+        if do_page_cycle {
+            dynasm!{self.asm
+                ; inc cyc
+            }
+        }
     }
 
     fn get_dynamic_label(&mut self, address: u16) -> DynamicLabel {

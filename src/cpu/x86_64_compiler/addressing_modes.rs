@@ -96,14 +96,14 @@ macro_rules! fast_write {
     );};
 }
 pub trait AddressingMode: Copy {
-    fn read_to_arg(&self, comp: &mut Compiler);
+    fn read_to_arg(&self, comp: &mut Compiler, tick_cycle: bool);
     fn write_from_arg(&self, comp: &mut Compiler);
 }
 
 #[derive(Debug, Copy, Clone)]
 struct ImmediateAddressingMode;
 impl AddressingMode for ImmediateAddressingMode {
-    fn read_to_arg(&self, comp: &mut Compiler) {
+    fn read_to_arg(&self, comp: &mut Compiler, _: bool) {
         let imm_arg = comp.read_incr_pc() as i8;
         dynasm!{comp.asm
             ; mov arg, BYTE imm_arg
@@ -119,7 +119,7 @@ struct ZeroPageAddressingMode {
     addr: u8,
 }
 impl AddressingMode for ZeroPageAddressingMode {
-    fn read_to_arg(&self, comp: &mut Compiler) {
+    fn read_to_arg(&self, comp: &mut Compiler, _: bool) {
         dynasm!{comp.asm
             ; mov arg, [ram + self.addr as _]
         }
@@ -137,7 +137,7 @@ struct ZeroPageXAddressingMode {
     addr: u8,
 }
 impl AddressingMode for ZeroPageXAddressingMode {
-    fn read_to_arg(&self, comp: &mut Compiler) {
+    fn read_to_arg(&self, comp: &mut Compiler, _: bool) {
         dynasm!{comp.asm
             ; mov rcx, self.addr as _
             ; add cl, n_x
@@ -158,7 +158,7 @@ struct ZeroPageYAddressingMode {
     addr: u8,
 }
 impl AddressingMode for ZeroPageYAddressingMode {
-    fn read_to_arg(&self, comp: &mut Compiler) {
+    fn read_to_arg(&self, comp: &mut Compiler, _: bool) {
         dynasm!{comp.asm
             ; mov rcx, DWORD self.addr as _
             ; add cl, n_y
@@ -179,7 +179,7 @@ struct AbsoluteAddressingMode {
     addr: u16,
 }
 impl AddressingMode for AbsoluteAddressingMode {
-    fn read_to_arg(&self, comp: &mut Compiler) {
+    fn read_to_arg(&self, comp: &mut Compiler, _: bool) {
         if (self.addr < 0x2000) {
             let ram_address = self.addr % 0x800;
             dynasm!{comp.asm
@@ -212,8 +212,26 @@ impl AddressingMode for AbsoluteAddressingMode {
 struct AbsoluteXAddressingMode {
     addr: u16,
 }
+impl AbsoluteXAddressingMode {
+    fn tick_cycle(&self, comp: &mut Compiler, tick_cycle: bool) {
+        if !tick_cycle || (self.addr & 0xFF00 == self.addr) {
+            return;
+        }
+        // If x is greater than the number necessary to take it to the end of the page,
+        // add a cycle.
+        let page_boundary = (self.addr as u32 & 0xFF00) + 0x0100;
+        let difference = page_boundary - self.addr as u32;
+
+        dynasm!(comp.asm
+            ; xor rcx, rcx
+            ; cmp n_x, difference as _
+            ; setae cl
+            ; add cyc, rcx
+        )
+    }
+}
 impl AddressingMode for AbsoluteXAddressingMode {
-    fn read_to_arg(&self, comp: &mut Compiler) {
+    fn read_to_arg(&self, comp: &mut Compiler, tick_cycle: bool) {
         // adding X might make it step outside of RAM
         if (self.addr < 0x1F00) {
             let ram_address = self.addr % 0x800;
@@ -221,12 +239,14 @@ impl AddressingMode for AbsoluteXAddressingMode {
                 ; mov rcx, ram_address as _
                 ; add rcx, r10
                 ; mov arg, [ram + rcx]
+                ;; self.tick_cycle(comp, tick_cycle)
             }
         } else {
             dynasm!{comp.asm
                 ; mov rcx, self.addr as _
                 ; add rcx, r10
                 ;; call_read!(comp)
+                ;; self.tick_cycle(comp, tick_cycle)
             }
         }
     }
@@ -254,8 +274,26 @@ impl AddressingMode for AbsoluteXAddressingMode {
 struct AbsoluteYAddressingMode {
     addr: u16,
 }
+impl AbsoluteYAddressingMode {
+    fn tick_cycle(&self, comp: &mut Compiler, tick_cycle: bool) {
+        if !tick_cycle || (self.addr & 0xFF00 == self.addr) {
+            return;
+        }
+        // If y is greater than the number necessary to take it to the end of the page,
+        // add a cycle.
+        let page_boundary = (self.addr as u32 & 0xFF00) + 0x0100;
+        let difference = page_boundary - self.addr as u32;
+
+        dynasm!(comp.asm
+            ; xor rcx, rcx
+            ; cmp n_y, difference as _
+            ; setae cl
+            ; add cyc, rcx
+        )
+    }
+}
 impl AddressingMode for AbsoluteYAddressingMode {
-    fn read_to_arg(&self, comp: &mut Compiler) {
+    fn read_to_arg(&self, comp: &mut Compiler, tick_cycle: bool) {
         // adding Y might make it step outside of RAM
         if (self.addr < 0x1F00) {
             let ram_address = self.addr % 0x800;
@@ -263,12 +301,14 @@ impl AddressingMode for AbsoluteYAddressingMode {
                 ; mov rcx, ram_address as _
                 ; add rcx, r11
                 ; mov arg, [ram + rcx]
+                ;; self.tick_cycle(comp, tick_cycle)
             }
         } else {
             dynasm!{comp.asm
                 ; mov rcx, self.addr as _
                 ; add rcx, r11
                 ;; call_read!(comp)
+                ;; self.tick_cycle(comp, tick_cycle)
             }
         }
     }
@@ -295,7 +335,7 @@ impl AddressingMode for AbsoluteYAddressingMode {
 #[derive(Debug, Copy, Clone)]
 struct AccumulatorAddressingMode;
 impl AddressingMode for AccumulatorAddressingMode {
-    fn read_to_arg(&self, comp: &mut Compiler) {
+    fn read_to_arg(&self, comp: &mut Compiler, _: bool) {
         dynasm!{comp.asm
             ; mov arg, n_a
         }
@@ -325,7 +365,7 @@ impl IndirectXAddressingMode {
     }
 }
 impl AddressingMode for IndirectXAddressingMode {
-    fn read_to_arg(&self, comp: &mut Compiler) {
+    fn read_to_arg(&self, comp: &mut Compiler, _: bool) {
         dynasm!{comp.asm
             ;; self.calc_addr(comp)
             ;; fast_read!(comp)
@@ -344,7 +384,7 @@ struct IndirectYAddressingMode {
     addr: u8,
 }
 impl IndirectYAddressingMode {
-    fn calc_addr(&self, comp: &mut Compiler) {
+    fn calc_addr(&self, comp: &mut Compiler, tick_cycle: bool) {
         dynasm!{comp.asm
             ; mov rcx, self.addr as _
             ; mov al, BYTE [ram + rcx]
@@ -353,33 +393,44 @@ impl IndirectYAddressingMode {
             ; mov cx, ax
             ; add cx, r11w
         }
+
+        // Overwriting arg is safe here, because we only ever do the oops cycle on
+        // reads, which
+        // will immediately overwrite arg anyway.
+        if tick_cycle {
+            dynasm!{comp.asm
+                ; xor r8, r8
+                ; cmp ah, ch
+                ; setne arg
+                ; add cyc, r8
+            }
+        }
     }
 }
 impl AddressingMode for IndirectYAddressingMode {
-    fn read_to_arg(&self, comp: &mut Compiler) {
-        dynasm!{comp.asm
-            ;; self.calc_addr(comp)
-            ;; fast_read!(comp)
-        }
+    fn read_to_arg(&self, comp: &mut Compiler, tick_cycle: bool) {
+        self.calc_addr(comp, tick_cycle);
+        fast_read!(comp)
     }
     fn write_from_arg(&self, comp: &mut Compiler) {
-        dynasm!{comp.asm
-            ;; self.calc_addr(comp)
-            ;; fast_write!(comp)
-        }
+        self.calc_addr(comp, false);
+        fast_write!(comp)
     }
 }
 
 #[derive(Debug, Copy, Clone)]
-struct DummyAddressingMode;
-impl AddressingMode for DummyAddressingMode {
-    fn read_to_arg(&self, _: &mut Compiler) {
-        panic!("Tried to use DummyAddressingMode")
+pub struct NoTickMode<T: AddressingMode> {
+    pub mode: T,
+}
+impl<T: AddressingMode> AddressingMode for NoTickMode<T> {
+    fn read_to_arg(&self, comp: &mut Compiler, _: bool) {
+        self.mode.read_to_arg(comp, false)
     }
-    fn write_from_arg(&self, _: &mut Compiler) {
-        panic!("Tried to use DummyAddressingMode")
+    fn write_from_arg(&self, comp: &mut Compiler) {
+        self.mode.write_from_arg(comp)
     }
 }
+
 
 impl<'a> Compiler<'a> {
     pub fn immediate(&mut self) -> ImmediateAddressingMode {
