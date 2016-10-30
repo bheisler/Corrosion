@@ -2,6 +2,7 @@
 
 use cpu::CPU;
 use cpu::Registers;
+use cpu::JitInterrupt;
 use cpu::nes_analyst::Analyst;
 use cpu::nes_analyst::BlockAnalysis;
 use cpu::IRQ_VECTOR;
@@ -240,14 +241,14 @@ impl<'a> Compiler<'a> {
 
         let start = self.asm.offset();
 
-        // TODO: Implement interrupts
-
         prologue!(self);
 
         while self.pc <= analysis.exit_point {
             self.emit_branch_target(&analysis);
 
             self.do_call_trace();
+
+            self.check_for_interrupt();
 
             let opcode = self.read_incr_pc();
             self.emit_cycle_count(opcode);
@@ -279,6 +280,18 @@ impl<'a> Compiler<'a> {
 
     fn do_call_trace(&mut self) {
         call_trace!(self);
+    }
+
+    fn check_for_interrupt(&mut self) {
+        dynasm!{self.asm
+            ; lea rcx, cpu => CPU.interrupt
+            ; mov rcx, rcx => JitInterrupt.next_interrupt
+            ; cmp cyc, rcx
+            ; jnae >next
+            ; mov n_pc, WORD self.pc as _
+            ;; epilogue!(self)
+            ; next:
+        }
     }
 
     // Stores

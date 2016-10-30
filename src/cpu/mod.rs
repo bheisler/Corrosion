@@ -437,8 +437,18 @@ pub struct Registers {
     pub pc: u16,
 }
 
+pub struct JitInterrupt {
+    pub next_interrupt: u64
+}
+impl JitInterrupt {
+    fn interrupt_now(&mut self) {
+        self.next_interrupt = 0;
+    }
+}
+
 pub struct CPU {
     pub regs: Registers,
+    pub interrupt: JitInterrupt,
     pub ram: [u8; 0x0800],
     pub ppu: PPU,
     pub apu: APU,
@@ -462,6 +472,7 @@ impl MemSegment for CPU {
             0x4014 => 0, //No idea what this should return. PPU dynamic latch garbage, maybe?
             0x4015 => {
                 let (irq, val) = self.apu.read_status(self.cycle);
+                self.update_next_interrupt();
                 if let IrqInterrupt::IRQ = irq {
                     self.irq();
                 }
@@ -967,7 +978,7 @@ impl CPU {
     }
 
     pub fn new(ppu: PPU, apu: APU, io: Box<IO>, cart: Rc<UnsafeCell<Cart>>, dispatcher: Rc<UnsafeCell<Dispatcher>>) -> CPU {
-        CPU {
+        let mut cpu = CPU {
             regs: Registers {
                 a: 0,
                 x: 0,
@@ -975,6 +986,9 @@ impl CPU {
                 p: Status::init(),
                 sp: 0xFD,
                 pc: 0,
+            },
+            interrupt: JitInterrupt {
+                next_interrupt: 0
             },
             cycle: 0,
             ram: [0; 0x800],
@@ -985,15 +999,17 @@ impl CPU {
             dispatcher: dispatcher,
             halted: false,
             io_strobe: false,
-        }
+        };
+        cpu.update_next_interrupt();
+        cpu
     }
 
     pub fn init(&mut self) {
-        //self.regs.pc = self.read_w(RESET_VECTOR);
-        self.regs.pc = 0xC000;
+        self.regs.pc = self.read_w(RESET_VECTOR);
     }
 
     fn nmi(&mut self) {
+        self.interrupt.interrupt_now();
         let target = self.read_w(NMI_VECTOR);
         let return_addr = self.regs.pc;
         self.regs.pc = target;
@@ -1007,6 +1023,7 @@ impl CPU {
             return;
         }
 
+        self.interrupt.interrupt_now();
         let target = self.read_w(IRQ_VECTOR);
         let return_addr = self.regs.pc;
         self.regs.pc = target;
@@ -1189,6 +1206,7 @@ impl CPU {
 
     fn run_apu(&mut self) {
         let irq = self.apu.run_to(self.cycle);
+        self.update_next_interrupt();
         if let IrqInterrupt::IRQ = irq {
             self.irq();
         }
@@ -1196,9 +1214,17 @@ impl CPU {
 
     fn run_ppu(&mut self) {
         let nmi = self.ppu.run_to(self.cycle);
+        self.update_next_interrupt();
         if let StepResult::NMI = nmi {
             self.nmi();
         }
+    }
+
+    fn update_next_interrupt(&mut self) {
+        self.interrupt.next_interrupt = ::std::cmp::min(
+            self.ppu.requested_run_cycle(),
+            self.apu.requested_run_cycle()
+        );
     }
 
     fn dma_transfer(&mut self, page: u8) {
