@@ -1005,7 +1005,8 @@ impl CPU {
     }
 
     pub fn init(&mut self) {
-        self.regs.pc = self.read_w(RESET_VECTOR);
+        //self.regs.pc = self.read_w(RESET_VECTOR);
+        self.regs.pc = 0xC000;
     }
 
     fn nmi(&mut self) {

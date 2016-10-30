@@ -245,10 +245,9 @@ impl<'a> Compiler<'a> {
 
         while self.pc <= analysis.exit_point {
             self.emit_branch_target(&analysis);
+            self.check_for_interrupt();
 
             self.do_call_trace();
-
-            self.check_for_interrupt();
 
             let opcode = self.read_incr_pc();
             self.emit_cycle_count(opcode);
@@ -320,6 +319,7 @@ impl<'a> Compiler<'a> {
             ;; mode.read_to_arg(self, true)
             ; mov n_x, arg
             ;; call_naked!(self, set_zero_flag)
+            ;; call_naked!(self, set_sign_flag)
         }
     }
     fn lda<M: AddressingMode>(&mut self, mode: M) {
