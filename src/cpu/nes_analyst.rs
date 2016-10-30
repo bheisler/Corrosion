@@ -1,10 +1,11 @@
-use memory::MemSegment;
 use cpu::CPU;
+use memory::MemSegment;
 use std::collections::HashMap;
 
 pub struct Analyst<'a> {
     entry_point: u16,
     pc: u16,
+    current_instruction: u16,
     cpu: &'a mut CPU,
     furthest_branch: u16,
     found_exit_point: bool,
@@ -14,11 +15,15 @@ pub struct Analyst<'a> {
 
 pub struct InstructionAnalysis {
     pub is_branch_target: bool,
+    pub is_branch_to_before_entry: bool,
 }
 
 impl Default for InstructionAnalysis {
     fn default() -> InstructionAnalysis {
-        InstructionAnalysis { is_branch_target: false }
+        InstructionAnalysis {
+            is_branch_target: false,
+            is_branch_to_before_entry: false,
+        }
     }
 }
 
@@ -34,6 +39,7 @@ impl<'a> Analyst<'a> {
         Analyst {
             entry_point: 0,
             pc: 0,
+            current_instruction: 0,
             cpu: cpu,
             furthest_branch: 0,
             found_exit_point: false,
@@ -53,6 +59,7 @@ impl<'a> Analyst<'a> {
         while !self.found_exit_point {
             // Ensure that every instruction has an entry
             let temp_pc = self.pc;
+            self.current_instruction = temp_pc;
             self.get_instr_analysis(temp_pc);
 
             let opcode = self.read_incr_pc();
@@ -202,6 +209,9 @@ impl<'a> Analyst<'a> {
         if target > self.furthest_branch {
             self.furthest_branch = target;
         }
+        if target < self.entry_point {
+            self.get_current_instr_analysis().is_branch_to_before_entry = true;
+        }
     }
 
     // Stack
@@ -249,6 +259,11 @@ impl<'a> Analyst<'a> {
         let val: u8 = self.read_safe(pc);
         self.pc = self.pc.wrapping_add(1);
         val
+    }
+
+    fn get_current_instr_analysis(&mut self) -> &mut InstructionAnalysis {
+        let temp = self.current_instruction;
+        self.get_instr_analysis(temp)
     }
 
     fn get_instr_analysis(&mut self, addr: u16) -> &mut InstructionAnalysis {

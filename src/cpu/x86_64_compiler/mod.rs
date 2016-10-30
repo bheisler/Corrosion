@@ -5,6 +5,7 @@ use cpu::Registers;
 use cpu::JitInterrupt;
 use cpu::nes_analyst::Analyst;
 use cpu::nes_analyst::BlockAnalysis;
+use cpu::nes_analyst::InstructionAnalysis;
 use cpu::IRQ_VECTOR;
 use cpu::CYCLE_TABLE;
 use std::mem;
@@ -38,7 +39,8 @@ impl ExecutableBlock {
 }
 
 pub fn compile(addr: u16, cpu: &mut CPU) -> ExecutableBlock {
-    Compiler::new(cpu).compile_block(addr)
+    let analysis = Analyst::new(cpu).analyze(addr);
+    Compiler::new(cpu, analysis).compile_block()
 }
 
 macro_rules! unimplemented {
@@ -217,34 +219,37 @@ use self::addressing_modes::AddressingMode;
 struct Compiler<'a> {
     asm: ::dynasmrt::Assembler,
     cpu: &'a mut CPU,
+    analysis: BlockAnalysis,
 
     pc: u16,
+    current_instruction: u16,
 
     branch_targets: HashMap<u16, DynamicLabel>,
 }
 
 impl<'a> Compiler<'a> {
-    fn new(cpu: &'a mut CPU) -> Compiler<'a> {
+    fn new(cpu: &'a mut CPU, analysis: BlockAnalysis) -> Compiler<'a> {
+        let entry_point = analysis.entry_point;
         Compiler {
             asm: ::dynasmrt::Assembler::new(),
             cpu: cpu,
 
-            pc: 0,
+            pc: entry_point,
+            current_instruction: entry_point,
+            analysis: analysis,
 
             branch_targets: HashMap::new(),
         }
     }
 
-    fn compile_block(mut self, addr: u16) -> ExecutableBlock {
-        self.pc = addr;
-        let analysis = Analyst::new(self.cpu).analyze(addr);
-
+    fn compile_block(mut self) -> ExecutableBlock {
         let start = self.asm.offset();
 
         prologue!(self);
 
-        while self.pc <= analysis.exit_point {
-            self.emit_branch_target(&analysis);
+        while self.pc <= self.analysis.exit_point {
+            self.current_instruction = self.pc;
+            self.emit_branch_target();
             self.check_for_interrupt();
 
             self.do_call_trace();
@@ -260,9 +265,9 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn emit_branch_target(&mut self, analysis: &BlockAnalysis) {
-        let temp_pc = self.pc;
-        if analysis.instructions.get(&temp_pc).unwrap().is_branch_target {
+    fn emit_branch_target(&mut self) {
+        if self.get_current_instr_analysis().is_branch_target {
+            let temp_pc = self.current_instruction;
             let target_label = self.get_dynamic_label(temp_pc);
             dynasm!{self.asm
                 ; => target_label
@@ -715,91 +720,88 @@ impl<'a> Compiler<'a> {
 
     // Branches
     fn bcs(&mut self) {
-        let (target_label, cycle) = self.get_branch_target_label();
         dynasm!{self.asm
             ; test n_p, CARRY as _
             ; jz >next
-            ; inc cyc
-            ;; self.branch_page_cycle(cycle)
-            ; jmp => target_label
+            ;; self.branch()
             ; next:
         }
     }
     fn bcc(&mut self) {
-        let (target_label, cycle) = self.get_branch_target_label();
         dynasm!{self.asm
             ; test n_p, CARRY as _
             ; jnz >next
-            ; inc cyc
-            ;; self.branch_page_cycle(cycle)
-            ; jmp => target_label
+            ;; self.branch()
             ; next:
         }
     }
     fn beq(&mut self) {
-        let (target_label, cycle) = self.get_branch_target_label();
         dynasm!{self.asm
             ; test n_p, ZERO as _
             ; jz >next
-            ; inc cyc
-            ;; self.branch_page_cycle(cycle)
-            ; jmp => target_label
+            ;; self.branch()
             ; next:
         }
     }
     fn bne(&mut self) {
-        let (target_label, cycle) = self.get_branch_target_label();
         dynasm!{self.asm
             ; test n_p, ZERO as _
             ; jnz >next
-            ; inc cyc
-            ;; self.branch_page_cycle(cycle)
-            ; jmp => target_label
+            ;; self.branch()
             ; next:
         }
     }
     fn bvs(&mut self) {
-        let (target_label, cycle) = self.get_branch_target_label();
         dynasm!{self.asm
             ; test n_p, OVERFLOW as _
             ; jz >next
-            ; inc cyc
-            ;; self.branch_page_cycle(cycle)
-            ; jmp => target_label
+            ;; self.branch()
             ; next:
         }
     }
     fn bvc(&mut self) {
-        let (target_label, cycle) = self.get_branch_target_label();
         dynasm!{self.asm
             ; test n_p, OVERFLOW as _
             ; jnz >next
-            ; inc cyc
-            ;; self.branch_page_cycle(cycle)
-            ; jmp => target_label
+            ;; self.branch()
             ; next:
         }
     }
     fn bmi(&mut self) {
-        let (target_label, cycle) = self.get_branch_target_label();
         dynasm!{self.asm
             ; test n_p, SIGN as _
             ; jz >next
-            ; inc cyc
-            ;; self.branch_page_cycle(cycle)
-            ; jmp => target_label
+            ;; self.branch()
             ; next:
         }
     }
     fn bpl(&mut self) {
-        let (target_label, cycle) = self.get_branch_target_label();
         dynasm!{self.asm
             ; test n_p, SIGN as _
             ; jnz >next
+            ;; self.branch()
+            ; next:
+        }
+    }
+
+    fn branch(&mut self) {
+        let (target, cycle) = self.get_branch_target();
+        dynasm! {self.asm
             ; inc cyc
             ;; self.branch_page_cycle(cycle)
-            ; jmp => target_label
-            ; next:
+        }
+
+        if self.get_current_instr_analysis().is_branch_to_before_entry {
+            dynasm!{self.asm
+                ; mov n_pc, target as _
+                ;; epilogue!{self}
+            }
+        }
+        else {
+            let target_label = self.get_dynamic_label(target);
+            dynasm!{self.asm
+                ; jmp =>target_label
+            }
         }
     }
 
@@ -1002,13 +1004,17 @@ impl<'a> Compiler<'a> {
         self.read_incr_pc() as u16 | ((self.read_incr_pc() as u16) << 8)
     }
 
-    fn get_branch_target_label(&mut self) -> (DynamicLabel, bool) {
+    fn get_current_instr_analysis(&mut self) -> &InstructionAnalysis {
+        let temp = self.current_instruction;
+        self.analysis.instructions.get(&temp).unwrap()
+    }
+
+    fn get_branch_target(&mut self) -> (u16, bool) {
         let arg = self.read_incr_pc();
         let target = self.relative_addr(arg);
 
-        let label = self.get_dynamic_label(target);
         let do_page_cycle = (self.pc & 0xFF00) != (target & 0xFF00);
-        (label, do_page_cycle)
+        (target, do_page_cycle)
     }
     fn branch_page_cycle(&mut self, do_page_cycle: bool) {
         if do_page_cycle {

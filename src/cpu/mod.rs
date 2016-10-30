@@ -1005,8 +1005,8 @@ impl CPU {
     }
 
     pub fn init(&mut self) {
-        //self.regs.pc = self.read_w(RESET_VECTOR);
-        self.regs.pc = 0xC000;
+        self.regs.pc = self.read_w(RESET_VECTOR);
+        //self.regs.pc = 0xC000;
     }
 
     fn nmi(&mut self) {
@@ -1180,8 +1180,13 @@ impl CPU {
     }
 
     pub fn step(&mut self) {
+        println!("Next Interrupt: {}", self.interrupt.next_interrupt);
         if self.halted {
             return;
+        }
+
+        if self.interrupt.next_interrupt == 0 {
+            self.update_next_interrupt();
         }
 
         if self.apu.requested_run_cycle() <= self.cycle {

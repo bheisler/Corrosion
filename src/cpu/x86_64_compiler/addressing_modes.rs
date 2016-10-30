@@ -1,7 +1,8 @@
-use super::Compiler;
+use cpu::CPU;
+use cpu::Registers;
 use dynasmrt::{AssemblyOffset, DynasmApi, DynasmLabelApi, ExecutableBuffer};
 use memory::MemSegment;
-use cpu::CPU;
+use super::Compiler;
 
 pub extern "win64" fn read_memory(cpu: *mut CPU, addr: u16) -> u8 {
     unsafe { (*cpu).read(addr) }
@@ -10,25 +11,18 @@ pub extern "win64" fn read_memory(cpu: *mut CPU, addr: u16) -> u8 {
 // Expects the 6502 address in rcx and returns the byte in r8 (arg)
 macro_rules! call_read {
     ($this:ident) => {dynasm!($this.asm
-        ; push rax
-        ; push rcx
         ; push rdx
-        ; push r9
-        ; push r10
-        ; push r11
-        ; mov rdx, rcx // Move the 6502 address to the second argument register
+        ; push rcx
+        ;; store_registers!($this)
+        ; pop rdx // Move the 6502 address to the second argument register
         ; mov rax, QWORD ::cpu::x86_64_compiler::addressing_modes::read_memory as _
         ; mov rcx, rbx //Pointer to CPU is first arg
-        ; sub rsp, 0x20
+        ; sub rsp, 0x28
         ; call rax
-        ; add rsp, 0x20
+        ; add rsp, 0x28
+        ;; load_registers!($this)
         ; mov r8, rax //rax contains returned value, move it to r8 (which is arg)
-        ; pop r11
-        ; pop r10
-        ; pop r9
         ; pop rdx
-        ; pop rcx
-        ; pop rax
     );};
 }
 
@@ -56,27 +50,20 @@ pub extern "win64" fn write_memory(cpu: *mut CPU, addr: u16, val: u8) {
 // Expects the 6502 address in rcx and the value in r8 (arg)
 macro_rules! call_write {
     ($this:ident) => {dynasm!($this.asm
-        ; push rax
-        ; push rcx
         ; push rdx
         ; push r8
-        ; push r9
-        ; push r10
-        ; push r11
-        ; mov rdx, rcx // Move the 6502 address to the second argument register
+        ; push rcx
+        ;; store_registers!($this)
+        ; pop rdx // Move the 6502 address to the second argument register
+        ; pop r8
         ; mov rax, QWORD ::cpu::x86_64_compiler::addressing_modes::write_memory as _
         ; mov rcx, rbx //Pointer to CPU is first arg
         //Conveniently, we already have the value in r8
         ; sub rsp, 0x28
         ; call rax
         ; add rsp, 0x28
-        ; pop r11
-        ; pop r10
-        ; pop r9
-        ; pop r8
+        ;; load_registers!($this)
         ; pop rdx
-        ; pop rcx
-        ; pop rax
     );};
 }
 
