@@ -1,6 +1,7 @@
 use cpu::CPU;
 use memory::MemSegment;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 pub struct Analyst<'a> {
     entry_point: u16,
@@ -15,15 +16,11 @@ pub struct Analyst<'a> {
 
 pub struct InstructionAnalysis {
     pub is_branch_target: bool,
-    pub is_branch_to_before_entry: bool,
 }
 
 impl Default for InstructionAnalysis {
     fn default() -> InstructionAnalysis {
-        InstructionAnalysis {
-            is_branch_target: false,
-            is_branch_to_before_entry: false,
-        }
+        InstructionAnalysis { is_branch_target: false }
     }
 }
 
@@ -56,19 +53,41 @@ impl<'a> Analyst<'a> {
         self.entry_point = entry_point;
         self.pc = entry_point;
 
+        let mut valid_instr_addrs: HashSet<u16> = HashSet::new();
+
         while !self.found_exit_point {
             // Ensure that every instruction has an entry
             let temp_pc = self.pc;
             self.current_instruction = temp_pc;
+            valid_instr_addrs.insert(temp_pc);
             self.get_instr_analysis(temp_pc);
 
             let opcode = self.read_incr_pc();
             decode_opcode!(opcode, self);
         }
+
+        self.remove_invalid_instructions(valid_instr_addrs);
+
         BlockAnalysis {
             entry_point: entry_point,
             exit_point: self.pc - 1,
             instructions: self.instructions,
+        }
+    }
+
+    fn remove_invalid_instructions(&mut self, valid_instr_addrs: HashSet<u16>) {
+        let mut invalid_instrs: HashSet<u16> = HashSet::new();
+
+        {
+            for addr in self.instructions.keys().cloned() {
+                if !valid_instr_addrs.contains(&addr) {
+                    invalid_instrs.insert(addr);
+                }
+            }
+        }
+
+        for addr in invalid_instrs.iter() {
+            self.instructions.remove(addr);
         }
     }
 
@@ -209,9 +228,6 @@ impl<'a> Analyst<'a> {
         if target > self.furthest_branch {
             self.furthest_branch = target;
         }
-        if target < self.entry_point {
-            self.get_current_instr_analysis().is_branch_to_before_entry = true;
-        }
     }
 
     // Stack
@@ -246,7 +262,12 @@ impl<'a> Analyst<'a> {
     fn rla(&mut self, _: u8) {}
     fn sre(&mut self, _: u8) {}
     fn rra(&mut self, _: u8) {}
-    fn kil(&mut self) {}
+    fn kil(&mut self) {
+        self.end_function();
+    }
+    fn unsupported(&mut self, _: u8) {
+        self.end_function();
+    }
 
     fn relative_addr(&self, disp: u8) -> u16 {
         let disp = (disp as i8) as i16; //We want to sign-extend here.

@@ -32,7 +32,7 @@ macro_rules! call_read {
 macro_rules! fast_read {
     ($this:ident) => {dynasm!($this.asm
         ; cmp cx, WORD 0x1FFF
-        ; jg >slow_read
+        ; ja >slow_read
         ; and rcx, DWORD 0x07FF
         ; mov arg, [ram + rcx]
         ; jmp >next
@@ -73,7 +73,7 @@ macro_rules! call_write {
 macro_rules! fast_write {
     ($this:ident) => {dynasm!($this.asm
         ; cmp cx, WORD 0x1FFF
-        ; jg >slow_write
+        ; ja >slow_write
         ; and rcx, DWORD 0x07FF
         ; mov [ram + rcx], arg
         ; jmp >next

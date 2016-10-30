@@ -1,5 +1,5 @@
-use memory::MemSegment;
 use cpu::CPU;
+use memory::MemSegment;
 
 pub struct Disassembler<'a> {
     pc: u16,
@@ -397,6 +397,9 @@ impl<'a> Disassembler<'a> {
     fn kil(&mut self) -> String {
         "KIL".to_string()
     }
+    fn unsupported(&self, _: u8) -> String {
+        "UNKNOWN".to_string()
+    }
 
     fn decode_instruction(&mut self) -> Instruction {
         let address = self.pc;
@@ -482,11 +485,7 @@ impl<'a> Disassembler<'a> {
                          }
                      })
                      .unwrap(),
-                 if opcode.unofficial {
-                     "*"
-                 } else {
-                     " "
-                 },
+                 if opcode.unofficial { "*" } else { " " },
                  opcode.str,
                  self.cpu.regs.a,
                  self.cpu.regs.x,
@@ -496,4 +495,33 @@ impl<'a> Disassembler<'a> {
                  cyc,
                  sl);
     }
+
+    #[cfg(feature="function_disasm")]
+    pub fn disasm_function(self, entry_point: u16) {
+        let exit_point = ::cpu::nes_analyst::Analyst::new(self.cpu).find_exit_point(entry_point);
+        let function = self.decode_function(entry_point, exit_point);
+        println!("Disassembly of function at {:04X} -> {:04X}",
+                 entry_point,
+                 exit_point);
+        for opcode in function.into_iter() {
+            println!("{:04X}:{:9} {}{:30}",
+                     opcode.address,
+                     opcode.bytes
+                         .iter()
+                         .map(|byte| format!("{:02X}", byte))
+                         .fold(None as Option<String>, |opt, right| {
+                             match opt {
+                                 Some(left) => Some(left + " " + &right),
+                                 None => Some(right),
+                             }
+                         })
+                         .unwrap(),
+                     if opcode.unofficial { "*" } else { " " },
+                     opcode.str);
+        }
+        println!("");
+    }
+
+    #[cfg(not(feature="function_disasm"))]
+    fn disasm_function(&self) {}
 }

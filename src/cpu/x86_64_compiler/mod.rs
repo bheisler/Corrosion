@@ -715,6 +715,9 @@ impl<'a> Compiler<'a> {
             ;; epilogue!(self)
         }
     }
+    fn unsupported(&mut self, opcode: u8) {
+        epilogue!(self);
+    }
 
     fn unofficial(&self) {}
 
@@ -791,16 +794,19 @@ impl<'a> Compiler<'a> {
             ;; self.branch_page_cycle(cycle)
         }
 
-        if self.get_current_instr_analysis().is_branch_to_before_entry {
-            dynasm!{self.asm
-                ; mov n_pc, target as _
-                ;; epilogue!{self}
-            }
-        }
-        else {
+        if self.analysis.instructions.contains_key(&target) {
+            //Target is an instruction in this block
             let target_label = self.get_dynamic_label(target);
             dynasm!{self.asm
                 ; jmp =>target_label
+            }
+        }
+        else {
+            //Target may be before this block, or misaligned with the instructions in this block.
+            //Either way, safest to treat it as a conditional JMP.
+            dynasm!{self.asm
+                ; mov n_pc, target as _
+                ;; epilogue!{self}
             }
         }
     }
@@ -1006,6 +1012,8 @@ impl<'a> Compiler<'a> {
 
     fn get_current_instr_analysis(&mut self) -> &InstructionAnalysis {
         let temp = self.current_instruction;
+        //There will always be an instruction for the current PC unless something went horribly
+        //wrong.
         self.analysis.instructions.get(&temp).unwrap()
     }
 

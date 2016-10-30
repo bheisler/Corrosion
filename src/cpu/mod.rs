@@ -293,7 +293,7 @@ macro_rules! decode_opcode {
 // 0xAB -> LAX (broken on actual hardware)
 // 0xBB -> LAS (unstable on actual hardware)
 // 0xCB -> AXS (not tested by nestest)
-        x => panic!( "Unknown or unsupported opcode: 0x{:02X}", x ),
+        x => $this.unsupported( x ),
     } }
 }
 
@@ -542,38 +542,6 @@ impl CPU {
 
     #[cfg(not(feature="stacktrace"))]
     fn stack_dump(&self) {}
-
-    #[cfg(feature="function_disasm")]
-    fn disasm_function(&mut self) {
-        let entry_point = self.regs.pc;
-        if entry_point < 0x8000 {
-            return;
-        }
-
-        let exit_point = Analyst::new(self).find_exit_point(entry_point);
-        let function = Disassembler::new(self).decode_function(entry_point, exit_point);
-        println!("Disassembly of function at {:04X} -> {:04X}", entry_point, exit_point);
-        for opcode in function.into_iter() {
-            println!(
-                "{:04X}:{:9} {}{:30}",
-                opcode.address,
-                opcode.bytes.iter()
-                    .map(|byte| format!("{:02X}", byte))
-                    .fold(None as Option<String>, |opt, right| {
-                        match opt {
-                            Some(left) => Some(left + " " + &right),
-                            None => Some(right),
-                        }
-                    } ).unwrap(),
-                if opcode.unofficial { "*" } else { " " },
-                opcode.str
-            );
-        }
-        println!("");
-    }
-
-    #[cfg(not(feature="function_disasm"))]
-    fn disasm_function(&self) {}
 
     // Addressing modes
     fn immediate(&mut self) -> ImmediateAddressingMode {
@@ -976,6 +944,9 @@ impl CPU {
     fn kil(&mut self) {
         self.halted = true;
     }
+    fn unsupported(&self, opcode: u8) {
+        panic!( "Unknown or unsupported opcode: 0x{:02X}", opcode )
+    }
 
     pub fn new(ppu: PPU, apu: APU, io: Box<IO>, cart: Rc<UnsafeCell<Cart>>, dispatcher: Rc<UnsafeCell<Dispatcher>>) -> CPU {
         let mut cpu = CPU {
@@ -1180,7 +1151,6 @@ impl CPU {
     }
 
     pub fn step(&mut self) {
-        println!("Next Interrupt: {}", self.interrupt.next_interrupt);
         if self.halted {
             return;
         }
@@ -1198,7 +1168,6 @@ impl CPU {
         }
 
         if self.regs.pc >= 0x4020 && cfg!(feature="jit") {
-            self.disasm_function();
             unsafe { (*self.dispatcher.get()).jump(self) }
         }
         else {
