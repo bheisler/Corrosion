@@ -1,9 +1,12 @@
+use cart::ScreenMode;
+use cpu::dispatcher::Dispatcher;
+use memory::MemSegment;
+use std::cell::UnsafeCell;
+use std::rc::Rc;
 use super::{Mapper, MapperParams};
 use super::bank::*;
-use memory::MemSegment;
-use super::volatile::VolatileRam;
 use super::battery::BatteryBackedRam;
-use cart::ScreenMode;
+use super::volatile::VolatileRam;
 
 #[derive(Debug, Clone, PartialEq)]
 struct Ctrl {
@@ -175,5 +178,9 @@ impl Mapper for MMC1 {
 
     fn get_mirroring_table(&self) -> &[u16; 4] {
         self.regs.control.mirroring
+    }
+
+    fn set_dispatcher(&mut self, dispatcher: Rc<UnsafeCell<Dispatcher>>) {
+        self.prg_rom.set_dispatcher(dispatcher);
     }
 }

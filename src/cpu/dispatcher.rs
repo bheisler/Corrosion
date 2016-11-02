@@ -16,7 +16,9 @@ impl Dispatcher {
         Dispatcher {}
     }
 
-    pub fn jump(&mut self, cpu: &mut CPU) {}
+    pub fn jump(&mut self, _: &mut CPU) {}
+
+    pub fn dirty(&mut self, _: usize, _: usize) {}
 }
 
 #[cfg(feature="jit")]
@@ -26,7 +28,21 @@ pub struct Dispatcher {
 #[cfg(feature="jit")]
 struct Block {
     dirty: bool,
+    start_addr: u16,
+    end_addr: u16,
     code: ExecutableBlock,
+}
+#[cfg(feature="jit")]
+impl Block {
+    fn overlaps_with(&self, start: usize, end: usize) -> bool {
+        if (self.end_addr as usize) < start {
+            false
+        } else if (self.start_addr as usize) >= end {
+            false
+        } else {
+            true
+        }
+    }
 }
 
 #[cfg(feature="function_disasm")]
@@ -54,12 +70,14 @@ impl Dispatcher {
         }
     }
 
-    fn put(&mut self, addr: u16, code: ExecutableBlock) -> &Block {
-        self.table[addr as usize] = Some(Block {
+    fn put(&mut self, start_addr: u16, end_addr: u16, code: ExecutableBlock) -> &Block {
+        self.table[start_addr as usize] = Some(Block {
             dirty: false,
+            start_addr: start_addr,
+            end_addr: end_addr,
             code: code,
         });
-        self.table[addr as usize].as_ref().unwrap()
+        self.table[start_addr as usize].as_ref().unwrap()
     }
 
     pub fn jump(&mut self, cpu: &mut CPU) {
@@ -84,7 +102,17 @@ impl Dispatcher {
 
     fn compile(&mut self, addr: u16, cpu: &mut CPU) -> &Block {
         disasm_function(cpu, addr);
-        let executable = compiler::compile(addr, cpu);
-        self.put(addr, executable)
+        let (end_addr, executable) = compiler::compile(addr, cpu);
+        self.put(addr, end_addr, executable)
+    }
+
+    pub fn dirty(&mut self, start: usize, end: usize) {
+        for opt_block in self.table.iter_mut() {
+            if let Some(ref mut block) = *opt_block {
+                if block.overlaps_with(start, end) {
+                    block.dirty = true;
+                }
+            }
+        }
     }
 }

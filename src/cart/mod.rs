@@ -4,6 +4,9 @@ use std::io::prelude::*;
 use std::fs::File;
 use std::path::Path;
 use std::io;
+use cpu::dispatcher::Dispatcher;
+use std::cell::UnsafeCell;
+use std::rc::Rc;
 
 use cart::ines::{Rom, RomError};
 use mappers::{Mapper, MapperParams, RomBank};
@@ -72,6 +75,10 @@ impl Cart {
     }
     pub fn chr_write(&mut self, idx: u16, val: u8) {
         self.mapper.chr_write(idx, val)
+    }
+
+    pub fn set_dispatcher(&mut self, dispatcher: Rc<UnsafeCell<Dispatcher>>) {
+        self.mapper.set_dispatcher(dispatcher);
     }
 
     pub fn new(mapper: Box<Mapper>) -> Cart {

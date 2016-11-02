@@ -82,12 +82,13 @@ impl EmulatorBuilder {
         }
     }
 
-    pub fn build(self) -> Emulator {
+    pub fn build(mut self) -> Emulator {
+        let dispatcher = Rc::new(UnsafeCell::new(cpu::dispatcher::Dispatcher::new()));
+        self.cart.set_dispatcher(dispatcher.clone());
         let cart: Rc<UnsafeCell<Cart>> = Rc::new(UnsafeCell::new(self.cart));
         let ppu = PPU::new(cart.clone(), self.screen);
         let apu = APU::new(self.audio_out);
-        let dispatcher = cpu::dispatcher::Dispatcher::new();
-        let mut cpu = CPU::new(ppu, apu, self.io, cart, Rc::new(UnsafeCell::new(dispatcher)));
+        let mut cpu = CPU::new(ppu, apu, self.io, cart, dispatcher);
         cpu.init();
 
         Emulator{ cpu: cpu }

@@ -38,9 +38,10 @@ impl ExecutableBlock {
     }
 }
 
-pub fn compile(addr: u16, cpu: &mut CPU) -> ExecutableBlock {
+pub fn compile(addr: u16, cpu: &mut CPU) -> (u16, ExecutableBlock) {
     let analysis = Analyst::new(cpu).analyze(addr);
-    Compiler::new(cpu, analysis).compile_block()
+    let end_addr = analysis.exit_point;
+    (end_addr, Compiler::new(cpu, analysis).compile_block())
 }
 
 macro_rules! unimplemented {
@@ -99,21 +100,6 @@ macro_rules! store_registers {
             ; mov WORD rcx => Registers.pc, n_pc
             ; mov QWORD cpu => CPU.cycle, cyc
         );
-    }};
-}
-
-macro_rules! prologue {
-    ($this:ident) => {{
-        dynasm!{$this.asm
-            ; push rbx
-            ; push r12
-            ; push r13
-            ; push r14
-            ; push r15
-            ; mov rbx, rcx //Move the CPU pointer to the CPU pointer register
-            //Leave the RAM pointer in the RAM pointer register
-        }
-        load_registers!($this);
     }};
 }
 
@@ -245,7 +231,7 @@ impl<'a> Compiler<'a> {
     fn compile_block(mut self) -> ExecutableBlock {
         let start = self.asm.offset();
 
-        prologue!(self);
+        self.prologue();
 
         while self.pc <= self.analysis.exit_point {
             self.current_instruction = self.pc;
@@ -263,6 +249,19 @@ impl<'a> Compiler<'a> {
             offset: start,
             buffer: self.asm.finalize().unwrap(),
         }
+    }
+
+    fn prologue(&mut self) {
+        dynasm!{self.asm
+            ; push rbx
+            ; push r12
+            ; push r13
+            ; push r14
+            ; push r15
+            ; mov rbx, rcx //Move the CPU pointer to the CPU pointer register
+            //Leave the RAM pointer in the RAM pointer register
+        }
+        load_registers!(self);
     }
 
     fn emit_branch_target(&mut self) {
@@ -420,7 +419,7 @@ impl<'a> Compiler<'a> {
 
             //Set carry based on result
             ; cmp r8w, 0xFF
-            ; jg >set_carry
+            ; ja >set_carry
             ; and n_p, (!CARRY) as _
             ; jmp >next
             ; set_carry:
@@ -661,18 +660,21 @@ impl<'a> Compiler<'a> {
             }
         }
         else {
-            dynasm!{self.asm
-                ; mov rdx, QWORD hi_addr as _
-                ;; call_read!(self)
-                ; mov al, arg
-                ; mov ah, al
-                ; mov rdx, QWORD lo_addr as _
-                ;; call_read!(self)
-                ; mov al, arg
-                ; mov n_pc, ax
-            }
+            self.jmpi_slow( lo_addr, hi_addr );
         }
         epilogue!(self);
+    }
+    fn jmpi_slow(&mut self, lo_addr: u16, hi_addr: u16) {
+        dynasm!{self.asm
+            ; mov rdx, QWORD hi_addr as _
+            ;; call_read!(self)
+            ; mov al, arg
+            ; mov ah, al
+            ; mov rdx, QWORD lo_addr as _
+            ;; call_read!(self)
+            ; mov al, arg
+            ; mov n_pc, ax
+        }
     }
     fn jsr(&mut self) {
         let target = self.read_w_incr_pc();
@@ -980,6 +982,7 @@ impl<'a> Compiler<'a> {
     fn kil(&mut self) {
         dynasm!{self.asm
             ; mov cpu => CPU.halted, BYTE true as _
+            ;; epilogue!(self)
         }
     }
 

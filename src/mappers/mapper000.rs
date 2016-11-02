@@ -1,3 +1,7 @@
+
+use cpu::dispatcher::Dispatcher;
+use std::cell::UnsafeCell;
+use std::rc::Rc;
 use super::{Mapper, MapperParams};
 use super::bank::*;
 
@@ -68,12 +72,16 @@ impl Mapper for Mapper000 {
     fn get_mirroring_table(&self) -> &[u16; 4] {
         self.mode
     }
+
+    fn set_dispatcher(&mut self, dispatcher: Rc<UnsafeCell<Dispatcher>>) {
+        self.prg_rom.set_dispatcher(dispatcher);
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use mappers::{Mapper, MapperParams};
+    use super::*;
 
     #[test]
     fn test_can_create_mapper_0() {

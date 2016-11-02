@@ -1,12 +1,18 @@
+use cpu::dispatcher::Dispatcher;
+use std::cell::UnsafeCell;
 use std::ops::Range;
+use std::rc::Rc;
 
 pub struct RomBank {
     data: Box<[u8]>,
 }
 
+const BANK_SIZE: usize = 0x1000;
+const FIRST_PAGE: usize = 0x8000;
+
 impl RomBank {
     pub fn new(data: Vec<u8>) -> RomBank {
-        if data.len() != 0x1000 {
+        if data.len() != BANK_SIZE {
             panic!("Unexpected bank size {}", data.len());
         }
 
@@ -26,9 +32,12 @@ impl RomBank {
 pub struct MappingTable {
     // All banks of ROM
     banks: Box<[RomBank]>,
+
     // Mappings from CPU addresses to bank indexes.
     // Indexed in terms of pages starting at 0x8000.
     mappings: [usize; 8],
+
+    dispatcher: Option<Rc<UnsafeCell<Dispatcher>>>,
 }
 
 fn to_page_num(addr: u16) -> usize {
@@ -49,7 +58,15 @@ impl MappingTable {
         MappingTable {
             banks: banks.into_boxed_slice(),
             mappings: [0; 8],
+            dispatcher: None,
         }
+    }
+
+    pub fn set_dispatcher(&mut self, dispatcher: Rc<UnsafeCell<Dispatcher>>) {
+        if self.dispatcher.is_some() {
+            panic!("Tried to set the dispatcher twice.");
+        }
+        self.dispatcher = Some(dispatcher);
     }
 
     pub fn get_bank(&self, addr: u16) -> &RomBank {
@@ -68,13 +85,24 @@ impl MappingTable {
 
     pub fn map_page(&mut self, page: usize, bank: usize) {
         self.mappings[page] = bank;
+        if let Some(ref mut dispatcher) = self.dispatcher {
+            let start = page * BANK_SIZE + FIRST_PAGE;
+            let end = start + BANK_SIZE;
+            unsafe { (*dispatcher.get()).dirty(start, end) }
+        }
     }
 
     pub fn map_pages_linear(&mut self, range: Range<usize>, starting_bank: usize) {
+        let start = range.start * BANK_SIZE + FIRST_PAGE;
+        let end = range.end * BANK_SIZE + FIRST_PAGE;
+
         let mut cur_bank = starting_bank;
         for page in range {
             self.mappings[page] = cur_bank;
             cur_bank += 1;
+        }
+        if let Some(ref mut dispatcher) = self.dispatcher {
+            unsafe { (*dispatcher.get()).dirty(start, end) }
         }
     }
 }
