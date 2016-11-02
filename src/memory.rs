@@ -43,23 +43,3 @@ pub trait MemSegment {
         }
     }
 }
-
-pub struct RAM {
-    memory: [u8; 0x0800],
-}
-
-impl Default for RAM {
-    fn default() -> RAM {
-        RAM { memory: [0u8; 0x800] }
-    }
-}
-
-impl MemSegment for RAM {
-    fn read(&mut self, idx: u16) -> u8 {
-        self.memory[idx as usize % 0x800]
-    }
-
-    fn write(&mut self, idx: u16, val: u8) {
-        self.memory[idx as usize % 0x800] = val;
-    }
-}

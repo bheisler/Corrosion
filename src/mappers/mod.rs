@@ -1,11 +1,17 @@
 mod volatile;
 mod battery;
 
+mod bank;
+
 mod mapper000;
 mod mmc1;
 
 use std::path::Path;
 use cart::ScreenMode;
+use cpu::dispatcher::Dispatcher;
+use std::cell::UnsafeCell;
+use std::rc::Rc;
+pub use mappers::bank::RomBank;
 
 static VERTICAL: [u16; 4] = [0x2000, 0x2400, 0x2000, 0x2400];
 static HORIZONTAL: [u16; 4] = [0x2000, 0x2000, 0x2400, 0x2400];
@@ -24,8 +30,8 @@ fn standard_mapping_tables(mode: ScreenMode) -> &'static [u16; 4] {
 }
 
 pub trait Mapper {
-    fn prg_rom_read(&mut self, idx: u16) -> u8;
-    fn prg_rom_write(&mut self, idx: u16, val: u8);
+    fn prg_rom_read(&mut self, idx: u16) -> &RomBank;
+    fn prg_rom_write(&mut self, idx: u16, val: u8) -> &mut RomBank;
 
     fn prg_ram_read(&mut self, idx: u16) -> u8;
     fn prg_ram_write(&mut self, idx: u16, val: u8);
@@ -34,6 +40,8 @@ pub trait Mapper {
     fn chr_write(&mut self, idx: u16, val: u8);
 
     fn get_mirroring_table(&self) -> &[u16; 4];
+
+    fn set_dispatcher(&mut self, dispatcher: Rc<UnsafeCell<Dispatcher>>);
 }
 
 pub struct MapperParams<'a> {

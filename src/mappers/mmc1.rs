@@ -1,8 +1,12 @@
-use super::*;
-use memory::MemSegment;
-use super::volatile::VolatileRam;
-use super::battery::BatteryBackedRam;
 use cart::ScreenMode;
+use cpu::dispatcher::Dispatcher;
+use memory::MemSegment;
+use std::cell::UnsafeCell;
+use std::rc::Rc;
+use super::{Mapper, MapperParams};
+use super::bank::*;
+use super::battery::BatteryBackedRam;
+use super::volatile::VolatileRam;
 
 #[derive(Debug, Clone, PartialEq)]
 struct Ctrl {
@@ -23,7 +27,7 @@ struct Regs {
 
     chr_0: u8,
     chr_1: u8,
-    prg_bank: u8,
+    prg_bank: usize,
 }
 
 struct MMC1 {
@@ -32,26 +36,67 @@ struct MMC1 {
     accumulator: u8,
     write_counter: u8,
 
-    prg_rom: Box<[u8]>,
+    prg_rom: MappingTable,
     chr_ram: Box<[u8]>,
     prg_ram: Box<MemSegment>,
 }
 
 impl MMC1 {
-    fn first_bank(&self) -> u8 {
+    fn update_mapping(&mut self) {
         match self.regs.control.mode {
-            PrgMode::Switch32Kb => self.regs.prg_bank & 0b0001_1110,
-            PrgMode::FixFirst => 0,
-            PrgMode::FixLast => self.regs.prg_bank,
+            PrgMode::Switch32Kb => {
+                self.prg_rom.map_pages_linear(0..8, (self.regs.prg_bank & 0b0000_1110) * 8)
+            }
+            PrgMode::FixFirst => {
+                self.prg_rom.map_pages_linear(0..4, 0);
+                self.prg_rom.map_pages_linear(4..8, (self.regs.prg_bank & 0b0000_1111) * 4);
+            }
+            PrgMode::FixLast => {
+                self.prg_rom.map_pages_linear(0..4, (self.regs.prg_bank & 0b0000_1111) * 4);
+                let bank_count = self.prg_rom.bank_count();
+                self.prg_rom.map_pages_linear(4..8, bank_count - 4);
+            }
         }
     }
 
-    fn second_bank(&self) -> u8 {
-        match self.regs.control.mode {
-            PrgMode::Switch32Kb => self.regs.prg_bank | 1,
-            PrgMode::FixFirst => self.regs.prg_bank,
-            PrgMode::FixLast => (self.prg_rom.len() / 0x4000) as u8 - 1,
+    fn reset(&mut self) {
+        self.accumulator = 0;
+        self.write_counter = 0;
+        self.regs.control = Ctrl {
+            mode: PrgMode::FixLast,
+            mirroring: super::standard_mapping_tables(ScreenMode::OneScreenLow),
+        };
+        self.update_mapping();
+    }
+
+    fn do_write(&mut self, idx: u16) {
+        match idx {
+            0x8000...0x9FFF => {
+                let val = self.accumulator;
+                let mode = match (val & 0x0C) >> 2 {
+                    0 | 1 => PrgMode::Switch32Kb,
+                    2 => PrgMode::FixFirst,
+                    3 => PrgMode::FixLast,
+                    _ => panic!("Can't happen."),
+                };
+                let mirroring = match val & 0x03 {
+                    0 => ScreenMode::OneScreenLow,
+                    1 => ScreenMode::OneScreenHigh,
+                    2 => ScreenMode::Vertical,
+                    3 => ScreenMode::Horizontal,
+                    _ => panic!("Can't happen."),
+                };
+                self.regs.control = Ctrl {
+                    mode: mode,
+                    mirroring: super::standard_mapping_tables(mirroring),
+                };
+            }
+            0xA000...0xBFFF => self.regs.chr_0 = self.accumulator,
+            0xC000...0xDFFF => self.regs.chr_1 = self.accumulator,
+            0xE000...0xFFFF => self.regs.prg_bank = self.accumulator as usize,
+            x => invalid_address!(x),
         }
+        self.update_mapping();
     }
 }
 
@@ -72,7 +117,7 @@ pub fn new(params: MapperParams) -> Box<Mapper> {
         Box::new(VolatileRam::new(params.prg_ram_size as usize))
     };
 
-    Box::new(MMC1 {
+    let mut mapper = MMC1 {
         regs: Regs {
             control: Ctrl {
                 mode: PrgMode::FixLast,
@@ -84,68 +129,35 @@ pub fn new(params: MapperParams) -> Box<Mapper> {
         },
         accumulator: 0,
         write_counter: 0,
-        prg_rom: params.prg_rom.into_boxed_slice(),
+        prg_rom: MappingTable::new(params.prg_rom),
         chr_ram: chr_ram,
         prg_ram: prg_ram,
-    })
+    };
+    mapper.update_mapping();
+
+    Box::new(mapper)
 }
 
 impl Mapper for MMC1 {
-    fn prg_rom_read(&mut self, idx: u16) -> u8 {
-        let bank = match idx {
-            0x8000...0xBFFF => self.first_bank(),
-            0xC000...0xFFFF => self.second_bank(),
-            x => invalid_address!(x),
-        };
-        let address = (bank as usize * 0x4000) | (idx as usize & 0x3FFF);
-        self.prg_rom[address]
+    fn prg_rom_read(&mut self, idx: u16) -> &RomBank {
+        self.prg_rom.get_bank(idx)
     }
 
-    fn prg_rom_write(&mut self, idx: u16, val: u8) {
+    fn prg_rom_write(&mut self, idx: u16, val: u8) -> &mut RomBank {
         if val & 0b1000_0000 != 0 {
-            self.accumulator = 0;
-            self.write_counter = 0;
-            self.regs.control = Ctrl {
-                mode: PrgMode::FixLast,
-                mirroring: super::standard_mapping_tables(ScreenMode::OneScreenLow),
-            };
-            return;
-        }
+            self.reset();
+        } else {
+            self.accumulator |= (val & 1) << self.write_counter;
+            self.write_counter += 1;
 
-        self.accumulator |= (val & 1) << self.write_counter;
-        self.write_counter += 1;
-
-        if self.write_counter == 5 {
-
-            match idx {
-                0x8000...0x9FFF => {
-                    let val = self.accumulator;
-                    let mode = match (val & 0x0C) >> 2 {
-                        0 | 1 => PrgMode::Switch32Kb,
-                        2 => PrgMode::FixFirst,
-                        3 => PrgMode::FixLast,
-                        _ => panic!("Can't happen."),
-                    };
-                    let mirroring = match val & 0x03 {
-                        0 => ScreenMode::OneScreenLow,
-                        1 => ScreenMode::OneScreenHigh,
-                        2 => ScreenMode::Vertical,
-                        3 => ScreenMode::Horizontal,
-                        _ => panic!("Can't happen."),
-                    };
-                    self.regs.control = Ctrl {
-                        mode: mode,
-                        mirroring: super::standard_mapping_tables(mirroring),
-                    };
-                }
-                0xA000...0xBFFF => self.regs.chr_0 = self.accumulator,
-                0xC000...0xDFFF => self.regs.chr_1 = self.accumulator,
-                0xE000...0xFFFF => self.regs.prg_bank = self.accumulator,
-                x => invalid_address!(x),
+            if self.write_counter == 5 {
+                self.do_write(idx);
+                self.accumulator = 0;
+                self.write_counter = 0;
             }
-            self.accumulator = 0;
-            self.write_counter = 0;
         }
+
+        self.prg_rom.get_bank_mut(idx)
     }
 
     fn prg_ram_read(&mut self, idx: u16) -> u8 {
@@ -166,5 +178,9 @@ impl Mapper for MMC1 {
 
     fn get_mirroring_table(&self) -> &[u16; 4] {
         self.regs.control.mirroring
+    }
+
+    fn set_dispatcher(&mut self, dispatcher: Rc<UnsafeCell<Dispatcher>>) {
+        self.prg_rom.set_dispatcher(dispatcher);
     }
 }

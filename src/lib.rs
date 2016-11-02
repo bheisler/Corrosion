@@ -1,11 +1,19 @@
 #![feature(test)]
 #![feature(plugin)]
+#![feature(asm)]
+#![feature(naked_functions)]
+
 #![plugin(clippy)]
+#![plugin(dynasm)]
 
 #![allow(unused_features)]
 #![allow(unknown_lints)]
 #![allow(new_without_default)]
 #![allow(match_same_arms)]
+
+#[cfg(feature="jit")]
+#[macro_use]
+extern crate dynasmrt;
 
 #[macro_use]
 extern crate bitflags;
@@ -34,9 +42,6 @@ mod util;
 
 #[cfg(test)]
 mod tests;
-
-#[cfg(feature="cputrace")]
-pub mod disasm;
 
 use cart::Cart;
 use cpu::CPU;
@@ -77,11 +82,13 @@ impl EmulatorBuilder {
         }
     }
 
-    pub fn build(self) -> Emulator {
+    pub fn build(mut self) -> Emulator {
+        let dispatcher = Rc::new(UnsafeCell::new(cpu::dispatcher::Dispatcher::new()));
+        self.cart.set_dispatcher(dispatcher.clone());
         let cart: Rc<UnsafeCell<Cart>> = Rc::new(UnsafeCell::new(self.cart));
         let ppu = PPU::new(cart.clone(), self.screen);
         let apu = APU::new(self.audio_out);
-        let mut cpu = CPU::new(ppu, apu, self.io, cart);
+        let mut cpu = CPU::new(ppu, apu, self.io, cart, dispatcher);
         cpu.init();
 
         Emulator{ cpu: cpu }

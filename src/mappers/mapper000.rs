@@ -1,7 +1,12 @@
-use super::*;
+
+use cpu::dispatcher::Dispatcher;
+use std::cell::UnsafeCell;
+use std::rc::Rc;
+use super::{Mapper, MapperParams};
+use super::bank::*;
 
 struct Mapper000 {
-    prg_rom: Box<[u8]>,
+    prg_rom: MappingTable,
     chr_rom: Box<[u8]>,
     chr_ram: Box<[u8]>,
     prg_ram: Box<[u8]>,
@@ -15,8 +20,15 @@ pub fn new(params: MapperParams) -> Box<Mapper> {
     } else {
         vec![0u8; 0].into_boxed_slice()
     };
+
+    let mut prg_rom_table = MappingTable::new(params.prg_rom);
+    let bank_count = prg_rom_table.bank_count();
+    for page in 0..8 {
+        prg_rom_table.map_page(page, page % bank_count);
+    }
+
     Box::new(Mapper000 {
-        prg_rom: params.prg_rom.into_boxed_slice(),
+        prg_rom: prg_rom_table,
         chr_rom: params.chr_rom.into_boxed_slice(),
         chr_ram: chr_ram,
         prg_ram: vec![0u8; params.prg_ram_size].into_boxed_slice(),
@@ -25,12 +37,12 @@ pub fn new(params: MapperParams) -> Box<Mapper> {
 }
 
 impl Mapper for Mapper000 {
-    fn prg_rom_read(&mut self, idx: u16) -> u8 {
-        self.prg_rom[((idx - 0x8000) as usize % self.prg_rom.len())]
+    fn prg_rom_read(&mut self, idx: u16) -> &RomBank {
+        self.prg_rom.get_bank(idx)
     }
 
-    fn prg_rom_write(&mut self, _: u16, _: u8) {
-        // Do Nothing
+    fn prg_rom_write(&mut self, idx: u16, _: u8) -> &mut RomBank {
+        self.prg_rom.get_bank_mut(idx)
     }
 
     fn prg_ram_read(&mut self, idx: u16) -> u8 {
@@ -60,18 +72,22 @@ impl Mapper for Mapper000 {
     fn get_mirroring_table(&self) -> &[u16; 4] {
         self.mode
     }
+
+    fn set_dispatcher(&mut self, dispatcher: Rc<UnsafeCell<Dispatcher>>) {
+        self.prg_rom.set_dispatcher(dispatcher);
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use mappers::{Mapper, MapperParams};
+    use super::*;
 
     #[test]
     fn test_can_create_mapper_0() {
         let path_buf = ::std::path::PathBuf::new();
         let path = path_buf.as_path();
-        new(MapperParams::simple(path, vec![], vec![]));
+        new(MapperParams::simple(path, vec![0u8; 0x1000], vec![]));
     }
 
     fn create_test_mapper() -> Box<Mapper> {
@@ -103,7 +119,8 @@ mod tests {
             .collect();
         let mut mapper = new(MapperParams::simple(path, prg_rom, vec!(0u8; 0x4000)));
 
-        assert_eq!(mapper.prg_rom_read(0x8111), mapper.prg_rom_read(0xC111));
+        assert_eq!(mapper.prg_rom_read(0x8111).read(0x8111),
+                   mapper.prg_rom_read(0xC111).read(0xC111));
     }
 
     #[test]
@@ -113,15 +130,15 @@ mod tests {
         let mut prg_rom: Vec<_> = vec!(0u8; 0x4000);
         prg_rom[0x2612] = 0x15;
         let mut mapper = new(MapperParams::simple(path, prg_rom, vec!(0u8; 0x1000)));
-        assert_eq!(mapper.prg_rom_read(0xA612), 0x15);
+        assert_eq!(mapper.prg_rom_read(0xA612).read(0xA612), 0x15);
     }
 
     #[test]
     fn test_prg_rom_write() {
         let mut mapper = create_test_mapper();
 
-        mapper.prg_rom_write(0x8612, 15);
-        assert_eq!(mapper.prg_rom_read(0x8612), 0);
+        mapper.prg_rom_write(0x8612, 15).write(0x8612, 15);
+        assert_eq!(mapper.prg_rom_read(0x8612).read(0x8612), 0);
     }
 
     #[test]

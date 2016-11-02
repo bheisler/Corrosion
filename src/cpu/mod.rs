@@ -1,8 +1,8 @@
 #![macro_use]
 
-const NMI_VECTOR: u16 = 0xFFFA;
-const RESET_VECTOR: u16 = 0xFFFC;
-const IRQ_VECTOR: u16 = 0xFFFE;
+pub const NMI_VECTOR: u16 = 0xFFFA;
+pub const RESET_VECTOR: u16 = 0xFFFC;
+pub const IRQ_VECTOR: u16 = 0xFFFE;
 const STACK_PAGE: u16 = 0x0100;
 
 pub enum IrqInterrupt {
@@ -293,11 +293,24 @@ macro_rules! decode_opcode {
 // 0xAB -> LAX (broken on actual hardware)
 // 0xBB -> LAS (unstable on actual hardware)
 // 0xCB -> AXS (not tested by nestest)
-        x => panic!( "Unknown or unsupported opcode: 0x{:02X}", x ),
+        x => $this.unsupported( x ),
     } }
 }
 
-use memory::RAM;
+#[cfg(feature="disasm")]
+pub mod disasm;
+
+#[cfg(any(feature="function_disasm", feature="jit"))]
+mod nes_analyst;
+
+#[cfg(all(target_arch="x86_64", feature="jit"))]
+pub mod x86_64_compiler;
+
+#[cfg(all(target_arch="x86_64", feature="jit"))]
+pub use cpu::x86_64_compiler as compiler;
+
+pub mod dispatcher;
+
 use memory::MemSegment;
 use ppu::StepResult;
 use ppu::PPU;
@@ -306,15 +319,20 @@ use io::IO;
 use cart::Cart;
 use std::rc::Rc;
 use std::cell::UnsafeCell;
+use cpu::dispatcher::Dispatcher;
 
-#[cfg(feature="cputrace")]
-use disasm::Disassembler;
+#[cfg(feature="disasm")]
+use cpu::disasm::Disassembler;
+
+#[cfg(any(feature="function_disasm", feature="jit"))]
+use cpu::nes_analyst::Analyst;
+
 
 /// The number of cycles that each machine operation takes. Indexed by opcode
 /// number.
 /// Copied from `FCEUX` & `SprocketNES`.
 #[cfg_attr(rustfmt, rustfmt_skip)]
-static CYCLE_TABLE: [u64; 256] = [
+pub static CYCLE_TABLE: [u64; 256] = [
     /*0x00*/ 7,6,2,8,3,3,5,5,3,2,2,2,4,4,6,6,
     /*0x10*/ 2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7,
     /*0x20*/ 6,6,2,8,3,3,5,5,4,2,2,2,4,4,6,6,
@@ -392,7 +410,7 @@ impl AddressingMode for MemoryAddressingMode {
 }
 
 bitflags! {
-    flags Status : u8 {
+    pub flags Status : u8 {
         const C = 0b0000_0001, //Carry flag
         const Z = 0b0000_0010, //Zero flag
         const I = 0b0000_0100, //Suppress IRQ
@@ -410,31 +428,42 @@ impl Status {
     }
 }
 
-struct Registers {
-    a: u8,
-    x: u8,
-    y: u8,
-    p: Status,
-    sp: u8,
-    pc: u16,
+pub struct Registers {
+    pub a: u8,
+    pub x: u8,
+    pub y: u8,
+    pub p: Status,
+    pub sp: u8,
+    pub pc: u16,
+}
+
+pub struct JitInterrupt {
+    pub next_interrupt: u64
+}
+impl JitInterrupt {
+    fn interrupt_now(&mut self) {
+        self.next_interrupt = 0;
+    }
 }
 
 pub struct CPU {
-    regs: Registers,
-    pub ram: RAM,
+    pub regs: Registers,
+    pub interrupt: JitInterrupt,
+    pub ram: [u8; 0x0800],
     pub ppu: PPU,
     pub apu: APU,
     pub io: Box<IO>,
     cart: Rc<UnsafeCell<Cart>>,
-    cycle: u64,
-    halted: bool,
+    dispatcher: Rc<UnsafeCell<Dispatcher>>,
+    pub cycle: u64,
+    pub halted: bool,
     io_strobe: bool,
 }
 
 impl MemSegment for CPU {
     fn read(&mut self, idx: u16) -> u8 {
         match idx {
-            0x0000...0x1FFF => self.ram.read(idx),
+            0x0000...0x1FFF => self.ram[(idx % 0x800) as usize],
             0x2000...0x3FFF => {
                 self.run_ppu();
                 self.ppu.read(idx)
@@ -443,6 +472,7 @@ impl MemSegment for CPU {
             0x4014 => 0, //No idea what this should return. PPU dynamic latch garbage, maybe?
             0x4015 => {
                 let (irq, val) = self.apu.read_status(self.cycle);
+                self.update_next_interrupt();
                 if let IrqInterrupt::IRQ = irq {
                     self.irq();
                 }
@@ -455,7 +485,7 @@ impl MemSegment for CPU {
                 self.io.read(idx)
             }
             0x6000...0x7FFF => unsafe { (*self.cart.get()).prg_ram_read(idx) },
-            0x4020...0xFFFF => unsafe { (*self.cart.get()).prg_rom_read(idx) },
+            0x4020...0xFFFF => unsafe { (*self.cart.get()).prg_rom_read(idx).read(idx) },
             x => invalid_address!(x),
         }
 
@@ -463,7 +493,7 @@ impl MemSegment for CPU {
 
     fn write(&mut self, idx: u16, val: u8) {
         match idx {
-            0x0000...0x1FFF => self.ram.write(idx, val),
+            0x0000...0x1FFF => self.ram[(idx % 0x800) as usize] = val,
             0x2000...0x3FFF => {
                 self.run_ppu();
                 self.ppu.write(idx, val);
@@ -484,7 +514,7 @@ impl MemSegment for CPU {
                 }
             }
             0x6000...0x7FFF => unsafe { (*self.cart.get()).prg_ram_write(idx, val) },
-            0x4020...0xFFFF => unsafe { (*self.cart.get()).prg_rom_write(idx, val) },
+            0x4020...0xFFFF => unsafe { (*self.cart.get()).prg_rom_write(idx, val).write(idx, val) },
             x => invalid_address!(x),
         }
     }
@@ -493,25 +523,7 @@ impl MemSegment for CPU {
 impl CPU {
     #[cfg(feature="cputrace")]
     fn trace(&mut self) {
-        let opcode = Disassembler::new(self).decode();
-        println!(
-            "${:04X}:{:9} {}{:30}  A:{:02X} X:{:02X} Y:{:02X} S:{:02X}",
-            self.regs.pc,
-            opcode.bytes.iter()
-                .map(|byte| format!("{:02X}", byte))
-                .fold(None as Option<String>, |opt, right| {
-                    match opt {
-                        Some(left) => Some(left + " " + &right),
-                        None => Some(right),
-                    }
-                } ).unwrap(),
-            if opcode.unofficial { "*" } else { " " },
-            opcode.str,
-            self.regs.a,
-            self.regs.x,
-            self.regs.y,
-            self.regs.sp,
-        );
+        Disassembler::new(self).trace();
     }
 
     #[cfg(not(feature="cputrace"))]
@@ -932,9 +944,12 @@ impl CPU {
     fn kil(&mut self) {
         self.halted = true;
     }
+    fn unsupported(&self, opcode: u8) {
+        panic!( "Unknown or unsupported opcode: 0x{:02X}", opcode )
+    }
 
-    pub fn new(ppu: PPU, apu: APU, io: Box<IO>, cart: Rc<UnsafeCell<Cart>>) -> CPU {
-        CPU {
+    pub fn new(ppu: PPU, apu: APU, io: Box<IO>, cart: Rc<UnsafeCell<Cart>>, dispatcher: Rc<UnsafeCell<Dispatcher>>) -> CPU {
+        let mut cpu = CPU {
             regs: Registers {
                 a: 0,
                 x: 0,
@@ -943,22 +958,30 @@ impl CPU {
                 sp: 0xFD,
                 pc: 0,
             },
+            interrupt: JitInterrupt {
+                next_interrupt: 0
+            },
             cycle: 0,
-            ram: Default::default(),
+            ram: [0; 0x800],
             ppu: ppu,
             apu: apu,
             io: io,
             cart: cart,
+            dispatcher: dispatcher,
             halted: false,
             io_strobe: false,
-        }
+        };
+        cpu.update_next_interrupt();
+        cpu
     }
 
     pub fn init(&mut self) {
         self.regs.pc = self.read_w(RESET_VECTOR);
+        //self.regs.pc = 0xC000;
     }
 
     fn nmi(&mut self) {
+        self.interrupt.interrupt_now();
         let target = self.read_w(NMI_VECTOR);
         let return_addr = self.regs.pc;
         self.regs.pc = target;
@@ -972,6 +995,7 @@ impl CPU {
             return;
         }
 
+        self.interrupt.interrupt_now();
         let target = self.read_w(IRQ_VECTOR);
         let return_addr = self.regs.pc;
         self.regs.pc = target;
@@ -1131,6 +1155,10 @@ impl CPU {
             return;
         }
 
+        if self.interrupt.next_interrupt == 0 {
+            self.update_next_interrupt();
+        }
+
         if self.apu.requested_run_cycle() <= self.cycle {
             self.run_apu();
         }
@@ -1139,15 +1167,21 @@ impl CPU {
             self.run_ppu();
         }
 
-        self.trace();
-        self.stack_dump();
-        let opcode: u8 = self.load_incr_pc();
-        self.incr_cycle(CYCLE_TABLE[opcode as usize]);
-        decode_opcode!(opcode, self);
+        if self.regs.pc >= 0x4020 && cfg!(feature="jit") {
+            unsafe { (*self.dispatcher.get()).jump(self) }
+        }
+        else {
+            self.trace();
+            self.stack_dump();
+            let opcode: u8 = self.load_incr_pc();
+            self.incr_cycle(CYCLE_TABLE[opcode as usize]);
+            decode_opcode!(opcode, self);
+        }
     }
 
     fn run_apu(&mut self) {
         let irq = self.apu.run_to(self.cycle);
+        self.update_next_interrupt();
         if let IrqInterrupt::IRQ = irq {
             self.irq();
         }
@@ -1155,9 +1189,17 @@ impl CPU {
 
     fn run_ppu(&mut self) {
         let nmi = self.ppu.run_to(self.cycle);
+        self.update_next_interrupt();
         if let StepResult::NMI = nmi {
             self.nmi();
         }
+    }
+
+    fn update_next_interrupt(&mut self) {
+        self.interrupt.next_interrupt = ::std::cmp::min(
+            self.ppu.requested_run_cycle(),
+            self.apu.requested_run_cycle()
+        );
     }
 
     fn dma_transfer(&mut self, page: u8) {
@@ -1182,21 +1224,6 @@ impl CPU {
     pub fn cycle(&self) -> u64 {
         self.cycle
     }
-
-    #[cfg(feature="cputrace")]
-    pub fn get_x(&self) -> u8 {
-        self.regs.x
-    }
-
-    #[cfg(feature="cputrace")]
-    pub fn get_y(&self) -> u8 {
-        self.regs.y
-    }
-
-    #[cfg(feature="cputrace")]
-    pub fn get_pc(&self) -> u16 {
-        self.regs.pc
-    }
 }
 
 #[cfg(test)]
@@ -1209,6 +1236,7 @@ mod tests {
     use io::DummyIO;
     use audio::DummyAudioOut;
     use memory::MemSegment;
+    use cpu::dispatcher::Dispatcher;
 
     fn create_test_cpu() -> CPU {
         let path_buf = ::std::path::PathBuf::new();
@@ -1220,7 +1248,8 @@ mod tests {
         let ppu = ::ppu::PPU::new(cart.clone(), Box::new(DummyScreen::default()));
         let apu = ::apu::APU::new(Box::new(DummyAudioOut));
         let io = DummyIO::new();
-        CPU::new(ppu, apu, Box::new(io), cart)
+        let dispatcher = Rc::new(UnsafeCell::new(Dispatcher::new()));
+        CPU::new(ppu, apu, Box::new(io), cart, dispatcher)
     }
 
     #[test]
