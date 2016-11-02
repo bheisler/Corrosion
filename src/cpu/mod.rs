@@ -324,10 +324,6 @@ use cpu::dispatcher::Dispatcher;
 #[cfg(feature="disasm")]
 use cpu::disasm::Disassembler;
 
-#[cfg(any(feature="function_disasm", feature="jit"))]
-use cpu::nes_analyst::Analyst;
-
-
 /// The number of cycles that each machine operation takes. Indexed by opcode
 /// number.
 /// Copied from `FCEUX` & `SprocketNES`.
@@ -485,7 +481,7 @@ impl MemSegment for CPU {
                 self.io.read(idx)
             }
             0x6000...0x7FFF => unsafe { (*self.cart.get()).prg_ram_read(idx) },
-            0x4020...0xFFFF => unsafe { (*self.cart.get()).prg_rom_read(idx).read(idx) },
+            0x4020...0x5FFF | 0x8000...0xFFFF => unsafe { (*self.cart.get()).prg_rom_read(idx).read(idx) },
             x => invalid_address!(x),
         }
 
@@ -514,7 +510,7 @@ impl MemSegment for CPU {
                 }
             }
             0x6000...0x7FFF => unsafe { (*self.cart.get()).prg_ram_write(idx, val) },
-            0x4020...0xFFFF => unsafe { (*self.cart.get()).prg_rom_write(idx, val).write(idx, val) },
+            0x4020...0x5FFF | 0x8000...0xFFFF => unsafe { (*self.cart.get()).prg_rom_write(idx, val).write(idx, val) },
             x => invalid_address!(x),
         }
     }

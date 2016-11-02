@@ -1,4 +1,5 @@
 #![allow(unneeded_field_pattern)]
+#![allow(private_in_public)]
 
 use cpu::CPU;
 use cpu::Registers;
@@ -23,13 +24,17 @@ const BREAK : u8 = 0b0001_0000;
 const OVERFLOW: u8 = 0b0100_0000;
 const SIGN: u8 = 0b1000_0000;
 
+const HIGH_BIT: u8 = 0b1000_0000;
+const LOW_BIT: u8 = 0b0000_0001;
+
 pub struct ExecutableBlock {
     offset: AssemblyOffset,
     buffer: ExecutableBuffer,
 }
 
 impl ExecutableBlock {
-    pub fn call(&self, cpu: *mut CPU) {
+    pub fn call(&self, cpu: &mut CPU) {
+        let cpu : *mut CPU = cpu as _;
         let offset = self.offset;
         let f: extern "win64" fn(*mut CPU, *mut [u8; 0x800]) -> () =
             unsafe { mem::transmute(self.buffer.ptr(offset)) };
@@ -429,11 +434,11 @@ impl<'a> Compiler<'a> {
             //Calculate the overflow flag
             ; mov al, n_a
             ; xor al, [rsp]
-            ; test al, 0x80
+            ; test al, BYTE HIGH_BIT as _
             ; jnz >clear_overflow
             ; mov al, n_a
             ; xor al, arg
-            ; test al, 0x80
+            ; test al, BYTE HIGH_BIT as _
             ; jz >clear_overflow
             ; or n_p, OVERFLOW as _
             ; jmp >next
@@ -573,7 +578,7 @@ impl<'a> Compiler<'a> {
     fn asl<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
             ;; mode.read_to_arg(self, false)
-            ; test arg, BYTE 0x80
+            ; test arg, BYTE HIGH_BIT as _
             ; jz >clear_carry
             ; or n_p, CARRY as _
             ; jmp >next
@@ -593,10 +598,10 @@ impl<'a> Compiler<'a> {
             ; shr arg, BYTE 1
             ; test n_p, CARRY as _
             ; jz >next
-            ; or arg, BYTE 0x80
+            ; or arg, BYTE HIGH_BIT as _
             ; next:
 
-            ; test al, BYTE 0x01
+            ; test al, BYTE LOW_BIT as _
             ; jz >clear_carry
             ; or n_p, CARRY as _
             ; jmp >next
@@ -616,10 +621,10 @@ impl<'a> Compiler<'a> {
             ; shl arg, BYTE 1
             ; test n_p, CARRY as _
             ; jz >next
-            ; or arg, BYTE 0x01
+            ; or arg, BYTE LOW_BIT as _
             ; next:
 
-            ; test al, BYTE 0x80
+            ; test al, BYTE HIGH_BIT as _
             ; jz >clear_carry
             ; or n_p, CARRY as _
             ; jmp >next
@@ -717,7 +722,7 @@ impl<'a> Compiler<'a> {
             ;; epilogue!(self)
         }
     }
-    fn unsupported(&mut self, opcode: u8) {
+    fn unsupported(&mut self, _: u8) {
         epilogue!(self);
     }
 
@@ -1040,7 +1045,7 @@ impl<'a> Compiler<'a> {
             Some(label) => label,
             None => {
                 let label = self.asm.new_dynamic_label();
-                self.branch_targets.insert( address, label.clone());
+                self.branch_targets.insert(address, label);
                 label
             },
         }

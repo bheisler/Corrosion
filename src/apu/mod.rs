@@ -18,6 +18,7 @@ use apu::dmc::*;
 
 pub type Sample = i16;
 
+#[allow(zero_prefixed_literal)]
 static NTSC_TICK_LENGTH_TABLE: [[u64; 6]; 2] = [[7459, 7456, 7458, 7458, 7458, 0000],
                                                 [0001, 7458, 7456, 7458, 7458, 7452]];
 

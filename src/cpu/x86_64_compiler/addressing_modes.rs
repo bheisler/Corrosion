@@ -1,6 +1,8 @@
+#![allow(private_in_public)]
+
 use cpu::CPU;
 use cpu::Registers;
-use dynasmrt::{AssemblyOffset, DynasmApi, DynasmLabelApi, ExecutableBuffer};
+use dynasmrt::{DynasmApi, DynasmLabelApi};
 use memory::MemSegment;
 use super::Compiler;
 
@@ -112,7 +114,6 @@ impl AddressingMode for ZeroPageAddressingMode {
         }
     }
     fn write_from_arg(&self, comp: &mut Compiler) {
-        let offset = self.addr as usize;
         dynasm!{comp.asm
             ; mov [ram + self.addr as _], arg
         }
@@ -167,7 +168,7 @@ struct AbsoluteAddressingMode {
 }
 impl AddressingMode for AbsoluteAddressingMode {
     fn read_to_arg(&self, comp: &mut Compiler, _: bool) {
-        if (self.addr < 0x2000) {
+        if self.addr < 0x2000 {
             let ram_address = self.addr % 0x800;
             dynasm!{comp.asm
                 ; mov arg, [ram + ram_address as _]
@@ -181,7 +182,7 @@ impl AddressingMode for AbsoluteAddressingMode {
     }
 
     fn write_from_arg(&self, comp: &mut Compiler) {
-        if (self.addr < 0x2000) {
+        if self.addr < 0x2000 {
             let ram_address = self.addr % 0x800;
             dynasm!{comp.asm
                 ; mov [ram + ram_address as _], arg
@@ -220,7 +221,7 @@ impl AbsoluteXAddressingMode {
 impl AddressingMode for AbsoluteXAddressingMode {
     fn read_to_arg(&self, comp: &mut Compiler, tick_cycle: bool) {
         // adding X might make it step outside of RAM
-        if (self.addr < 0x1F00) {
+        if self.addr < 0x1F00 {
             let ram_address = self.addr % 0x800;
             dynasm!{comp.asm
                 ; mov rcx, ram_address as _
@@ -240,7 +241,7 @@ impl AddressingMode for AbsoluteXAddressingMode {
 
     fn write_from_arg(&self, comp: &mut Compiler) {
         // adding X might make it step outside of RAM
-        if (self.addr < 0x1F00) {
+        if self.addr < 0x1F00 {
             let ram_address = self.addr % 0x800;
             dynasm!{comp.asm
                     ; mov rcx, ram_address as _
@@ -282,7 +283,7 @@ impl AbsoluteYAddressingMode {
 impl AddressingMode for AbsoluteYAddressingMode {
     fn read_to_arg(&self, comp: &mut Compiler, tick_cycle: bool) {
         // adding Y might make it step outside of RAM
-        if (self.addr < 0x1F00) {
+        if self.addr < 0x1F00 {
             let ram_address = self.addr % 0x800;
             dynasm!{comp.asm
                 ; mov rcx, ram_address as _
@@ -302,7 +303,7 @@ impl AddressingMode for AbsoluteYAddressingMode {
 
     fn write_from_arg(&self, comp: &mut Compiler) {
         // adding Y might make it step outside of RAM
-        if (self.addr < 0x1F00) {
+        if self.addr < 0x1F00 {
             let ram_address = self.addr % 0x800;
             dynasm!{comp.asm
                     ; mov rcx, ram_address as _

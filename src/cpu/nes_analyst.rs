@@ -45,10 +45,6 @@ impl<'a> Analyst<'a> {
         }
     }
 
-    pub fn find_exit_point(mut self, entry_point: u16) -> u16 {
-        self.analyze(entry_point).exit_point
-    }
-
     pub fn analyze(mut self, entry_point: u16) -> BlockAnalysis {
         self.entry_point = entry_point;
         self.pc = entry_point;
@@ -86,7 +82,7 @@ impl<'a> Analyst<'a> {
             }
         }
 
-        for addr in invalid_instrs.iter() {
+        for addr in &invalid_instrs {
             self.instructions.remove(addr);
         }
     }
@@ -282,13 +278,9 @@ impl<'a> Analyst<'a> {
         val
     }
 
-    fn get_current_instr_analysis(&mut self) -> &mut InstructionAnalysis {
-        let temp = self.current_instruction;
-        self.get_instr_analysis(temp)
-    }
-
     fn get_instr_analysis(&mut self, addr: u16) -> &mut InstructionAnalysis {
-        self.instructions.entry(addr).or_insert(Default::default())
+        let default: InstructionAnalysis = Default::default();
+        self.instructions.entry(addr).or_insert(default)
     }
 
     fn read_w_incr_pc(&mut self) -> u16 {

@@ -35,13 +35,7 @@ struct Block {
 #[cfg(feature="jit")]
 impl Block {
     fn overlaps_with(&self, start: usize, end: usize) -> bool {
-        if (self.end_addr as usize) < start {
-            false
-        } else if (self.start_addr as usize) >= end {
-            false
-        } else {
-            true
-        }
+        (self.start_addr as usize) < end || (self.end_addr as usize) >= start
     }
 }
 
@@ -53,21 +47,22 @@ fn disasm_function(cpu: &mut CPU, addr: u16) {
 #[cfg(not(feature="function_disasm"))]
 fn disasm_function(_: &mut CPU, _: u16) {}
 
+impl Default for Dispatcher {
+    fn default() -> Dispatcher {
+        Dispatcher::new()
+    }
+}
+
 #[cfg(feature="jit")]
 impl Dispatcher {
     pub fn new() -> Dispatcher {
-        unsafe {
-            use std::ptr;
-            use std::mem;
-
-            let mut table: Vec<Option<Block>> = vec![];
-            table.reserve_exact(0x10000);
-            for _ in 0..0x10000 {
-                table.push(None);
-            }
-
-            Dispatcher { table: table.into_boxed_slice() }
+        let mut table: Vec<Option<Block>> = vec![];
+        table.reserve_exact(0x10000);
+        for _ in 0..0x10000 {
+            table.push(None);
         }
+
+        Dispatcher { table: table.into_boxed_slice() }
     }
 
     fn put(&mut self, start_addr: u16, end_addr: u16, code: ExecutableBlock) -> &Block {
@@ -83,7 +78,7 @@ impl Dispatcher {
     pub fn jump(&mut self, cpu: &mut CPU) {
         let addr = cpu.regs.pc;
         let executable = &self.get_block(addr, cpu).code;
-        executable.call(cpu as *mut CPU);
+        executable.call(cpu);
     }
 
     fn get_block(&mut self, addr: u16, cpu: &mut CPU) -> &Block {
