@@ -1151,7 +1151,7 @@ impl CPU {
             return;
         }
 
-        if self.interrupt.next_interrupt == 0 {
+        if self.cycle >= self.interrupt.next_interrupt {
             self.update_next_interrupt();
         }
 

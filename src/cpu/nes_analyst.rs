@@ -45,6 +45,11 @@ impl<'a> Analyst<'a> {
         }
     }
 
+    #[cfg(feature="function_disasm")]
+    pub fn find_exit_point(mut self, entry_point: u16) -> u16 {
+        self.analyze(entry_point).exit_point
+    }
+
     pub fn analyze(mut self, entry_point: u16) -> BlockAnalysis {
         self.entry_point = entry_point;
         self.pc = entry_point;
