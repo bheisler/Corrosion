@@ -1,7 +1,7 @@
-use memory::MemSegment;
 use cart::Cart;
-use std::rc::Rc;
+use memory::MemSegment;
 use std::cell::UnsafeCell;
+use std::rc::Rc;
 use super::Color;
 use super::TilePattern;
 
@@ -53,7 +53,7 @@ impl PPUMemory {
     }
 
     #[cfg(not(feature="vectorize"))]
-    pub fn read_palette(&mut self, idx: super::PaletteIndex) -> Color {
+    pub fn read_palette(&self, idx: super::PaletteIndex) -> Color {
         self.palette[idx.to_index()]
     }
 
@@ -132,10 +132,10 @@ impl MemSegment for PPUMemory {
 
 #[cfg(test)]
 mod tests {
-    use memory::MemSegment;
-    use ppu::tests::*;
-    use ppu::{Color, PPU};
     use cart::ScreenMode;
+    use memory::MemSegment;
+    use ppu::{Color, PPU};
+    use ppu::tests::*;
 
     #[test]
     fn ppu_can_read_write_palette() {

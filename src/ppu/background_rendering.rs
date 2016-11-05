@@ -1,12 +1,13 @@
-use super::PaletteIndex;
-use super::TilePattern;
-use super::SCREEN_BUFFER_SIZE;
-use super::SCREEN_WIDTH;
-use super::SCREEN_HEIGHT;
-use super::ppu_reg::PPUReg;
-use super::ppu_memory::PPUMemory;
+
 use memory::MemSegment;
 use std::cmp;
+use super::PaletteIndex;
+use super::SCREEN_BUFFER_SIZE;
+use super::SCREEN_HEIGHT;
+use super::SCREEN_WIDTH;
+use super::TilePattern;
+use super::ppu_memory::PPUMemory;
+use super::ppu_reg::PPUReg;
 
 const TILES_PER_LINE: usize = 34;
 
@@ -250,7 +251,7 @@ impl BackgroundRenderer {
         let scanline = px_y as usize;
         let tile = (px_x / 8) as usize;
         let tile_id = self.idx[scanline][tile];
-        let attr = self.attr[scanline][tile];
+        let attr = TileAttribute::new(self.attr[scanline][tile]);
         let scrolled_x = px_x as u16 + reg.get_scroll_x() as u16;
         let scrolled_y = px_y as u16 + reg.get_scroll_y() as u16;
         let palette = attr.get_palette(scrolled_x, scrolled_y);

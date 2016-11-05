@@ -64,7 +64,12 @@ const TRANSPARENT: PaletteIndex = PaletteIndex{ addr: 0x00 };
 
 impl PaletteIndex {
     pub fn from_packed(addr: u8) -> PaletteIndex {
-        PaletteIndex{ addr: addr }
+        if addr & 0x03 == 0 {
+            PaletteIndex{ addr: 0 }
+        }
+        else {
+            PaletteIndex{ addr: addr }
+        }
     }
 
     pub fn from_unpacked( set: PaletteSet,

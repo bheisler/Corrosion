@@ -1,13 +1,13 @@
 use memory::MemSegment;
+use std::cmp;
 use super::PaletteIndex;
 use super::PaletteSet;
-use super::TilePattern;
 use super::SCREEN_BUFFER_SIZE;
-use super::SCREEN_WIDTH;
 use super::SCREEN_HEIGHT;
-use super::ppu_reg::PPUReg;
+use super::SCREEN_WIDTH;
+use super::TilePattern;
 use super::ppu_memory::PPUMemory;
-use std::cmp;
+use super::ppu_reg::PPUReg;
 
 bitflags! {
     flags OAMAttr : u8 {
@@ -219,11 +219,7 @@ impl Default for SpriteRenderer {
 
 fn get_fine_scroll(size: u16, screen_dist: u16, sprite_dist: u16, flip: bool) -> u16 {
     let scroll = screen_dist - sprite_dist;
-    if flip {
-        (size - 1) - scroll
-    } else {
-        scroll
-    }
+    if flip { (size - 1) - scroll } else { scroll }
 }
 
 impl SpriteRenderer {
@@ -317,9 +313,10 @@ impl SpriteRenderer {
     #[cfg(feature="mousepick")]
     pub fn mouse_pick(&self, px_x: i32, px_y: i32) {
         let scanline = px_y as usize;
-        let pixel = px_x as u8;
+        let pixel = px_x as u16;
         for sprite in &self.secondary_oam[scanline] {
-            if sprite.x <= pixel && pixel <= (sprite.x + 8) {
+            let spr_x = sprite.x as u16;
+            if spr_x <= pixel && pixel <= (spr_x + 8) {
                 println!("{:?}", sprite);
             }
         }
