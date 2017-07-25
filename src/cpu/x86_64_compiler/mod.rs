@@ -1,26 +1,26 @@
 #![allow(unneeded_field_pattern)]
 #![allow(private_in_public)]
 
+use self::addressing_modes::NoTickMode;
 use cpu::CPU;
-use cpu::Registers;
+use cpu::CYCLE_TABLE;
+use cpu::IRQ_VECTOR;
 use cpu::JitInterrupt;
+use cpu::Registers;
 use cpu::nes_analyst::Analyst;
 use cpu::nes_analyst::BlockAnalysis;
 use cpu::nes_analyst::InstructionAnalysis;
-use cpu::IRQ_VECTOR;
-use cpu::CYCLE_TABLE;
-use std::mem;
-use memory::MemSegment;
-use std::collections::HashMap;
-use self::addressing_modes::NoTickMode;
 
 use dynasmrt::{AssemblyOffset, DynasmApi, DynasmLabelApi, ExecutableBuffer, DynamicLabel};
+use memory::MemSegment;
+use std::collections::HashMap;
+use std::mem;
 
 const CARRY: u8 = 0b0000_0001;
 const ZERO: u8 = 0b0000_0010;
 const SUPPRESS_IRQ: u8 = 0b0000_0100;
 const DECIMAL: u8 = 0b0000_1000;
-const BREAK : u8 = 0b0001_0000;
+const BREAK: u8 = 0b0001_0000;
 const OVERFLOW: u8 = 0b0100_0000;
 const SIGN: u8 = 0b1000_0000;
 
@@ -34,7 +34,7 @@ pub struct ExecutableBlock {
 
 impl ExecutableBlock {
     pub fn call(&self, cpu: &mut CPU) {
-        let cpu : *mut CPU = cpu as _;
+        let cpu: *mut CPU = cpu as _;
         let offset = self.offset;
         let f: extern "win64" fn(*mut CPU, *mut [u8; 0x800]) -> () =
             unsafe { mem::transmute(self.buffer.ptr(offset)) };
@@ -49,14 +49,8 @@ pub fn compile(addr: u16, cpu: &mut CPU) -> (u16, ExecutableBlock) {
     (end_addr, Compiler::new(cpu, analysis).compile_block())
 }
 
-macro_rules! unimplemented {
-    ($opcode:ident) => {
-        panic!(stringify!(Unknown or unimplemented operation $opcode));
-    };
-}
-
-//rcx and sub-sections thereof are the general-purpose scratch register.
-//Sometimes r8 and rax are used as scratch registers as well
+// rcx and sub-sections thereof are the general-purpose scratch register.
+// Sometimes r8 and rax are used as scratch registers as well
 dynasm!(this
     ; .alias cpu, rbx
     ; .alias ram, rdx
@@ -108,7 +102,7 @@ macro_rules! store_registers {
     }};
 }
 
-#[cfg(feature="cputrace")]
+#[cfg(feature = "cputrace")]
 macro_rules! call_trace {
     ($this:ident) => {dynasm!($this.asm
         ; mov n_pc, WORD $this.pc as _
@@ -133,12 +127,12 @@ macro_rules! call_trace {
     );};
 }
 
-#[cfg(not(feature="cputrace"))]
+#[cfg(not(feature = "cputrace"))]
 macro_rules! call_trace {
     ($this:ident) => {};
 }
 
-#[cfg(feature="cputrace")]
+#[cfg(feature = "cputrace")]
 pub extern "win64" fn trace(cpu: *mut CPU) {
     unsafe { (*cpu).trace() }
 }
@@ -208,7 +202,7 @@ mod addressing_modes;
 use self::addressing_modes::AddressingMode;
 
 struct Compiler<'a> {
-    asm: ::dynasmrt::Assembler,
+    asm: ::dynasmrt::x64::Assembler,
     cpu: &'a mut CPU,
     analysis: BlockAnalysis,
 
@@ -222,7 +216,7 @@ impl<'a> Compiler<'a> {
     fn new(cpu: &'a mut CPU, analysis: BlockAnalysis) -> Compiler<'a> {
         let entry_point = analysis.entry_point;
         Compiler {
-            asm: ::dynasmrt::Assembler::new(),
+            asm: ::dynasmrt::x64::Assembler::new(),
             cpu: cpu,
 
             pc: entry_point,
@@ -663,9 +657,8 @@ impl<'a> Compiler<'a> {
                 ; mov ah, BYTE [ram + hi_addr as _]
                 ; mov n_pc, ax
             }
-        }
-        else {
-            self.jmpi_slow( lo_addr, hi_addr );
+        } else {
+            self.jmpi_slow(lo_addr, hi_addr);
         }
         epilogue!(self);
     }
@@ -802,15 +795,15 @@ impl<'a> Compiler<'a> {
         }
 
         if self.analysis.instructions.contains_key(&target) {
-            //Target is an instruction in this block
+            // Target is an instruction in this block
             let target_label = self.get_dynamic_label(target);
             dynasm!{self.asm
                 ; jmp =>target_label
             }
-        }
-        else {
-            //Target may be before this block, or misaligned with the instructions in this block.
-            //Either way, safest to treat it as a conditional JMP.
+        } else {
+            // Target may be before this block, or misaligned with the instructions in this
+            // block.
+            // Either way, safest to treat it as a conditional JMP.
             dynasm!{self.asm
                 ; mov n_pc, target as _
                 ;; epilogue!{self}
@@ -955,38 +948,38 @@ impl<'a> Compiler<'a> {
         }
     }
     fn dcp<M: AddressingMode>(&mut self, mode: M) {
-        let mode = NoTickMode{ mode: mode };
+        let mode = NoTickMode { mode: mode };
         self.dec(mode);
         self.cmp(mode);
     }
     fn isc<M: AddressingMode>(&mut self, mode: M) {
-        let mode = NoTickMode{ mode: mode };
+        let mode = NoTickMode { mode: mode };
         self.inc(mode);
         self.sbc(mode);
     }
     fn slo<M: AddressingMode>(&mut self, mode: M) {
-        let mode = NoTickMode{ mode: mode };
+        let mode = NoTickMode { mode: mode };
         self.asl(mode);
         self.ora(mode);
     }
     fn rla<M: AddressingMode>(&mut self, mode: M) {
-        let mode = NoTickMode{ mode: mode };
+        let mode = NoTickMode { mode: mode };
         self.rol(mode);
         self.and(mode);
     }
     fn sre<M: AddressingMode>(&mut self, mode: M) {
-        let mode = NoTickMode{ mode: mode };
+        let mode = NoTickMode { mode: mode };
         self.lsr(mode);
         self.eor(mode);
     }
     fn rra<M: AddressingMode>(&mut self, mode: M) {
-        let mode = NoTickMode{ mode: mode };
+        let mode = NoTickMode { mode: mode };
         self.ror(mode);
         self.adc(mode);
     }
     fn kil(&mut self) {
         dynasm!{self.asm
-            ; mov cpu => CPU.halted, BYTE true as _
+            ; mov BYTE cpu => CPU.halted, BYTE true as _
             ;; epilogue!(self)
         }
     }
@@ -1002,7 +995,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn relative_addr(&self, disp: u8) -> u16 {
-        let disp = (disp as i8) as i16; //We want to sign-extend here.
+        let disp = (disp as i8) as i16; // We want to sign-extend here.
         let pc = self.pc as i16;
         pc.wrapping_add(disp) as u16
     }
@@ -1020,8 +1013,9 @@ impl<'a> Compiler<'a> {
 
     fn get_current_instr_analysis(&mut self) -> &InstructionAnalysis {
         let temp = self.current_instruction;
-        //There will always be an instruction for the current PC unless something went horribly
-        //wrong.
+        // There will always be an instruction for the current PC unless something went
+        // horribly
+        // wrong.
         self.analysis.instructions.get(&temp).unwrap()
     }
 
@@ -1047,7 +1041,7 @@ impl<'a> Compiler<'a> {
                 let label = self.asm.new_dynamic_label();
                 self.branch_targets.insert(address, label);
                 label
-            },
+            }
         }
     }
 }

@@ -75,7 +75,8 @@ impl<'a> Screen for SDLScreen<'a> {
 
         self.renderer.copy(&self.texture,
                            None,
-                           Some(Rect::new(0, 0, SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32)));
+                           Some(Rect::new(0, 0, SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32)))
+                           .unwrap();
         self.renderer.present();
     }
 }

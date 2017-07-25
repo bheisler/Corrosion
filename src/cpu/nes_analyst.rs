@@ -45,8 +45,8 @@ impl<'a> Analyst<'a> {
         }
     }
 
-    #[cfg(feature="function_disasm")]
-    pub fn find_exit_point(mut self, entry_point: u16) -> u16 {
+    #[cfg(feature = "function_disasm")]
+    pub fn find_exit_point(self, entry_point: u16) -> u16 {
         self.analyze(entry_point).exit_point
     }
 
@@ -271,7 +271,7 @@ impl<'a> Analyst<'a> {
     }
 
     fn relative_addr(&self, disp: u8) -> u16 {
-        let disp = (disp as i8) as i16; //We want to sign-extend here.
+        let disp = (disp as i8) as i16; // We want to sign-extend here.
         let pc = self.pc as i16;
         pc.wrapping_add(disp) as u16
     }

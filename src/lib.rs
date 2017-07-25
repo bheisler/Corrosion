@@ -3,7 +3,6 @@
 #![feature(asm)]
 #![feature(naked_functions)]
 
-#![plugin(clippy)]
 #![plugin(dynasm)]
 
 #![allow(unused_features)]
@@ -11,8 +10,7 @@
 #![allow(new_without_default)]
 #![allow(match_same_arms)]
 
-#[cfg(feature="jit")]
-#[macro_use]
+#[cfg(feature = "jit")]
 extern crate dynasmrt;
 
 #[macro_use]
@@ -25,7 +23,7 @@ pub extern crate sdl2;
 extern crate blip_buf;
 extern crate memmap;
 
-#[cfg(feature="vectorize")]
+#[cfg(feature = "vectorize")]
 extern crate simd;
 
 pub mod cart;
@@ -43,15 +41,15 @@ mod util;
 #[cfg(test)]
 mod tests;
 
+use apu::APU;
 use cart::Cart;
 use cpu::CPU;
-use apu::APU;
-use ppu::PPU;
 use io::IO;
+use ppu::PPU;
+use std::cell::RefCell;
+use std::cell::UnsafeCell;
 
 use std::rc::Rc;
-use std::cell::UnsafeCell;
-use std::cell::RefCell;
 
 pub struct EmulatorBuilder {
     pub cart: Cart,
@@ -72,7 +70,11 @@ impl EmulatorBuilder {
         }
     }
 
-    pub fn new_sdl(cart: Cart, sdl: &sdl2::Sdl, event_pump: &Rc<RefCell<sdl2::EventPump>>) -> EmulatorBuilder {
+    pub fn new_sdl(
+        cart: Cart,
+        sdl: &sdl2::Sdl,
+        event_pump: &Rc<RefCell<sdl2::EventPump>>,
+    ) -> EmulatorBuilder {
         EmulatorBuilder {
             cart: cart,
 
@@ -91,7 +93,7 @@ impl EmulatorBuilder {
         let mut cpu = CPU::new(ppu, apu, self.io, cart, dispatcher);
         cpu.init();
 
-        Emulator{ cpu: cpu }
+        Emulator { cpu: cpu }
     }
 }
 
@@ -108,7 +110,7 @@ impl Emulator {
         self.cpu.halted()
     }
 
-    #[cfg(feature="mousepick")]
+    #[cfg(feature = "mousepick")]
     pub fn mouse_pick(&self, px_x: i32, px_y: i32) {
         self.cpu.ppu.mouse_pick(px_x, px_y);
     }

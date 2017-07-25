@@ -16,13 +16,12 @@ jit = ["dynasmrt"]
 [dependencies]
 bitflags = "0.7"
 quick-error = "1.1"
-sdl2 = "0.23"
+sdl2 = "0.25"
 blip_buf = "0.1.4"
 memmap = "0.4"
-clippy = "0.0.92"
 simd = { git = "https://github.com/huonw/simd", optional = true }
-dynasm = { version = "0.0.4" }
-dynasmrt = { version = "0.0.4", optional = true }
+dynasm = { version = "0.1.1" }
+dynasmrt = { version = "0.1.1", optional = true }
 
 [dev-dependencies]
 sha1 = "0.2"

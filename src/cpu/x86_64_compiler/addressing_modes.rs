@@ -1,10 +1,10 @@
 #![allow(private_in_public)]
 
+use super::Compiler;
 use cpu::CPU;
 use cpu::Registers;
 use dynasmrt::{DynasmApi, DynasmLabelApi};
 use memory::MemSegment;
-use super::Compiler;
 
 pub extern "win64" fn read_memory(cpu: *mut CPU, addr: u16) -> u8 {
     unsafe { (*cpu).read(addr) }
@@ -90,7 +90,7 @@ pub trait AddressingMode: Copy {
 }
 
 #[derive(Debug, Copy, Clone)]
-struct ImmediateAddressingMode;
+pub struct ImmediateAddressingMode;
 impl AddressingMode for ImmediateAddressingMode {
     fn read_to_arg(&self, comp: &mut Compiler, _: bool) {
         let imm_arg = comp.read_incr_pc() as i8;
@@ -104,7 +104,7 @@ impl AddressingMode for ImmediateAddressingMode {
 }
 
 #[derive(Debug, Copy, Clone)]
-struct ZeroPageAddressingMode {
+pub struct ZeroPageAddressingMode {
     addr: u8,
 }
 impl AddressingMode for ZeroPageAddressingMode {
@@ -121,7 +121,7 @@ impl AddressingMode for ZeroPageAddressingMode {
 }
 
 #[derive(Debug, Copy, Clone)]
-struct ZeroPageXAddressingMode {
+pub struct ZeroPageXAddressingMode {
     addr: u8,
 }
 impl AddressingMode for ZeroPageXAddressingMode {
@@ -142,7 +142,7 @@ impl AddressingMode for ZeroPageXAddressingMode {
 }
 
 #[derive(Debug, Copy, Clone)]
-struct ZeroPageYAddressingMode {
+pub struct ZeroPageYAddressingMode {
     addr: u8,
 }
 impl AddressingMode for ZeroPageYAddressingMode {
@@ -163,7 +163,7 @@ impl AddressingMode for ZeroPageYAddressingMode {
 }
 
 #[derive(Debug, Copy, Clone)]
-struct AbsoluteAddressingMode {
+pub struct AbsoluteAddressingMode {
     addr: u16,
 }
 impl AddressingMode for AbsoluteAddressingMode {
@@ -197,7 +197,7 @@ impl AddressingMode for AbsoluteAddressingMode {
 }
 
 #[derive(Debug, Copy, Clone)]
-struct AbsoluteXAddressingMode {
+pub struct AbsoluteXAddressingMode {
     addr: u16,
 }
 impl AbsoluteXAddressingMode {
@@ -259,7 +259,7 @@ impl AddressingMode for AbsoluteXAddressingMode {
 }
 
 #[derive(Debug, Copy, Clone)]
-struct AbsoluteYAddressingMode {
+pub struct AbsoluteYAddressingMode {
     addr: u16,
 }
 impl AbsoluteYAddressingMode {
@@ -321,7 +321,7 @@ impl AddressingMode for AbsoluteYAddressingMode {
 }
 
 #[derive(Debug, Copy, Clone)]
-struct AccumulatorAddressingMode;
+pub struct AccumulatorAddressingMode;
 impl AddressingMode for AccumulatorAddressingMode {
     fn read_to_arg(&self, comp: &mut Compiler, _: bool) {
         dynasm!{comp.asm
@@ -336,7 +336,7 @@ impl AddressingMode for AccumulatorAddressingMode {
 }
 
 #[derive(Debug, Copy, Clone)]
-struct IndirectXAddressingMode {
+pub struct IndirectXAddressingMode {
     addr: u8,
 }
 impl IndirectXAddressingMode {
@@ -368,7 +368,7 @@ impl AddressingMode for IndirectXAddressingMode {
 }
 
 #[derive(Debug, Copy, Clone)]
-struct IndirectYAddressingMode {
+pub struct IndirectYAddressingMode {
     addr: u8,
 }
 impl IndirectYAddressingMode {
