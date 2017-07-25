@@ -19,11 +19,7 @@ impl PPUCtrl {
     }
 
     pub fn vram_addr_step(&self) -> u16 {
-        if self.bits & 0b0000_0100 != 0 {
-            32
-        } else {
-            1
-        }
+        if self.bits & 0b0000_0100 != 0 { 32 } else { 1 }
     }
 
     pub fn background_table(&self) -> u16 {
@@ -51,30 +47,26 @@ impl PPUCtrl {
     }
 
     pub fn sprite_height(&self) -> u16 {
-        if self.tall_sprites() {
-            16
-        } else {
-            8
-        }
+        if self.tall_sprites() { 16 } else { 8 }
     }
 }
 
 bitflags! {
-    pub flags PPUMask : u8 {
+    pub struct PPUMask : u8 {
         #[allow(dead_code)]
-        const GREY =    0b0000_0001, //Greyscale
+        const GREY =    0b0000_0001; //Greyscale
         #[allow(dead_code)]
-        const S_BCK_L = 0b0000_0010, //Show background in the leftmost 8 pixels
+        const S_BCK_L = 0b0000_0010; //Show background in the leftmost 8 pixels
         #[allow(dead_code)]
-        const S_SPR_L = 0b0000_0100, //Show sprites in the leftmost 8 pixels
-        const S_BCK =   0b0000_1000, //Show background
-        const S_SPR =   0b0001_0000, //Show sprites
+        const S_SPR_L = 0b0000_0100; //Show sprites in the leftmost 8 pixels
+        const S_BCK =   0b0000_1000; //Show background
+        const S_SPR =   0b0001_0000; //Show sprites
         #[allow(dead_code)]
-        const EM_R =    0b0010_0000, //Emphasize Red
+        const EM_R =    0b0010_0000; //Emphasize Red
         #[allow(dead_code)]
-        const EM_G =    0b0100_0000, //Emphasize Green
+        const EM_G =    0b0100_0000; //Emphasize Green
         #[allow(dead_code)]
-        const EM_B =    0b1000_0000, //Emphasize Blue
+        const EM_B =    0b1000_0000; //Emphasize Blue
     }
 }
 
@@ -85,10 +77,10 @@ impl PPUMask {
 }
 
 bitflags! {
-    pub flags PPUStat : u8 {
-        const VBLANK =          0b1000_0000, //Currently in the vertical blank interval
-        const SPRITE_0 =        0b0100_0000, //Sprite 0 hit
-        const SPRITE_OVERFLOW = 0b0010_0000, //Greater than 8 sprites on current scanline
+    pub struct PPUStat : u8 {
+        const VBLANK =          0b1000_0000; //Currently in the vertical blank interval
+        const SPRITE_0 =        0b0100_0000; //Sprite 0 hit
+        const SPRITE_OVERFLOW = 0b0010_0000; //Greater than 8 sprites on current scanline
     }
 }
 
@@ -323,11 +315,10 @@ mod tests {
     fn ppustat_is_read_only_register() {
         assert_register_ignores_writes(0x2002, &|ref ppu| ppu.reg.ppustat.bits);
         assert_writing_register_fills_latch(0x2002);
-        assert_register_is_readable(0x2002,
-                                    &|ref mut ppu, val| {
-                                        ppu.reg.ppustat = PPUStat::from_bits_truncate(val);
-                                        ppu.reg.dyn_latch = val;
-                                    });
+        assert_register_is_readable(0x2002, &|ref mut ppu, val| {
+            ppu.reg.ppustat = PPUStat::from_bits_truncate(val);
+            ppu.reg.dyn_latch = val;
+        });
     }
 
     #[test]

@@ -1,5 +1,4 @@
-use memory::MemSegment;
-use std::cmp;
+
 use super::PaletteIndex;
 use super::PaletteSet;
 use super::SCREEN_BUFFER_SIZE;
@@ -8,14 +7,16 @@ use super::SCREEN_WIDTH;
 use super::TilePattern;
 use super::ppu_memory::PPUMemory;
 use super::ppu_reg::PPUReg;
+use memory::MemSegment;
+use std::cmp;
 
 bitflags! {
-    flags OAMAttr : u8 {
-        const FLIP_VERT = 0b1000_0000,
-        const FLIP_HORZ = 0b0100_0000,
-        const BEHIND    = 0b0010_0000,
+    struct OAMAttr : u8 {
+        const FLIP_VERT = 0b1000_0000;
+        const FLIP_HORZ = 0b0100_0000;
+        const BEHIND    = 0b0010_0000;
         #[allow(dead_code)]
-        const PALETTE   = 0b0000_0011,
+        const PALETTE   = 0b0000_0011;
     }
 }
 
@@ -42,17 +43,20 @@ impl OAMEntry {
         self.y <= scanline && scanline < self.y + sprite_height
     }
 
-    fn build_details(&self,
-                     idx: usize,
-                     sl: u16,
-                     reg: &PPUReg,
-                     mem: &mut PPUMemory)
-                     -> SpriteDetails {
+    fn build_details(
+        &self,
+        idx: usize,
+        sl: u16,
+        reg: &PPUReg,
+        mem: &mut PPUMemory,
+    ) -> SpriteDetails {
         let tile_id = self.tile;
-        let fine_y_scroll = get_fine_scroll(reg.ppuctrl.sprite_height(),
-                                            sl,
-                                            self.y,
-                                            self.attr.contains(FLIP_VERT));
+        let fine_y_scroll = get_fine_scroll(
+            reg.ppuctrl.sprite_height(),
+            sl,
+            self.y,
+            self.attr.contains(FLIP_VERT),
+        );
         let tile = if reg.ppuctrl.tall_sprites() {
             let tile_table = (tile_id as u16 & 0b0000_0001) << 12;
             let mut tile_id = tile_id & 0b1111_1110;
@@ -131,36 +135,44 @@ impl SpriteDetails {
         PaletteIndex::from_unpacked(PaletteSet::Sprite, attr.palette(), color_id)
     }
 
-    #[allow(needless_range_loop)] //false positive - we need x to get the pixels.
-    fn hit_test(&self,
-                original_pixel_line: &[PaletteIndex; SCREEN_WIDTH],
-                reg: &mut PPUReg,
-                intersection: &Interval) {
+    #[allow(needless_range_loop)] // false positive - we need x to get the pixels.
+    fn hit_test(
+        &self,
+        original_pixel_line: &[PaletteIndex; SCREEN_WIDTH],
+        reg: &mut PPUReg,
+        intersection: &Interval,
+    ) {
         for x in intersection.start..(intersection.end) {
             if !original_pixel_line[x].is_transparent() &&
-               !self.do_get_pixel(x as u16).is_transparent() {
+                !self.do_get_pixel(x as u16).is_transparent()
+            {
                 reg.ppustat.insert(::ppu::ppu_reg::SPRITE_0);
                 return;
             }
         }
     }
 
-    fn blit(&self,
-            original_pixel_line: &[PaletteIndex; SCREEN_WIDTH],
-            pixel_line: &mut [PaletteIndex],
-            intersection: &Interval) {
+    fn blit(
+        &self,
+        original_pixel_line: &[PaletteIndex; SCREEN_WIDTH],
+        pixel_line: &mut [PaletteIndex],
+        intersection: &Interval,
+    ) {
         for x in intersection.start..(intersection.end) {
-            pixel_line[x] = self.mix(original_pixel_line[x],
-                                     pixel_line[x],
-                                     self.do_get_pixel(x as u16))
+            pixel_line[x] = self.mix(
+                original_pixel_line[x],
+                pixel_line[x],
+                self.do_get_pixel(x as u16),
+            )
         }
     }
 
-    fn mix(&self,
-           background: PaletteIndex,
-           current: PaletteIndex,
-           sprite: PaletteIndex)
-           -> PaletteIndex {
+    fn mix(
+        &self,
+        background: PaletteIndex,
+        current: PaletteIndex,
+        sprite: PaletteIndex,
+    ) -> PaletteIndex {
         if !sprite.is_transparent() && !self.attr.priority() && !background.is_transparent() {
             background
         } else if current.is_transparent() || (self.attr.priority() && !sprite.is_transparent()) {
@@ -223,11 +235,13 @@ fn get_fine_scroll(size: u16, screen_dist: u16, sprite_dist: u16, flip: bool) ->
 }
 
 impl SpriteRenderer {
-    pub fn render(&mut self,
-                  buffer: &mut [PaletteIndex; SCREEN_BUFFER_SIZE],
-                  reg: &mut PPUReg,
-                  start: usize,
-                  stop: usize) {
+    pub fn render(
+        &mut self,
+        buffer: &mut [PaletteIndex; SCREEN_BUFFER_SIZE],
+        reg: &mut PPUReg,
+        start: usize,
+        stop: usize,
+    ) {
         self.draw(buffer, reg, start, stop)
     }
 
@@ -251,11 +265,13 @@ impl SpriteRenderer {
         }
     }
 
-    fn draw(&mut self,
-            buffer: &mut [PaletteIndex; SCREEN_BUFFER_SIZE],
-            reg: &mut PPUReg,
-            start: usize,
-            stop: usize) {
+    fn draw(
+        &mut self,
+        buffer: &mut [PaletteIndex; SCREEN_BUFFER_SIZE],
+        reg: &mut PPUReg,
+        start: usize,
+        stop: usize,
+    ) {
         let mut current_scanline = start / SCREEN_WIDTH;
         let mut last_scanline_boundary = current_scanline * SCREEN_WIDTH;
         let next_scanline = current_scanline + 1;
@@ -266,13 +282,15 @@ impl SpriteRenderer {
             let segment_start = current - last_scanline_boundary;
             let segment_end = cmp::min(next_scanline_boundary, stop) - last_scanline_boundary;
 
-            self.render_segment(buffer,
-                                reg,
-                                current_scanline,
-                                last_scanline_boundary,
-                                next_scanline_boundary,
-                                segment_start,
-                                segment_end);
+            self.render_segment(
+                buffer,
+                reg,
+                current_scanline,
+                last_scanline_boundary,
+                next_scanline_boundary,
+                segment_start,
+                segment_end,
+            );
             current_scanline += 1;
             last_scanline_boundary = next_scanline_boundary;
             current = next_scanline_boundary;
@@ -281,14 +299,16 @@ impl SpriteRenderer {
     }
 
     #[allow(too_many_arguments)]
-    fn render_segment(&mut self,
-                      buffer: &mut [PaletteIndex; SCREEN_BUFFER_SIZE],
-                      reg: &mut PPUReg,
-                      scanline: usize,
-                      line_start: usize,
-                      line_stop: usize,
-                      start: usize,
-                      stop: usize) {
+    fn render_segment(
+        &mut self,
+        buffer: &mut [PaletteIndex; SCREEN_BUFFER_SIZE],
+        reg: &mut PPUReg,
+        scanline: usize,
+        line_start: usize,
+        line_stop: usize,
+        start: usize,
+        stop: usize,
+    ) {
         let oam_line = &self.secondary_oam[scanline];
         let pixel_line = &mut buffer[line_start..line_stop];
 
@@ -310,7 +330,7 @@ impl SpriteRenderer {
         }
     }
 
-    #[cfg(feature="mousepick")]
+    #[cfg(feature = "mousepick")]
     pub fn mouse_pick(&self, px_x: i32, px_y: i32) {
         let scanline = px_y as usize;
         let pixel = px_x as u16;
@@ -342,9 +362,9 @@ impl MemSegment for SpriteRenderer {
 
 #[cfg(tests)]
 mod tests {
+    use super::*;
     use memory::MemSegment;
     use ppu::PPU;
-    use super::*;
 
     #[test]
     fn reading_oamdata_uses_oamaddr_as_index_into_oam() {

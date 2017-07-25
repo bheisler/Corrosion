@@ -5,39 +5,37 @@ mod triangle;
 mod noise;
 mod dmc;
 
-use audio::AudioOut;
-use std::cmp;
-use cpu::IrqInterrupt;
-use std::cell::RefCell;
-use std::rc::Rc;
 use apu::buffer::*;
+use apu::dmc::*;
+use apu::noise::*;
 use apu::square::*;
 use apu::triangle::*;
-use apu::noise::*;
-use apu::dmc::*;
+use audio::AudioOut;
+use cpu::IrqInterrupt;
+use std::cell::RefCell;
+use std::cmp;
+use std::rc::Rc;
 
 pub type Sample = i16;
 
 #[allow(zero_prefixed_literal)]
-static NTSC_TICK_LENGTH_TABLE: [[u64; 6]; 2] = [[7459, 7456, 7458, 7458, 7458, 0000],
-                                                [0001, 7458, 7456, 7458, 7458, 7452]];
+static NTSC_TICK_LENGTH_TABLE: [[u64; 6]; 2] = [
+    [7459, 7456, 7458, 7458, 7458, 0000],
+    [0001, 7458, 7456, 7458, 7458, 7452],
+];
 
 const VOLUME_MULT: i32 = ((32767i16 / 16) / 3) as i32;
 
 bitflags! {
-    flags Frame : u8 {
-        const MODE = 0b1000_0000, //0 = 4-step, 1 = 5-step
-        const SUPPRESS_IRQ  = 0b0100_0000, //0 = disabled, 1 = enabled
+    struct Frame : u8 {
+        const MODE = 0b1000_0000; //0 = 4-step, 1 = 5-step
+        const SUPPRESS_IRQ  = 0b0100_0000; //0 = disabled, 1 = enabled
     }
 }
 
 impl Frame {
     fn mode(&self) -> usize {
-        if self.contains(MODE) {
-            1
-        } else {
-            0
-        }
+        if self.contains(MODE) { 1 } else { 0 }
     }
 }
 
@@ -216,8 +214,7 @@ impl APU {
         if !self.frame.contains(SUPPRESS_IRQ) {
             self.irq_requested = true;
             IrqInterrupt::IRQ
-        }
-        else {
+        } else {
             IrqInterrupt::None
         }
     }
@@ -244,17 +241,17 @@ impl APU {
         let samples: Vec<Sample> = {
             let iter1 = square_buf.read().iter().cloned();
             let iter2 = tnd_buf.read().iter().cloned();
-            iter1.zip(iter2)
-                .map(|(s, t)| s + t)
-                .collect()
+            iter1.zip(iter2).map(|(s, t)| s + t).collect()
         };
         self.next_transfer_cyc = cpu_cyc + square_buf.clocks_needed() as u64;
         self.device.play(&samples);
     }
 
-    ///Returns the cycle number representing the next time the CPU should run the APU.
-    ///Min of the next APU IRQ, the next DMC IRQ, and the next tick time. When the CPU cycle reaches
-    ///this number, the CPU must run the APU.
+    /// Returns the cycle number representing the next time the CPU should run
+    /// the APU.
+    /// Min of the next APU IRQ, the next DMC IRQ, and the next tick time. When
+    /// the CPU cycle reaches
+    /// this number, the CPU must run the APU.
     pub fn requested_run_cycle(&self) -> u64 {
         // In practice, the next tick time should cover the APU IRQ as well, since the
         // IRQ happens on tick boundaries. The DMC IRQ isn't implemented yet.

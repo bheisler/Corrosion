@@ -406,15 +406,15 @@ impl AddressingMode for MemoryAddressingMode {
 }
 
 bitflags! {
-    pub flags Status : u8 {
-        const C = 0b0000_0001, //Carry flag
-        const Z = 0b0000_0010, //Zero flag
-        const I = 0b0000_0100, //Suppress IRQ
-        const D = 0b0000_1000, //Enable BCD mode
-        const B = 0b0001_0000, //BRK
-        const U = 0b0010_0000, //Unused, should always be 1
-        const V = 0b0100_0000, //Overflow
-        const S = 0b1000_0000, //Sign
+    pub struct Status : u8 {
+        const C = 0b0000_0001; //Carry flag
+        const Z = 0b0000_0010; //Zero flag
+        const I = 0b0000_0100; //Suppress IRQ
+        const D = 0b0000_1000; //Enable BCD mode
+        const B = 0b0001_0000; //BRK
+        const U = 0b0010_0000; //Unused, should always be 1
+        const V = 0b0100_0000; //Overflow
+        const S = 0b1000_0000; //Sign
     }
 }
 
