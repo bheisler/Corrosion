@@ -126,8 +126,8 @@ pub struct PPU {
     ppu_mem: PPUMemory,
 
     screen: Box<Screen>,
-    palette_buffer: [PaletteIndex; SCREEN_BUFFER_SIZE],
-    screen_buffer: [Color; SCREEN_BUFFER_SIZE],
+    palette_buffer: Box<[PaletteIndex; SCREEN_BUFFER_SIZE]>,
+    screen_buffer: Box<[Color; SCREEN_BUFFER_SIZE]>,
 
     sprite_data: SpriteRenderer,
     background_data: BackgroundRenderer,
@@ -195,8 +195,8 @@ impl PPU {
             ppudata_read_buffer: 0,
             ppu_mem: PPUMemory::new(cart),
 
-            palette_buffer: [TRANSPARENT; SCREEN_BUFFER_SIZE],
-            screen_buffer: [Color::from_bits_truncate(0x00); SCREEN_BUFFER_SIZE],
+            palette_buffer: Box::new([TRANSPARENT; SCREEN_BUFFER_SIZE]),
+            screen_buffer: Box::new([Color::from_bits_truncate(0x00); SCREEN_BUFFER_SIZE]),
             screen: screen,
 
             sprite_data: Default::default(),
