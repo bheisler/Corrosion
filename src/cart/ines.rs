@@ -1,6 +1,6 @@
 use cart::*;
+use nom::{IResult, be_u8, ErrorKind};
 
-const MAGIC_NUMBERS: [u8; 4] = [0x4Eu8, 0x45u8, 0x53u8, 0x1Au8];
 pub const PRG_ROM_PAGE_SIZE: usize = 16384;
 pub const CHR_ROM_PAGE_SIZE: usize = 8192;
 pub const PRG_RAM_PAGE_SIZE: usize = 8192;
@@ -34,63 +34,52 @@ fn get_bit(byte: u8, bit_num: u8) -> bool {
     !((byte & 1u8 << bit_num) == 0)
 }
 
-fn read_byte(iter: &mut Iterator<Item = u8>) -> Result<u8, RomError> {
-    match iter.next() {
-        Some(val) => Ok(val),
-        None => Err(RomError::UnexpectedEndOfData),
+fn validate_not_nes2(input: &[u8], flags_7: u8) -> IResult<&[u8], ()> {
+    if (flags_7 & 0b0000_1100) == 0b0000_1000 {
+        IResult::Error(error_code!(ErrorKind::Custom(1)))
+    }
+    else {
+        IResult::Done(input, ())
     }
 }
 
-fn read_bytes(iter: &mut Iterator<Item = u8>, bytes: usize) -> Result<Vec<u8>, RomError> {
-    let buf: Vec<_> = iter.take(bytes).collect();
-    if buf.len() < bytes {
-        Err(RomError::UnexpectedEndOfData)
-    } else {
-        Ok(buf)
-    }
+fn parse_rom(input: &[u8]) -> IResult<&[u8], Rom> {
+    do_parse!(input,
+        tag!(b"NES\x1A") >>
+        prg_pages: be_u8 >>
+        chr_pages: be_u8 >>
+        flags_6: be_u8 >>
+        flags_7: be_u8 >>
+        call!(validate_not_nes2, flags_7) >>
+        prg_ram_pages: be_u8 >>
+        flags_9: be_u8 >>
+        tag!(b"\x00\x00\x00\x00\x00\x00") >>
+        cond!((flags_6 & 0b0000_0100) != 0, take!(512)) >> //Skip the trainer if there is one
+        prg_rom: take!(prg_pages as usize * PRG_ROM_PAGE_SIZE) >>
+        chr_rom: take!(chr_pages as usize * CHR_ROM_PAGE_SIZE) >>
+        ( Rom {
+            flags6: flags_6,
+            flags7: flags_7,
+            flags9: flags_9,
+            prg_rom: prg_rom.into(),
+            chr_rom: chr_rom.into(),
+            prg_ram_size: if prg_ram_pages == 0 { PRG_RAM_PAGE_SIZE } else { prg_ram_pages as usize * PRG_RAM_PAGE_SIZE },
+        } )
+    )
 }
 
 impl Rom {
     /// Parse the given bytes as an iNES 1.0 header.
     /// NES 2.0 is not supported yet.
     pub fn parse(data: &[u8]) -> Result<Rom, RomError> {
-        let mut iter = data.iter().cloned();
-        if try!(read_bytes(&mut iter, 4)) != MAGIC_NUMBERS {
-            return Err(RomError::DamagedHeader);
+        match parse_rom(data) {
+            IResult::Done(_, rom) => Ok(rom),
+            IResult::Error(err) => match err {
+                ErrorKind::Custom(_) => Err(RomError::Nes2NotSupported),
+                _ => Err(RomError::DamagedHeader),
+            },
+            IResult::Incomplete(_) => Err(RomError::UnexpectedEndOfData),
         }
-        let prg_rom_pages = try!(read_byte(&mut iter));
-        let chr_rom_pages = try!(read_byte(&mut iter));
-        let flags6 = try!(read_byte(&mut iter));
-        let flags7 = try!(read_byte(&mut iter));
-
-        if (flags7 & 0b0000_1100u8) == 0b0000_1000u8 {
-            return Err(RomError::Nes2NotSupported);
-        }
-
-        let prg_ram_pages = match try!(read_byte(&mut iter)) {
-            0 => 1,
-            x => x,
-        };
-
-        let flags9 = try!(read_byte(&mut iter));
-
-        if try!(read_bytes(&mut iter, 6)) != vec![0u8; 6] {
-            return Err(RomError::DamagedHeader);
-        }
-
-        if get_bit(flags6, 2) {
-            // Discard trainer for now, can add support later if needed
-            let _ = try!(read_bytes(&mut iter, TRAINER_LENGTH));
-        };
-
-        Ok(Rom {
-            prg_rom: try!(read_bytes(&mut iter, PRG_ROM_PAGE_SIZE * prg_rom_pages as usize)),
-            chr_rom: try!(read_bytes(&mut iter, CHR_ROM_PAGE_SIZE * chr_rom_pages as usize)),
-            flags6: flags6,
-            flags7: flags7,
-            flags9: flags9,
-            prg_ram_size: PRG_RAM_PAGE_SIZE * prg_ram_pages as usize,
-        })
     }
 
     pub fn screen_mode(&self) -> ScreenMode {
@@ -133,7 +122,6 @@ impl Rom {
 mod tests {
     extern crate rand;
     use super::*;
-    use cart::*;
     use self::rand::{Rng, thread_rng};
 
     struct RomBuilder {
@@ -230,6 +218,15 @@ mod tests {
     #[test]
     fn parse_returns_failure_on_empty_input() {
         assert!(Rom::parse(&Vec::new()).err().unwrap() == RomError::UnexpectedEndOfData);
+    }
+
+    #[test]
+    fn parse_returns_failure_on_incorrect_magic_bytes() {
+        let mut builder = RomBuilder::new();
+        builder.set_prg_page_count(3);
+        let mut buf = builder.build();
+        buf[3] = b'0';
+        assert!(Rom::parse(&buf).err().unwrap() == RomError::DamagedHeader);
     }
 
     #[test]

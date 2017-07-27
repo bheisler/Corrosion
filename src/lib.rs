@@ -19,6 +19,9 @@ extern crate bitflags;
 #[macro_use]
 extern crate quick_error;
 
+#[macro_use]
+extern crate nom;
+
 pub extern crate sdl2;
 extern crate blip_buf;
 extern crate memmap;
