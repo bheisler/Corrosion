@@ -1,7 +1,5 @@
 #![macro_use]
 
-use Settings;
-
 pub const NMI_VECTOR: u16 = 0xFFFA;
 pub const RESET_VECTOR: u16 = 0xFFFC;
 pub const IRQ_VECTOR: u16 = 0xFFFE;
@@ -302,17 +300,18 @@ macro_rules! decode_opcode {
 #[cfg(feature="debug_features")]
 pub mod disasm;
 
-#[cfg(any(feature="debug_features", feature="jit"))]
+#[cfg(target_arch="x86_64")]
 mod nes_analyst;
 
-#[cfg(all(target_arch="x86_64", feature="jit"))]
+#[cfg(target_arch="x86_64")]
 pub mod x86_64_compiler;
 
-#[cfg(all(target_arch="x86_64", feature="jit"))]
+#[cfg(target_arch="x86_64")]
 pub use cpu::x86_64_compiler as compiler;
 
 pub mod dispatcher;
 
+use Settings;
 use memory::MemSegment;
 use ppu::StepResult;
 use ppu::PPU;
@@ -1154,7 +1153,7 @@ impl CPU {
             self.run_ppu();
         }
 
-        if self.regs.pc >= 0x4020 && cfg!(feature="jit") {
+        if self.regs.pc >= 0x4020 && self.settings.jit {
             unsafe { (*self.dispatcher.get()).jump(self) }
         }
         else {

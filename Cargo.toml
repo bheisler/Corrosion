@@ -4,9 +4,8 @@ version = "0.1.0"
 authors = ["Brook Heisler <redattack34@gmail.com>"]
 
 [features]
-default = ["jit"]
+default = []
 vectorize = ["simd"]
-jit = ["dynasmrt"]
 debug_features = []
 
 [dependencies]
@@ -16,8 +15,10 @@ sdl2 = "0.29"
 blip_buf = "0.1.4"
 memmap = "0.5"
 simd = { version = "0.2", optional = true }
-dynasm = { version = "0.1.1" }
-dynasmrt = { version = "0.1.1", optional = true }
+dynasm = "0.1.1"
+
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+dynasmrt = "0.1.1"
 
 [dependencies.nom]
 version = "3.2"

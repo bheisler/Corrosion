@@ -35,6 +35,8 @@ fn load_config() -> Config {
 fn make_emulator_settings(config: &Config) -> Settings {
     let defaults : Settings = Default::default();
     Settings {
+        jit: config.get_bool("jit").unwrap_or(defaults.jit),
+
         trace_cpu: config.get_bool("debug.trace_cpu").unwrap_or(defaults.trace_cpu),
         disassemble_functions: config.get_bool("debug.disassemble_functions").unwrap_or(defaults.disassemble_functions),
     }

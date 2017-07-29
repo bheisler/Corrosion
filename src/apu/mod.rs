@@ -241,7 +241,7 @@ impl APU {
         let samples: Vec<Sample> = {
             let iter1 = square_buf.read().iter().cloned();
             let iter2 = tnd_buf.read().iter().cloned();
-            iter1.zip(iter2).map(|(s, t)| s + t).collect()
+            iter1.zip(iter2).map(|(s, t)| s.saturating_add(t)).collect()
         };
         self.next_transfer_cyc = cpu_cyc + square_buf.clocks_needed() as u64;
         self.device.play(&samples);

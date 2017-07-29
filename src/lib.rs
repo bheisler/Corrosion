@@ -10,7 +10,7 @@
 #![allow(new_without_default)]
 #![allow(match_same_arms)]
 
-#[cfg(feature = "jit")]
+#[cfg(target_arch = "x86_64")]
 extern crate dynasmrt;
 
 #[macro_use]
@@ -56,6 +56,8 @@ use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct Settings {
+    pub jit: bool,
+
     // The following will only be used if compiled with the debug_features feature
     pub trace_cpu: bool,
     pub disassemble_functions: bool,
@@ -64,6 +66,8 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Settings {
         Settings {
+            jit: false,
+
             trace_cpu: false,
             disassemble_functions: false,
         }
@@ -114,14 +118,7 @@ impl EmulatorBuilder {
         let cart: Rc<UnsafeCell<Cart>> = Rc::new(UnsafeCell::new(self.cart));
         let ppu = PPU::new(cart.clone(), self.screen);
         let apu = APU::new(self.audio_out);
-        let mut cpu = CPU::new(
-            settings,
-            ppu,
-            apu,
-            self.io,
-            cart,
-            dispatcher,
-        );
+        let mut cpu = CPU::new(settings, ppu, apu, self.io, cart, dispatcher);
         cpu.init();
 
         Emulator { cpu: cpu }

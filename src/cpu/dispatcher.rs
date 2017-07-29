@@ -1,14 +1,14 @@
 use cpu::CPU;
 
-#[cfg(feature = "jit")]
+#[cfg(target_arch = "x86_64")]
 use cpu::compiler;
 
-#[cfg(feature = "jit")]
+#[cfg(target_arch = "x86_64")]
 use cpu::compiler::ExecutableBlock;
 
-#[cfg(not(feature = "jit"))]
+#[cfg(not(target_arch = "x86_64"))]
 pub struct Dispatcher {}
-#[cfg(not(feature = "jit"))]
+#[cfg(not(target_arch = "x86_64"))]
 impl Dispatcher {
     pub fn new() -> Dispatcher {
         Dispatcher {}
@@ -19,18 +19,18 @@ impl Dispatcher {
     pub fn dirty(&mut self, _: usize, _: usize) {}
 }
 
-#[cfg(feature = "jit")]
+#[cfg(target_arch = "x86_64")]
 pub struct Dispatcher {
     table: Box<[Option<Block>]>,
 }
-#[cfg(feature = "jit")]
+#[cfg(target_arch = "x86_64")]
 struct Block {
     dirty: bool,
     start_addr: u16,
     end_addr: u16,
     code: ExecutableBlock,
 }
-#[cfg(feature = "jit")]
+#[cfg(target_arch = "x86_64")]
 impl Block {
     fn overlaps_with(&self, start: usize, end: usize) -> bool {
         (self.start_addr as usize) < end || (self.end_addr as usize) >= start
@@ -52,7 +52,7 @@ impl Default for Dispatcher {
     }
 }
 
-#[cfg(feature = "jit")]
+#[cfg(target_arch = "x86_64")]
 impl Dispatcher {
     pub fn new() -> Dispatcher {
         let mut table: Vec<Option<Block>> = vec![];
