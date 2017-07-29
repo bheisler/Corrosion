@@ -1,5 +1,6 @@
 use cart::*;
 use nom::{IResult, be_u8, ErrorKind};
+use std::convert::Into;
 
 pub const PRG_ROM_PAGE_SIZE: usize = 16384;
 pub const CHR_ROM_PAGE_SIZE: usize = 8192;
@@ -21,21 +22,81 @@ quick_error! {
     }
 }
 
+bitflags! {
+    struct Flags6: u8 {
+        const VERTICAL =    0b0000_0001;
+        const SRAM =        0b0000_0010;
+        const TRAINER =     0b0000_0100;
+        const FOUR_SCREEN = 0b0000_1000;
+    }
+}
+
+impl Into<ScreenMode> for Flags6 {
+    fn into(self) -> ScreenMode {
+        if self.contains(FOUR_SCREEN) {
+            ScreenMode::FourScreen
+        }
+        else if self.contains(VERTICAL) {
+            ScreenMode::Vertical
+        }
+        else {
+            ScreenMode::Horizontal
+        }
+    }
+}
+
+bitflags! {
+    struct Flags7: u8 {
+        const VS_UNISYSTEM =  0b0000_0001;
+        const PLAYCHOICE_10 = 0b0000_0010;
+        const NES_2 =         0b0000_1100;
+    }
+}
+
+impl Into<System> for Flags7 {
+    fn into(self) -> System {
+        if self.contains(VS_UNISYSTEM) {
+            System::Vs
+        }
+        else if self.contains(PLAYCHOICE_10) {
+            System::PC10
+        }
+        else {
+            System::NES
+        }
+    }
+}
+
+bitflags! {
+    struct Flags9: u8 {
+        const PAL = 0b0000_0001;
+    }
+}
+
+impl Into<TvFormat> for Flags9 {
+    fn into(self) -> TvFormat {
+        if self.contains(PAL) {
+            TvFormat::PAL
+        }
+        else {
+            TvFormat::NTSC
+        }
+    }
+}
+
 pub struct Rom {
-    flags6: u8,
-    flags7: u8,
-    flags9: u8,
+    mapper: u8,
+    screen_mode: ScreenMode,
+    sram: bool,
+    system: System,
+    tv_format: TvFormat,
     pub prg_rom: Vec<u8>,
     pub chr_rom: Vec<u8>,
     pub prg_ram_size: usize,
 }
 
-fn get_bit(byte: u8, bit_num: u8) -> bool {
-    !((byte & 1u8 << bit_num) == 0)
-}
-
-fn validate_not_nes2(input: &[u8], flags_7: u8) -> IResult<&[u8], ()> {
-    if (flags_7 & 0b0000_1100) == 0b0000_1000 {
+fn validate_not_nes2(input: &[u8], flags_7: Flags7) -> IResult<&[u8], ()> {
+    if (flags_7.bits() & 0b0000_1100) == 0b0000_1000 {
         IResult::Error(error_code!(ErrorKind::Custom(1)))
     }
     else {
@@ -48,19 +109,21 @@ fn parse_rom(input: &[u8]) -> IResult<&[u8], Rom> {
         tag!(b"NES\x1A") >>
         prg_pages: be_u8 >>
         chr_pages: be_u8 >>
-        flags_6: be_u8 >>
-        flags_7: be_u8 >>
-        call!(validate_not_nes2, flags_7) >>
+        flags_6: bits!(tuple!(take_bits!(u8, 4), map_opt!(take_bits!(u8, 4), Flags6::from_bits))) >>
+        flags_7: bits!(tuple!(take_bits!(u8, 4), map_opt!(take_bits!(u8, 4), Flags7::from_bits))) >>
+        call!(validate_not_nes2, flags_7.1) >>
         prg_ram_pages: be_u8 >>
-        flags_9: be_u8 >>
-        tag!(b"\x00\x00\x00\x00\x00\x00") >>
-        cond!((flags_6 & 0b0000_0100) != 0, take!(512)) >> //Skip the trainer if there is one
+        flags_9: map_opt!(be_u8, Flags9::from_bits) >>
+        tag!([0u8; 6]) >>
+        cond!(flags_6.1.contains(TRAINER), take!(TRAINER_LENGTH)) >> //Skip the trainer if there is one
         prg_rom: take!(prg_pages as usize * PRG_ROM_PAGE_SIZE) >>
         chr_rom: take!(chr_pages as usize * CHR_ROM_PAGE_SIZE) >>
         ( Rom {
-            flags6: flags_6,
-            flags7: flags_7,
-            flags9: flags_9,
+            mapper: (flags_7.0 << 4) | flags_6.0,
+            screen_mode: flags_6.1.into(),
+            sram: flags_6.1.contains(SRAM),
+            system: flags_7.1.into(),
+            tv_format: flags_9.into(),
             prg_rom: prg_rom.into(),
             chr_rom: chr_rom.into(),
             prg_ram_size: if prg_ram_pages == 0 { PRG_RAM_PAGE_SIZE } else { prg_ram_pages as usize * PRG_RAM_PAGE_SIZE },
@@ -83,38 +146,23 @@ impl Rom {
     }
 
     pub fn screen_mode(&self) -> ScreenMode {
-        match self.flags6 & 0b0000_1001u8 {
-            0b0000_0000 => ScreenMode::Horizontal,
-            0b0000_0001 => ScreenMode::Vertical,
-            0b0000_1000 | 0b0000_1001 => ScreenMode::FourScreen,
-            _ => panic!("Math is broken!"),
-        }
+        self.screen_mode
     }
 
     pub fn sram(&self) -> bool {
-        get_bit(self.flags6, 1)
+        self.sram
     }
 
     pub fn system(&self) -> System {
-        if get_bit(self.flags7, 0) {
-            System::Vs
-        } else if get_bit(self.flags7, 1) {
-            System::PC10
-        } else {
-            System::NES
-        }
+        self.system
     }
 
     pub fn tv_system(&self) -> TvFormat {
-        if get_bit(self.flags9, 0) {
-            TvFormat::PAL
-        } else {
-            TvFormat::NTSC
-        }
+        self.tv_format
     }
 
     pub fn mapper(&self) -> u8 {
-        ((self.flags6 & 0xF0) >> 4) | (self.flags7 & 0xF0)
+        self.mapper
     }
 }
 
@@ -144,7 +192,7 @@ mod tests {
 
     impl RomBuilder {
         fn new() -> RomBuilder {
-            let mut header = vec![0x4Eu8, 0x45u8, 0x53u8, 0x1Au8];
+            let mut header = b"NES\x1A".to_vec();
             header.extend([0; 12].iter().cloned());
 
             RomBuilder {
@@ -258,7 +306,7 @@ mod tests {
         let mut builder = RomBuilder::new();
         assert_eq!(&builder.build_rom().prg_rom, &vec![]);
 
-        builder.set_prg_page_count(3);
+        builder.set_prg_page_count(4);
         assert_eq!(&builder.build_rom().prg_rom, &builder.prg_rom);
     }
 

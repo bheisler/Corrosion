@@ -19,7 +19,7 @@ quick-error = "1.2"
 sdl2 = "0.29"
 blip_buf = "0.1.4"
 memmap = "0.5"
-simd = { git = "https://github.com/huonw/simd", optional = true }
+simd = { version = "0.2", optional = true }
 dynasm = { version = "0.1.1" }
 dynasmrt = { version = "0.1.1", optional = true }
 
