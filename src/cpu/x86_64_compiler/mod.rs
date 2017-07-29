@@ -288,7 +288,11 @@ impl<'a> Compiler<'a> {
             ; mov rcx, rcx => JitInterrupt.next_interrupt
             ; cmp cyc, rcx
             ; jnae >next
-            ; mov n_pc, WORD self.pc as _
+            // If the next_interrupt is zero, assume that other code has already updated the
+            // program counter and don't overwrite it.
+            ; test rcx, rcx
+            ; mov rcx, WORD self.pc as _
+            ; cmovnz n_pc, cx
             ;; epilogue!(self)
             ; next:
         }

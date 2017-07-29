@@ -510,9 +510,19 @@ impl<'a> Disassembler<'a> {
             sl = -1;
         }
 
+        let stack: String = ((self.cpu.regs.sp.saturating_add(1))..0xFF)
+            .rev()
+            .map(|idx| self.read_safe(0x0100 | idx as u16))
+            .map(|byte| format!("{:02X}", byte))
+            .fold(None as Option<String>, |opt, right| match opt {
+                Some(left) => Some(left + " " + &right),
+                None => Some(right),
+            })
+            .unwrap_or("".into());
+
         println!(
             "{:04X}  {:9}{}{:30}  A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:3} \
-             SL:{}",
+             SL:{:3} Stack:{}",
             self.cpu.regs.pc,
             opcode
                 .bytes
@@ -533,7 +543,8 @@ impl<'a> Disassembler<'a> {
             self.cpu.regs.p.bits(),
             self.cpu.regs.sp,
             cyc,
-            sl
+            sl,
+            stack
         );
     }
 

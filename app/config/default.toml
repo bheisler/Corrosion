@@ -10,7 +10,7 @@ jit = true
 mousepick = false
 
 # Print to the console a detailed trace of every 6502 instruction executed by
-# the emulated CPU. Works in both JIT and regular mode.
+# the emulated CPU. Works in both JIT and interpreter mode.
 trace_cpu = false
 
 # Print to the console a disassembly of each block of 6502 code when it's compiled
