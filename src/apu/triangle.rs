@@ -1,8 +1,8 @@
 //! Contains structures used by the NES's triangle channel.
 
 use apu::Writable;
-use apu::components::*;
 use apu::buffer::Waveform;
+use apu::components::*;
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
 static TRIANGLE_VOLUME: [i16; 32] = [

@@ -1,13 +1,15 @@
 //! Contains structures used only by the NES's two square-wave channels.
 
 use apu::Writable;
-use apu::components::*;
 use apu::buffer::*;
+use apu::components::*;
 
-static SQUARE_DUTY_CYCLES: [[i16; 8]; 4] = [[0, 1, -1, 0, 0, 0, 0, 0],
-                                            [0, 1, 0, -1, 0, 0, 0, 0],
-                                            [0, 1, 0, 0, 0, -1, 0, 0],
-                                            [0, -1, 0, 1, 0, 0, 0, 0]];
+static SQUARE_DUTY_CYCLES: [[i16; 8]; 4] = [
+    [0, 1, -1, 0, 0, 0, 0, 0],
+    [0, 1, 0, -1, 0, 0, 0, 0],
+    [0, 1, 0, 0, 0, -1, 0, 0],
+    [0, -1, 0, 1, 0, 0, 0, 0],
+];
 
 /// Represents the frequency-sweep units used by the two square channels.
 struct Sweep {

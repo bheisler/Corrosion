@@ -1,9 +1,9 @@
 use ppu::{Color, SCREEN_BUFFER_SIZE, SCREEN_HEIGHT, SCREEN_WIDTH};
 use screen::Screen;
 use sdl2::{Sdl, VideoSubsystem};
-use sdl2::render::{Renderer, Texture};
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
+use sdl2::render::{Renderer, Texture};
 
 #[allow(dead_code)]
 pub struct SDLScreen<'a> {
@@ -18,21 +18,29 @@ impl<'a> SDLScreen<'a> {
     pub fn new(sdl_context: &Sdl) -> SDLScreen<'a> {
         let video_subsystem = sdl_context.video().unwrap();
 
-        let window = video_subsystem.window("Corrosion",
-                                            (SCREEN_WIDTH * SCALE) as u32,
-                                            (SCREEN_HEIGHT * SCALE) as u32)
-                                    .position_centered()
-                                    .opengl()
-                                    .build()
-                                    .unwrap();
+        let window = video_subsystem
+            .window(
+                "Corrosion",
+                (SCREEN_WIDTH * SCALE) as u32,
+                (SCREEN_HEIGHT * SCALE) as u32,
+            )
+            .position_centered()
+            .opengl()
+            .build()
+            .unwrap();
 
         let mut renderer = window.renderer().present_vsync().build().unwrap();
-        renderer.set_logical_size(SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32).unwrap();
+        renderer
+            .set_logical_size(SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32)
+            .unwrap();
 
-        let texture = renderer.create_texture_streaming(PixelFormatEnum::RGB24,
-                                                        SCREEN_WIDTH as u32,
-                                                        SCREEN_HEIGHT as u32)
-                              .unwrap();
+        let texture = renderer
+            .create_texture_streaming(
+                PixelFormatEnum::RGB24,
+                SCREEN_WIDTH as u32,
+                SCREEN_HEIGHT as u32,
+            )
+            .unwrap();
         SDLScreen {
             video: video_subsystem,
             renderer: renderer,
@@ -73,10 +81,13 @@ impl<'a> Screen for SDLScreen<'a> {
             })
             .unwrap();
 
-        self.renderer.copy(&self.texture,
-                           None,
-                           Some(Rect::new(0, 0, SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32)))
-                           .unwrap();
+        self.renderer
+            .copy(
+                &self.texture,
+                None,
+                Some(Rect::new(0, 0, SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32)),
+            )
+            .unwrap();
         self.renderer.present();
     }
 }

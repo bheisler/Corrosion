@@ -1,14 +1,12 @@
 extern crate sha1;
 
+use self::sha1::{Digest, Sha1};
 use ppu::{Color, SCREEN_BUFFER_SIZE};
 use screen::Screen;
-use self::sha1::{Digest, Sha1};
 use std::collections::HashMap;
 
 fn hash_screen(buf: &[Color; SCREEN_BUFFER_SIZE]) -> Digest {
-    let newbuf: Vec<u8> = buf.iter()
-        .map(|col: &Color| col.bits())
-        .collect();
+    let newbuf: Vec<u8> = buf.iter().map(|col: &Color| col.bits()).collect();
 
     let mut s = Sha1::new();
     s.update(&newbuf);
@@ -34,9 +32,11 @@ impl HashPrinter {
 
 impl Screen for HashPrinter {
     fn draw(&mut self, buf: &[Color; SCREEN_BUFFER_SIZE]) {
-        println!("Frame: {}, Hash: {}",
-                 self.frames,
-                 hash_screen(buf).to_string());
+        println!(
+            "Frame: {}, Hash: {}",
+            self.frames,
+            hash_screen(buf).to_string()
+        );
         self.frames += 1;
 
         self.delegate.draw(buf);
@@ -60,8 +60,10 @@ impl HashVerifier {
 impl Screen for HashVerifier {
     fn draw(&mut self, buf: &[Color; SCREEN_BUFFER_SIZE]) {
         if self.hashes.contains_key(&self.frames) {
-            assert_eq!(self.hashes.get(&self.frames).unwrap(),
-                       &hash_screen(buf).to_string());
+            assert_eq!(
+                self.hashes.get(&self.frames).unwrap(),
+                &hash_screen(buf).to_string()
+            );
         }
         self.frames += 1;
     }

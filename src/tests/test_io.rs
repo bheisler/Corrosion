@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use io::IO;
 
 use io::OPEN_BUS;
-use io::IO;
 use memory::MemSegment;
+use std::collections::HashMap;
 use util::ShiftRegister8;
 
 pub struct TestIO {
@@ -28,9 +28,14 @@ impl TestIO {
 }
 
 fn parse(string: &str) -> u8 {
-    string.char_indices()
-        .filter(|&(_, c)| c != '.')
-        .fold(0u8, |acc, (idx, _)| acc | 1u8 << (7 - idx))
+    string.char_indices().filter(|&(_, c)| c != '.').fold(
+        0u8,
+        |acc,
+         (idx,
+          _)| {
+            acc | 1u8 << (7 - idx)
+        },
+    )
 }
 
 impl MemSegment for TestIO {

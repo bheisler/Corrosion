@@ -29,15 +29,11 @@ pub struct Instruction {
 impl<'a> Disassembler<'a> {
     // Addressing modes
     fn immediate(&mut self) -> PartialInstruction {
-        PartialInstruction {
-            pattern: format!("$$$ #${:02X}", self.read_incr_pc()),
-        }
+        PartialInstruction { pattern: format!("$$$ #${:02X}", self.read_incr_pc()) }
     }
     fn absolute(&mut self) -> PartialInstruction {
         let arg = self.read_w_incr_pc();
-        PartialInstruction {
-            pattern: format!("$$$ ${:04X} = {:02X}", arg, self.read_safe(arg)),
-        }
+        PartialInstruction { pattern: format!("$$$ ${:04X} = {:02X}", arg, self.read_safe(arg)) }
     }
     fn absolute_x(&mut self) -> PartialInstruction {
         let arg = self.read_w_incr_pc();
@@ -124,9 +120,7 @@ impl<'a> Disassembler<'a> {
         }
     }
     fn accumulator(&mut self) -> PartialInstruction {
-        PartialInstruction {
-            pattern: format!("$$$ A"),
-        }
+        PartialInstruction { pattern: format!("$$$ A") }
     }
 
     fn read_safe_w_zero_page(&mut self, zp_idx: u8) -> u16 {
@@ -140,62 +134,42 @@ impl<'a> Disassembler<'a> {
 impl<'a> Disassembler<'a> {
     // Addressing modes
     fn immediate(&mut self) -> PartialInstruction {
-        PartialInstruction {
-            pattern: format!("$$$ #${:02X}", self.read_incr_pc()),
-        }
+        PartialInstruction { pattern: format!("$$$ #${:02X}", self.read_incr_pc()) }
     }
     fn absolute(&mut self) -> PartialInstruction {
         let arg = self.read_w_incr_pc();
-        PartialInstruction {
-            pattern: format!("$$$ ${:04X}", arg),
-        }
+        PartialInstruction { pattern: format!("$$$ ${:04X}", arg) }
     }
     fn absolute_x(&mut self) -> PartialInstruction {
         let arg = self.read_w_incr_pc();
-        PartialInstruction {
-            pattern: format!("$$$ ${:04X},X", arg),
-        }
+        PartialInstruction { pattern: format!("$$$ ${:04X},X", arg) }
     }
     fn absolute_y(&mut self) -> PartialInstruction {
         let arg = self.read_w_incr_pc();
-        PartialInstruction {
-            pattern: format!("$$$ ${:04X},Y", arg),
-        }
+        PartialInstruction { pattern: format!("$$$ ${:04X},Y", arg) }
     }
     fn zero_page(&mut self) -> PartialInstruction {
         let arg = self.read_incr_pc();
-        PartialInstruction {
-            pattern: format!("$$$ ${:02X}", arg),
-        }
+        PartialInstruction { pattern: format!("$$$ ${:02X}", arg) }
     }
     fn zero_page_x(&mut self) -> PartialInstruction {
         let arg = self.read_incr_pc();
-        PartialInstruction {
-            pattern: format!("$$$ ${:02X},X", arg),
-        }
+        PartialInstruction { pattern: format!("$$$ ${:02X},X", arg) }
     }
     fn zero_page_y(&mut self) -> PartialInstruction {
         let arg = self.read_incr_pc();
-        PartialInstruction {
-            pattern: format!("$$$ ${:02X},Y", arg),
-        }
+        PartialInstruction { pattern: format!("$$$ ${:02X},Y", arg) }
     }
     fn indirect_x(&mut self) -> PartialInstruction {
         let arg = self.read_incr_pc();
-        PartialInstruction {
-            pattern: format!("$$$ (${:02X},X)", arg),
-        }
+        PartialInstruction { pattern: format!("$$$ (${:02X},X)", arg) }
     }
     fn indirect_y(&mut self) -> PartialInstruction {
         let arg = self.read_incr_pc();
-        PartialInstruction {
-            pattern: format!("$$$ (${:02X}),Y", arg),
-        }
+        PartialInstruction { pattern: format!("$$$ (${:02X}),Y", arg) }
     }
     fn accumulator(&mut self) -> PartialInstruction {
-        PartialInstruction {
-            pattern: format!("$$$ A"),
-        }
+        PartialInstruction { pattern: format!("$$$ A") }
     }
 }
 
@@ -528,11 +502,9 @@ impl<'a> Disassembler<'a> {
                 .bytes
                 .iter()
                 .map(|byte| format!("{:02X}", byte))
-                .fold(None as Option<String>, |opt, right| {
-                    match opt {
-                        Some(left) => Some(left + " " + &right),
-                        None => Some(right),
-                    }
+                .fold(None as Option<String>, |opt, right| match opt {
+                    Some(left) => Some(left + " " + &right),
+                    None => Some(right),
                 })
                 .unwrap(),
             if opcode.unofficial { "*" } else { " " },
@@ -565,11 +537,9 @@ impl<'a> Disassembler<'a> {
                     .bytes
                     .iter()
                     .map(|byte| format!("{:02X}", byte))
-                    .fold(None as Option<String>, |opt, right| {
-                        match opt {
-                            Some(left) => Some(left + " " + &right),
-                            None => Some(right),
-                        }
+                    .fold(None as Option<String>, |opt, right| match opt {
+                        Some(left) => Some(left + " " + &right),
+                        None => Some(right),
                     })
                     .unwrap(),
                 if opcode.unofficial { "*" } else { " " },

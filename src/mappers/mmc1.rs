@@ -1,12 +1,12 @@
+use super::{Mapper, MapperParams};
+use super::bank::*;
+use super::battery::BatteryBackedRam;
+use super::volatile::VolatileRam;
 use cart::ScreenMode;
 use cpu::dispatcher::Dispatcher;
 use memory::MemSegment;
 use std::cell::UnsafeCell;
 use std::rc::Rc;
-use super::{Mapper, MapperParams};
-use super::bank::*;
-use super::battery::BatteryBackedRam;
-use super::volatile::VolatileRam;
 
 #[derive(Debug, Clone, PartialEq)]
 struct Ctrl {
@@ -45,14 +45,23 @@ impl MMC1 {
     fn update_mapping(&mut self) {
         match self.regs.control.mode {
             PrgMode::Switch32Kb => {
-                self.prg_rom.map_pages_linear(0..8, (self.regs.prg_bank & 0b0000_1110) * 8)
+                self.prg_rom.map_pages_linear(
+                    0..8,
+                    (self.regs.prg_bank & 0b0000_1110) * 8,
+                )
             }
             PrgMode::FixFirst => {
                 self.prg_rom.map_pages_linear(0..4, 0);
-                self.prg_rom.map_pages_linear(4..8, (self.regs.prg_bank & 0b0000_1111) * 4);
+                self.prg_rom.map_pages_linear(
+                    4..8,
+                    (self.regs.prg_bank & 0b0000_1111) * 4,
+                );
             }
             PrgMode::FixLast => {
-                self.prg_rom.map_pages_linear(0..4, (self.regs.prg_bank & 0b0000_1111) * 4);
+                self.prg_rom.map_pages_linear(
+                    0..4,
+                    (self.regs.prg_bank & 0b0000_1111) * 4,
+                );
                 let bank_count = self.prg_rom.bank_count();
                 self.prg_rom.map_pages_linear(4..8, bank_count - 4);
             }
@@ -112,7 +121,9 @@ pub fn new(params: MapperParams) -> Box<Mapper> {
     };
 
     let prg_ram: Box<MemSegment> = if params.has_battery_backed_ram {
-        Box::new(BatteryBackedRam::new(params.rom_path, params.prg_ram_size as u32).unwrap())
+        Box::new(
+            BatteryBackedRam::new(params.rom_path, params.prg_ram_size as u32).unwrap(),
+        )
     } else {
         Box::new(VolatileRam::new(params.prg_ram_size as usize))
     };

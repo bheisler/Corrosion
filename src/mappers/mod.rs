@@ -6,12 +6,12 @@ mod bank;
 mod mapper000;
 mod mmc1;
 
-use std::path::Path;
 use cart::ScreenMode;
 use cpu::dispatcher::Dispatcher;
-use std::cell::UnsafeCell;
-use std::rc::Rc;
 pub use mappers::bank::RomBank;
+use std::cell::UnsafeCell;
+use std::path::Path;
+use std::rc::Rc;
 
 static VERTICAL: [u16; 4] = [0x2000, 0x2400, 0x2000, 0x2400];
 static HORIZONTAL: [u16; 4] = [0x2000, 0x2000, 0x2400, 0x2400];

@@ -20,9 +20,7 @@ pub struct InstructionAnalysis {
 
 impl Default for InstructionAnalysis {
     fn default() -> InstructionAnalysis {
-        InstructionAnalysis {
-            is_branch_target: false,
-        }
+        InstructionAnalysis { is_branch_target: false }
     }
 }
 

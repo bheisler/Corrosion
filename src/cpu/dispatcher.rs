@@ -43,8 +43,7 @@ fn disasm_function(cpu: &mut CPU, addr: u16) {
 }
 
 #[cfg(not(feature = "debug_features"))]
-fn disasm_function(_: &mut CPU, _: u16) {
-}
+fn disasm_function(_: &mut CPU, _: u16) {}
 
 impl Default for Dispatcher {
     fn default() -> Dispatcher {
@@ -61,9 +60,7 @@ impl Dispatcher {
             table.push(None);
         }
 
-        Dispatcher {
-            table: table.into_boxed_slice(),
-        }
+        Dispatcher { table: table.into_boxed_slice() }
     }
 
     fn put(&mut self, start_addr: u16, end_addr: u16, code: ExecutableBlock) -> &Block {

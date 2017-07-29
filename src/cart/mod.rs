@@ -1,15 +1,15 @@
 pub mod ines;
 
-use std::io::prelude::*;
-use std::fs::File;
-use std::path::Path;
-use std::io;
-use cpu::dispatcher::Dispatcher;
-use std::cell::UnsafeCell;
-use std::rc::Rc;
 
 use cart::ines::{Rom, RomError};
+use cpu::dispatcher::Dispatcher;
 use mappers::{Mapper, MapperParams, RomBank};
+use std::cell::UnsafeCell;
+use std::fs::File;
+use std::io;
+use std::io::prelude::*;
+use std::path::Path;
+use std::rc::Rc;
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum ScreenMode {
@@ -69,7 +69,7 @@ impl Cart {
     }
     pub fn prg_ram_write(&mut self, idx: u16, val: u8) {
         self.mapper.prg_ram_write(idx, val)
-}
+    }
     pub fn chr_read(&mut self, idx: u16) -> u8 {
         self.mapper.chr_read(idx)
     }
@@ -115,7 +115,7 @@ impl Cart {
             rom_path: path,
 
             has_battery_backed_ram: sram,
-            mirroring_mode : screen_mode,
+            mirroring_mode: screen_mode,
         };
 
         let mapper = Mapper::new(mapper as u16, params);

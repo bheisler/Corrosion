@@ -1,22 +1,26 @@
 extern crate test;
 
+use self::test::Bencher;
 use std::collections::HashMap;
 use std::path::Path;
-use self::test::Bencher;
 use tests::test_io;
 
 #[bench]
 fn bench_sprite(b: &mut Bencher) {
-    run_benchmark(b,
-                  Path::new("nes-test-roms/other/SPRITE.NES"),
-                  HashMap::new());
+    run_benchmark(
+        b,
+        Path::new("nes-test-roms/other/SPRITE.NES"),
+        HashMap::new(),
+    );
 }
 
 #[bench]
 fn bench_blocks(b: &mut Bencher) {
-    run_benchmark(b,
-                  Path::new("nes-test-roms/other/BLOCKS.NES"),
-                  HashMap::new());
+    run_benchmark(
+        b,
+        Path::new("nes-test-roms/other/BLOCKS.NES"),
+        HashMap::new(),
+    );
 }
 
 fn run_benchmark(bencher: &mut Bencher, file_name: &Path, commands: HashMap<u32, &'static str>) {

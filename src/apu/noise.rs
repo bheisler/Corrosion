@@ -1,11 +1,27 @@
 //! Contains structures used by the NES's noise channel.
 
 use apu::Writable;
-use apu::components::*;
 use apu::buffer::*;
+use apu::components::*;
 
-static PERIOD_TABLE: [u16; 16] = [0x0004, 0x0008, 0x0010, 0x0020, 0x0040, 0x0060, 0x0080, 0x00A0,
-                                  0x00CA, 0x00FE, 0x017C, 0x01FC, 0x02FA, 0x03F8, 0x07F2, 0x0FE4];
+static PERIOD_TABLE: [u16; 16] = [
+    0x0004,
+    0x0008,
+    0x0010,
+    0x0020,
+    0x0040,
+    0x0060,
+    0x0080,
+    0x00A0,
+    0x00CA,
+    0x00FE,
+    0x017C,
+    0x01FC,
+    0x02FA,
+    0x03F8,
+    0x07F2,
+    0x0FE4,
+];
 
 struct LinearFeedbackShiftRegister {
     value: u16,
@@ -14,10 +30,7 @@ struct LinearFeedbackShiftRegister {
 
 impl LinearFeedbackShiftRegister {
     fn new() -> LinearFeedbackShiftRegister {
-        LinearFeedbackShiftRegister {
-            value: 1,
-            mode: 0,
-        }
+        LinearFeedbackShiftRegister { value: 1, mode: 0 }
     }
 
     fn shift(&mut self) -> bool {
@@ -86,11 +99,7 @@ impl Noise {
         let mut current_cyc = from_cyc;
         while let TimerClock::Clock = self.timer.run(&mut current_cyc, to_cyc) {
             let enabled = self.shifter.shift();
-            let amp = if enabled {
-                volume
-            } else {
-                0
-            };
+            let amp = if enabled { volume } else { 0 };
             self.waveform.set_amplitude(amp, current_cyc);
         }
     }

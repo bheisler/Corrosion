@@ -21,7 +21,7 @@ static LENGTH_TABLE: [u8; 32] = [
     0x20, 0x1E,
 ];
 
-///Represents the Length counter used by all NES sound channels except the DMC.
+/// Represents the Length counter used by all NES sound channels except the DMC.
 #[derive(Debug)]
 pub struct Length {
     halt_bit: usize,
@@ -52,11 +52,7 @@ impl Length {
     }
 
     pub fn active(&self) -> u8 {
-        if self.audible() {
-            1
-        } else {
-            0
-        }
+        if self.audible() { 1 } else { 0 }
     }
 
     pub fn set_enable(&mut self, enable: bool) {
@@ -76,7 +72,8 @@ impl Length {
     }
 }
 
-///Represents the Envelope Generator (volume setting) used by the pulse & noise channels.
+/// Represents the Envelope Generator (volume setting) used by the pulse &
+/// noise channels.
 #[derive(Debug)]
 pub struct Envelope {
     should_loop: bool,
@@ -138,7 +135,7 @@ pub enum TimerClock {
     NoClock,
 }
 
-///Represents the CPU-clock timers used by all of the NES channels.
+/// Represents the CPU-clock timers used by all of the NES channels.
 #[derive(Debug)]
 pub struct Timer {
     period: u16,
@@ -180,8 +177,9 @@ impl Timer {
         (self.period as u32 + 1) * self.divider
     }
 
-    ///Run the timer until the next clock, or until current_cyc reaches to_cycle.
-    ///Returns either Clock or NoClock depending on if it reached a clock or not.
+    /// Run the timer until the next clock, or until current_cyc reaches
+    /// to_cycle. Returns either Clock or NoClock depending on if it reached a
+    /// clock or not.
     pub fn run(&mut self, current_cyc: &mut u32, to_cyc: u32) -> TimerClock {
         let end_wavelen = *current_cyc + self.remaining;
 

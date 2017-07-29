@@ -1,13 +1,14 @@
-use sdl2::EventPump;
-use sdl2::keyboard::KeyboardState;
-use sdl2::keyboard::Scancode;
 
-use std::rc::Rc;
-use std::cell::RefCell;
 
 use io::IO;
 use io::OPEN_BUS;
 use memory::MemSegment;
+use sdl2::EventPump;
+use sdl2::keyboard::KeyboardState;
+use sdl2::keyboard::Scancode;
+use std::cell::RefCell;
+
+use std::rc::Rc;
 use util::ShiftRegister8;
 
 const A: u8 = 1;

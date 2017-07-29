@@ -1,11 +1,11 @@
 use super::AudioOut;
 use apu::Sample;
-use sdl2::Sdl;
 use sdl2::AudioSubsystem;
+use sdl2::Sdl;
 use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired};
+use std::cmp;
 use std::sync::{Condvar, Mutex};
 use std::sync::Arc;
-use std::cmp;
 
 const OUT_SAMPLE_RATE: i32 = 44100;
 const BUFFER_SIZE: usize = OUT_SAMPLE_RATE as usize / 15;
@@ -110,7 +110,8 @@ impl SDLAudioOut {
             samples: None,
         };
 
-        let device = audio_subsystem.open_playback(None, &desired_spec, |_| {
+        let device = audio_subsystem
+            .open_playback(None, &desired_spec, |_| {
                 BufferOut {
                     samples: [0; BUFFER_SIZE],
                     input_counter: 0,

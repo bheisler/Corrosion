@@ -1,4 +1,3 @@
-
 use super::Color;
 use super::TilePattern;
 use cart::Cart;

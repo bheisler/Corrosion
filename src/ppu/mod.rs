@@ -1,10 +1,10 @@
+use cart::Cart;
 use memory::MemSegment;
 use screen::Screen;
-use cart::Cart;
-use std::rc::Rc;
 use std::cell::UnsafeCell;
-use std::default::Default;
 use std::cmp;
+use std::default::Default;
+use std::rc::Rc;
 
 mod ppu_reg;
 use ppu::ppu_reg::*;
@@ -60,32 +60,29 @@ pub struct PaletteIndex {
     addr: u8,
 }
 
-const TRANSPARENT: PaletteIndex = PaletteIndex{ addr: 0x00 };
+const TRANSPARENT: PaletteIndex = PaletteIndex { addr: 0x00 };
 
 impl PaletteIndex {
     pub fn from_packed(addr: u8) -> PaletteIndex {
         if addr & 0x03 == 0 {
-            PaletteIndex{ addr: 0 }
-        }
-        else {
-            PaletteIndex{ addr: addr }
+            PaletteIndex { addr: 0 }
+        } else {
+            PaletteIndex { addr: addr }
         }
     }
 
-    pub fn from_unpacked( set: PaletteSet,
-        palette_id: u8,
-        color_id: u8 ) -> PaletteIndex {
+    pub fn from_unpacked(set: PaletteSet, palette_id: u8, color_id: u8) -> PaletteIndex {
         if color_id == 0 {
-            return PaletteIndex{ addr: 0 }
+            return PaletteIndex { addr: 0 };
         }
         let mut addr: u8 = 0x00;
         addr |= set.table();
         addr |= (palette_id & 0x03) << 2;
         addr |= color_id & 0x03;
-        PaletteIndex{ addr: addr }
+        PaletteIndex { addr: addr }
     }
 
-    #[cfg(not(feature="vectorize"))]
+    #[cfg(not(feature = "vectorize"))]
     fn to_index(self) -> usize {
         self.addr as usize
     }
@@ -101,7 +98,7 @@ pub struct TilePattern {
     hi: u8,
 }
 
-pub const NO_TILE: TilePattern = TilePattern { lo: 0, hi : 0 };
+pub const NO_TILE: TilePattern = TilePattern { lo: 0, hi: 0 };
 
 impl Default for TilePattern {
     fn default() -> TilePattern {
@@ -153,11 +150,7 @@ fn div_rem(num: u64, den: u64) -> (u64, u64) {
 
 fn ppu_to_cpu_cyc(ppu_cyc: u64) -> u64 {
     let (div, rem) = div_rem(ppu_cyc, 3);
-    if rem == 0 {
-        div
-    } else {
-        div + 1
-    }
+    if rem == 0 { div } else { div + 1 }
 }
 
 fn cpu_to_ppu_cyc(cpu_cyc: u64) -> u64 {
@@ -168,21 +161,24 @@ fn cyc_to_px(ppu_cyc: u64) -> usize {
     let mut pixel: usize = 0;
     let mut rem = ppu_cyc;
 
-    rem += 241 * CYCLES_PER_SCANLINE;//Skip to the position at power-on.
+    rem += 241 * CYCLES_PER_SCANLINE; // Skip to the position at power-on.
 
     let (frames, rem_t) = div_rem(rem, CYCLES_PER_FRAME);
     rem = rem_t;
     pixel += frames as usize * SCREEN_BUFFER_SIZE;
 
-    rem = rem.saturating_sub(CYCLES_PER_SCANLINE);//Skip the pre-render scanline.
-    rem = cmp::min(rem, SCREEN_HEIGHT as u64 * CYCLES_PER_SCANLINE);//Cut off the VBLANK scanlines.
+    // Skip the pre-render scanline.
+    rem = rem.saturating_sub(CYCLES_PER_SCANLINE);
+
+    // Cut off the VBLANK scanlines.
+    rem = cmp::min(rem, SCREEN_HEIGHT as u64 * CYCLES_PER_SCANLINE);
 
     let (scanlines, rem_t) = div_rem(rem, CYCLES_PER_SCANLINE);
     rem = rem_t;
     pixel += scanlines as usize * SCREEN_WIDTH;
 
-    rem = rem.saturating_sub(1);//Skip idle cycle
-    rem = cmp::min(rem, SCREEN_WIDTH as u64);//Cut off HBLANK
+    rem = rem.saturating_sub(1); // Skip idle cycle
+    rem = cmp::min(rem, SCREEN_WIDTH as u64); // Cut off HBLANK
 
     pixel += rem as usize;
     pixel
@@ -229,17 +225,26 @@ impl PPU {
             self.run_cycle(rendering_enabled, &mut hit_nmi);
         }
 
-        if self.reg.ppumask.contains( S_BCK ) {
-            self.background_data.render(&mut self.palette_buffer, start_px, stop_px, &self.reg);
-        }
-        else {
+        if self.reg.ppumask.contains(S_BCK) {
+            self.background_data.render(
+                &mut self.palette_buffer,
+                start_px,
+                stop_px,
+                &self.reg,
+            );
+        } else {
             let slice = &mut self.palette_buffer[start_px..stop_px];
             for dest in slice.iter_mut() {
                 *dest = TRANSPARENT;
             }
         }
-        if self.reg.ppumask.contains( S_SPR ) {
-            self.sprite_data.render(&mut self.palette_buffer, &mut self.reg, start_px, stop_px);
+        if self.reg.ppumask.contains(S_SPR) {
+            self.sprite_data.render(
+                &mut self.palette_buffer,
+                &mut self.reg,
+                start_px,
+                stop_px,
+            );
         }
 
         self.colorize(start_px, stop_px);
@@ -251,8 +256,9 @@ impl PPU {
         }
     }
 
-    ///Returns the CPU cycle number representing the next time the CPU should run the PPU.
-    ///When the CPU cycle reaches this number, the CPU must run the PPU.
+    /// Returns the CPU cycle number representing the next time the CPU should
+    /// run the PPU. When the CPU cycle reaches this number, the CPU must run
+    /// the PPU.
     pub fn requested_run_cycle(&self) -> u64 {
         self.next_vblank_cpu_cyc
     }
@@ -273,18 +279,29 @@ impl PPU {
     fn run_cycle(&mut self, rendering_enabled: bool, hit_nmi: &mut bool) {
         if let -1...239 = self.sl {
             if rendering_enabled {
-                self.background_data.run_cycle(self.cyc, self.sl, &mut self.reg, &mut self.ppu_mem);
+                self.background_data.run_cycle(
+                    self.cyc,
+                    self.sl,
+                    &mut self.reg,
+                    &mut self.ppu_mem,
+                );
             }
         }
         match (self.cyc, self.sl) {
             (_, -1) => self.prerender_scanline(),
 
-            //Visible scanlines
-            (0, 0...239) => self.sprite_data.sprite_eval(self.sl as u16, &self.reg, &mut self.ppu_mem),
+            // Visible scanlines
+            (0, 0...239) => {
+                self.sprite_data.sprite_eval(
+                    self.sl as u16,
+                    &self.reg,
+                    &mut self.ppu_mem,
+                )
+            }
             (_, 0...239) => (),
 
             (_, 240) => (), //Post-render idle scanline
-            (1, 241) => self.start_vblank( hit_nmi ),
+            (1, 241) => self.start_vblank(hit_nmi),
             (_, 241...260) => (), //VBlank lines
             _ => (),
         }
@@ -312,22 +329,24 @@ impl PPU {
         }
     }
 
-    #[cfg(feature="vectorize")]
-    fn colorize(&mut self, start:usize, stop: usize) {
+    #[cfg(feature = "vectorize")]
+    fn colorize(&mut self, start: usize, stop: usize) {
         use std::mem;
         use std::cmp;
         use simd::u8x16;
         use simd::x86::ssse3::Ssse3U8x16;
 
         let (background_pal, sprite_pal) = self.ppu_mem.get_palettes();
-        let index_bytes : &[u8; SCREEN_BUFFER_SIZE] = unsafe{ mem::transmute( &self.palette_buffer ) };
-        let color_bytes : &mut [u8; SCREEN_BUFFER_SIZE] = unsafe{ mem::transmute( &mut self.screen_buffer ) };
+        let index_bytes: &[u8; SCREEN_BUFFER_SIZE] =
+            unsafe { mem::transmute(&self.palette_buffer) };
+        let color_bytes: &mut [u8; SCREEN_BUFFER_SIZE] =
+            unsafe { mem::transmute(&mut self.screen_buffer) };
 
         let mut start = start;
 
         while start < stop {
             start = cmp::min(start, SCREEN_BUFFER_SIZE - 16);
-            let palette_idx = u8x16::load( index_bytes, start );
+            let palette_idx = u8x16::load(index_bytes, start);
 
             let table: u8x16 = palette_idx >> 4;
             let use_sprite_table = table.ne(u8x16::splat(0));
@@ -336,14 +355,14 @@ impl PPU {
             let background_shuf = background_pal.shuffle_bytes(color_id);
             let sprite_shuf = sprite_pal.shuffle_bytes(color_id);
 
-            let final_color = use_sprite_table.select( sprite_shuf, background_shuf);
+            let final_color = use_sprite_table.select(sprite_shuf, background_shuf);
             final_color.store(&mut *color_bytes, start);
             start += 16;
         }
     }
 
-    #[cfg(not(feature="vectorize"))]
-    fn colorize(&mut self, start: usize, stop: usize ) {
+    #[cfg(not(feature = "vectorize"))]
+    fn colorize(&mut self, start: usize, stop: usize) {
         let color_slice = &mut self.screen_buffer[start..stop];
         let index_slice = &self.palette_buffer[start..stop];
 
@@ -352,17 +371,17 @@ impl PPU {
         }
     }
 
-    #[cfg(feature="debug_features")]
+    #[cfg(feature = "debug_features")]
     pub fn cycle(&self) -> u16 {
         self.cyc
     }
 
-    #[cfg(feature="debug_features")]
+    #[cfg(feature = "debug_features")]
     pub fn scanline(&self) -> i16 {
         self.sl
     }
 
-    #[cfg(feature="debug_features")]
+    #[cfg(feature = "debug_features")]
     pub fn vram_addr(&self) -> u16 {
         self.reg.v
     }
@@ -371,7 +390,7 @@ impl PPU {
         self.frame
     }
 
-    #[cfg(feature="debug_features")]
+    #[cfg(feature = "debug_features")]
     pub fn mouse_pick(&self, px_x: i32, px_y: i32) {
         self.background_data.mouse_pick(&self.reg, px_x, px_y);
         self.sprite_data.mouse_pick(px_x, px_y);
@@ -426,13 +445,13 @@ impl MemSegment for PPU {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mappers::create_test_mapper;
-    use std::rc::Rc;
-    use std::cell::UnsafeCell;
     use cart::{Cart, ScreenMode};
-    use screen::DummyScreen;
-    use ppu::ppu_reg::PPUCtrl;
+    use mappers::create_test_mapper;
     use memory::MemSegment;
+    use ppu::ppu_reg::PPUCtrl;
+    use screen::DummyScreen;
+    use std::cell::UnsafeCell;
+    use std::rc::Rc;
 
     pub fn create_test_ppu() -> PPU {
         create_test_ppu_with_rom(vec![0u8; 0x1000])
@@ -441,13 +460,19 @@ mod tests {
     pub fn create_test_ppu_with_rom(chr_rom: Vec<u8>) -> PPU {
         let mapper = create_test_mapper(vec![0u8; 0x1000], chr_rom, ScreenMode::FourScreen);
         let cart = Cart::new(mapper);
-        PPU::new(Rc::new(UnsafeCell::new(cart)), Box::new(DummyScreen::default()))
+        PPU::new(
+            Rc::new(UnsafeCell::new(cart)),
+            Box::new(DummyScreen::default()),
+        )
     }
 
     pub fn create_test_ppu_with_mirroring(mode: ScreenMode) -> PPU {
         let mapper = create_test_mapper(vec![0u8; 0x1000], vec![0u8; 0x1000], mode);
         let cart = Cart::new(mapper);
-        PPU::new(Rc::new(UnsafeCell::new(cart)), Box::new(DummyScreen::default()))
+        PPU::new(
+            Rc::new(UnsafeCell::new(cart)),
+            Box::new(DummyScreen::default()),
+        )
     }
 
     #[test]
@@ -477,11 +502,11 @@ mod tests {
         let mut ppu = create_test_ppu_with_rom(chr_rom);
 
         ppu.reg.v = 0x0ABC;
-        ppu.read(0x2007);//Dummy Read
+        ppu.read(0x2007); // Dummy Read
         assert_eq!(ppu.read(0x2007), 12);
 
         ppu.reg.v = 0x0DBA;
-        ppu.read(0x2007);//Dummy Read
+        ppu.read(0x2007); // Dummy Read
         assert_eq!(ppu.read(0x2007), 212);
     }
 
@@ -492,20 +517,20 @@ mod tests {
         ppu.reg.v = 0x2ABC;
         ppu.write(0x2007, 12);
         ppu.reg.v = 0x2ABC;
-        ppu.read(0x2007);//Dummy read
+        ppu.read(0x2007); // Dummy read
         assert_eq!(ppu.read(0x2007), 12);
 
         ppu.reg.v = 0x2DBA;
         ppu.write(0x2007, 212);
         ppu.reg.v = 0x2DBA;
-        ppu.read(0x2007);//Dummy Read
+        ppu.read(0x2007); // Dummy Read
         assert_eq!(ppu.read(0x2007), 212);
 
         // Mirroring
         ppu.reg.v = 0x2EFC;
         ppu.write(0x2007, 128);
         ppu.reg.v = 0x3EFC;
-        ppu.read(0x2007);//Dummy Read
+        ppu.read(0x2007); // Dummy Read
         assert_eq!(ppu.read(0x2007), 128);
     }
 

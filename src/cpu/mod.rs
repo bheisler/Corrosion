@@ -207,12 +207,35 @@ macro_rules! decode_opcode {
         0x58 => $this.cli(),
 
 // Unofficial NOPs
-        0x04 | 0x44 | 0x64 => { $this.unofficial( ); let mode = $this.zero_page(); $this.u_nop(mode) }
-        0x0C => { $this.unofficial( ); let mode = $this.absolute(); $this.u_nop(mode) }
-        0x14 | 0x34 | 0x54 | 0x74 | 0xD4 | 0xF4 => { $this.unofficial( ); let mode = $this.zero_page_x(); $this.u_nop(mode) }
-        0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xFA => { $this.unofficial( ); $this.nop() }
-        0x80 | 0x89 | 0xC2 | 0xE2 => { $this.unofficial( ); let mode = $this.immediate(); $this.u_nop(mode) }
-        0x1C | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC => { $this.unofficial( ); let mode = $this.absolute_x(); $this.u_nop(mode) }
+        0x04 | 0x44 | 0x64 => {
+            $this.unofficial( );
+            let mode = $this.zero_page();
+            $this.u_nop(mode)
+        }
+        0x0C => {
+            $this.unofficial( );
+            let mode = $this.absolute();
+            $this.u_nop(mode)
+        }
+        0x14 | 0x34 | 0x54 | 0x74 | 0xD4 | 0xF4 => {
+            $this.unofficial( );
+            let mode = $this.zero_page_x();
+            $this.u_nop(mode)
+        }
+        0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xFA => {
+            $this.unofficial( );
+            $this.nop()
+        }
+        0x80 | 0x89 | 0xC2 | 0xE2 => {
+            $this.unofficial( );
+            let mode = $this.immediate();
+            $this.u_nop(mode)
+        }
+        0x1C | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC => {
+            $this.unofficial( );
+            let mode = $this.absolute_x();
+            $this.u_nop(mode)
+        }
 
         0xA3 => { $this.unofficial(); let mode = $this.indirect_x();  $this.lax(mode) }
         0xB3 => { $this.unofficial(); let mode = $this.indirect_y();  $this.lax(mode) }
@@ -276,7 +299,8 @@ macro_rules! decode_opcode {
         0x7F => { $this.unofficial(); let mode = $this.absolute_x();  $this.rra(mode) }
         0x7B => { $this.unofficial(); let mode = $this.absolute_y();  $this.rra(mode) }
 
-        0x02 | 0x12 | 0x22 | 0x32 | 0x42 | 0x52 | 0x62 | 0x72 | 0x82 | 0x92 | 0xB2 | 0xD2 | 0xF2 => $this.kil(),
+        0x02 | 0x12 | 0x22 | 0x32 | 0x42 | 0x52 | 0x62 |
+            0x72 | 0x82 | 0x92 | 0xB2 | 0xD2 | 0xF2 => $this.kil(),
 
 // Else
 // Unsupported opcodes (reason)
@@ -297,33 +321,33 @@ macro_rules! decode_opcode {
     } }
 }
 
-#[cfg(feature="debug_features")]
+#[cfg(feature = "debug_features")]
 pub mod disasm;
 
-#[cfg(target_arch="x86_64")]
+#[cfg(target_arch = "x86_64")]
 mod nes_analyst;
 
-#[cfg(target_arch="x86_64")]
+#[cfg(target_arch = "x86_64")]
 pub mod x86_64_compiler;
 
-#[cfg(target_arch="x86_64")]
+#[cfg(target_arch = "x86_64")]
 pub use cpu::x86_64_compiler as compiler;
 
 pub mod dispatcher;
 
 use Settings;
-use memory::MemSegment;
-use ppu::StepResult;
-use ppu::PPU;
 use apu::APU;
-use io::IO;
 use cart::Cart;
-use std::rc::Rc;
-use std::cell::UnsafeCell;
-use cpu::dispatcher::Dispatcher;
 
-#[cfg(feature="debug_features")]
+#[cfg(feature = "debug_features")]
 use cpu::disasm::Disassembler;
+use cpu::dispatcher::Dispatcher;
+use io::IO;
+use memory::MemSegment;
+use ppu::PPU;
+use ppu::StepResult;
+use std::cell::UnsafeCell;
+use std::rc::Rc;
 
 /// The number of cycles that each machine operation takes. Indexed by opcode
 /// number.
@@ -349,7 +373,7 @@ pub static CYCLE_TABLE: [u64; 256] = [
 ];
 
 
-trait AddressingMode : Copy {
+trait AddressingMode: Copy {
     fn read(self, cpu: &mut CPU) -> u8;
     fn write(self, cpu: &mut CPU, val: u8);
     fn tick_cycle(self, cpu: &mut CPU);
@@ -435,7 +459,7 @@ pub struct Registers {
 }
 
 pub struct JitInterrupt {
-    pub next_interrupt: u64
+    pub next_interrupt: u64,
 }
 impl JitInterrupt {
     fn interrupt_now(&mut self) {
@@ -484,7 +508,9 @@ impl MemSegment for CPU {
                 self.io.read(idx)
             }
             0x6000...0x7FFF => unsafe { (*self.cart.get()).prg_ram_read(idx) },
-            0x4020...0x5FFF | 0x8000...0xFFFF => unsafe { (*self.cart.get()).prg_rom_read(idx).read(idx) },
+            0x4020...0x5FFF | 0x8000...0xFFFF => unsafe {
+                (*self.cart.get()).prg_rom_read(idx).read(idx)
+            },
             x => invalid_address!(x),
         }
 
@@ -513,19 +539,21 @@ impl MemSegment for CPU {
                 }
             }
             0x6000...0x7FFF => unsafe { (*self.cart.get()).prg_ram_write(idx, val) },
-            0x4020...0x5FFF | 0x8000...0xFFFF => unsafe { (*self.cart.get()).prg_rom_write(idx, val).write(idx, val) },
+            0x4020...0x5FFF | 0x8000...0xFFFF => unsafe {
+                (*self.cart.get()).prg_rom_write(idx, val).write(idx, val)
+            },
             x => invalid_address!(x),
         }
     }
 }
 
 impl CPU {
-    #[cfg(feature="debug_features")]
+    #[cfg(feature = "debug_features")]
     fn trace(&mut self) {
         Disassembler::new(self).trace();
     }
 
-    #[cfg(not(feature="debug_features"))]
+    #[cfg(not(feature = "debug_features"))]
     fn trace(&self) {}
 
     // Addressing modes
@@ -930,10 +958,17 @@ impl CPU {
         self.halted = true;
     }
     fn unsupported(&self, opcode: u8) {
-        panic!( "Unknown or unsupported opcode: 0x{:02X}", opcode )
+        panic!("Unknown or unsupported opcode: 0x{:02X}", opcode)
     }
 
-    pub fn new(settings: Rc<Settings>, ppu: PPU, apu: APU, io: Box<IO>, cart: Rc<UnsafeCell<Cart>>, dispatcher: Rc<UnsafeCell<Dispatcher>>) -> CPU {
+    pub fn new(
+        settings: Rc<Settings>,
+        ppu: PPU,
+        apu: APU,
+        io: Box<IO>,
+        cart: Rc<UnsafeCell<Cart>>,
+        dispatcher: Rc<UnsafeCell<Dispatcher>>,
+    ) -> CPU {
         let mut cpu = CPU {
             settings: settings,
             regs: Registers {
@@ -944,9 +979,7 @@ impl CPU {
                 sp: 0xFD,
                 pc: 0,
             },
-            interrupt: JitInterrupt {
-                next_interrupt: 0
-            },
+            interrupt: JitInterrupt { next_interrupt: 0 },
             cycle: 0,
             ram: [0; 0x800],
             ppu: ppu,
@@ -963,7 +996,7 @@ impl CPU {
 
     pub fn init(&mut self) {
         self.regs.pc = self.read_w(RESET_VECTOR);
-        //self.regs.pc = 0xC000;
+        // self.regs.pc = 0xC000;
     }
 
     fn nmi(&mut self) {
@@ -1155,8 +1188,7 @@ impl CPU {
 
         if self.regs.pc >= 0x4020 && self.settings.jit {
             unsafe { (*self.dispatcher.get()).jump(self) }
-        }
-        else {
+        } else {
             if self.settings.trace_cpu {
                 self.trace();
             }
@@ -1185,7 +1217,7 @@ impl CPU {
     fn update_next_interrupt(&mut self) {
         self.interrupt.next_interrupt = ::std::cmp::min(
             self.ppu.requested_run_cycle(),
-            self.apu.requested_run_cycle()
+            self.apu.requested_run_cycle(),
         );
     }
 
@@ -1216,21 +1248,23 @@ impl CPU {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::rc::Rc;
-    use std::cell::UnsafeCell;
-    use mappers::{Mapper, MapperParams};
-    use screen::DummyScreen;
-    use io::DummyIO;
     use audio::DummyAudioOut;
-    use memory::MemSegment;
     use cpu::dispatcher::Dispatcher;
+    use io::DummyIO;
+    use mappers::{Mapper, MapperParams};
+    use memory::MemSegment;
+    use screen::DummyScreen;
+    use std::cell::UnsafeCell;
+    use std::rc::Rc;
 
     fn create_test_cpu() -> CPU {
         let path_buf = ::std::path::PathBuf::new();
         let path = path_buf.as_path();
-        let settings : Rc<Settings> = Rc::new(Default::default());
-        let nrom = Mapper::new(0,
-                               MapperParams::simple(path, vec!(0u8; 0x4000), vec!(0u8; 0x4000)));
+        let settings: Rc<Settings> = Rc::new(Default::default());
+        let nrom = Mapper::new(
+            0,
+            MapperParams::simple(path, vec![0u8; 0x4000], vec![0u8; 0x4000]),
+        );
         let cart = ::cart::Cart::new(nrom);
         let cart = Rc::new(UnsafeCell::new(cart));
         let ppu = ::ppu::PPU::new(cart.clone(), Box::new(DummyScreen::default()));

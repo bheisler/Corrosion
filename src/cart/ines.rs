@@ -35,11 +35,9 @@ impl Into<ScreenMode> for Flags6 {
     fn into(self) -> ScreenMode {
         if self.contains(FOUR_SCREEN) {
             ScreenMode::FourScreen
-        }
-        else if self.contains(VERTICAL) {
+        } else if self.contains(VERTICAL) {
             ScreenMode::Vertical
-        }
-        else {
+        } else {
             ScreenMode::Horizontal
         }
     }
@@ -57,11 +55,9 @@ impl Into<System> for Flags7 {
     fn into(self) -> System {
         if self.contains(VS_UNISYSTEM) {
             System::Vs
-        }
-        else if self.contains(PLAYCHOICE_10) {
+        } else if self.contains(PLAYCHOICE_10) {
             System::PC10
-        }
-        else {
+        } else {
             System::NES
         }
     }
@@ -77,8 +73,7 @@ impl Into<TvFormat> for Flags9 {
     fn into(self) -> TvFormat {
         if self.contains(PAL) {
             TvFormat::PAL
-        }
-        else {
+        } else {
             TvFormat::NTSC
         }
     }
@@ -98,8 +93,7 @@ pub struct Rom {
 fn validate_not_nes2(input: &[u8], flags_7: Flags7) -> IResult<&[u8], ()> {
     if (flags_7.bits() & 0b0000_1100) == 0b0000_1000 {
         IResult::Error(error_code!(ErrorKind::Custom(1)))
-    }
-    else {
+    } else {
         IResult::Done(input, ())
     }
 }
@@ -109,13 +103,18 @@ fn parse_rom(input: &[u8]) -> IResult<&[u8], Rom> {
         tag!(b"NES\x1A") >>
         prg_pages: be_u8 >>
         chr_pages: be_u8 >>
-        flags_6: bits!(tuple!(take_bits!(u8, 4), map_opt!(take_bits!(u8, 4), Flags6::from_bits))) >>
-        flags_7: bits!(tuple!(take_bits!(u8, 4), map_opt!(take_bits!(u8, 4), Flags7::from_bits))) >>
+        flags_6: bits!(tuple!(
+            take_bits!(u8, 4),
+            map_opt!(take_bits!(u8, 4), Flags6::from_bits))) >>
+        flags_7: bits!(tuple!(
+            take_bits!(u8, 4),
+            map_opt!(take_bits!(u8, 4), Flags7::from_bits))) >>
         call!(validate_not_nes2, flags_7.1) >>
         prg_ram_pages: be_u8 >>
         flags_9: map_opt!(be_u8, Flags9::from_bits) >>
         tag!([0u8; 6]) >>
-        cond!(flags_6.1.contains(TRAINER), take!(TRAINER_LENGTH)) >> //Skip the trainer if there is one
+        //Skip the trainer if there is one
+        cond!(flags_6.1.contains(TRAINER), take!(TRAINER_LENGTH)) >>
         prg_rom: take!(prg_pages as usize * PRG_ROM_PAGE_SIZE) >>
         chr_rom: take!(chr_pages as usize * CHR_ROM_PAGE_SIZE) >>
         ( Rom {
@@ -126,7 +125,11 @@ fn parse_rom(input: &[u8]) -> IResult<&[u8], Rom> {
             tv_format: flags_9.into(),
             prg_rom: prg_rom.into(),
             chr_rom: chr_rom.into(),
-            prg_ram_size: if prg_ram_pages == 0 { PRG_RAM_PAGE_SIZE } else { prg_ram_pages as usize * PRG_RAM_PAGE_SIZE },
+            prg_ram_size: if prg_ram_pages == 0 {
+                PRG_RAM_PAGE_SIZE
+            } else {
+                prg_ram_pages as usize * PRG_RAM_PAGE_SIZE
+            },
         } )
     )
 }
@@ -137,10 +140,12 @@ impl Rom {
     pub fn parse(data: &[u8]) -> Result<Rom, RomError> {
         match parse_rom(data) {
             IResult::Done(_, rom) => Ok(rom),
-            IResult::Error(err) => match err {
-                ErrorKind::Custom(_) => Err(RomError::Nes2NotSupported),
-                _ => Err(RomError::DamagedHeader),
-            },
+            IResult::Error(err) => {
+                match err {
+                    ErrorKind::Custom(_) => Err(RomError::Nes2NotSupported),
+                    _ => Err(RomError::DamagedHeader),
+                }
+            }
             IResult::Incomplete(_) => Err(RomError::UnexpectedEndOfData),
         }
     }
@@ -169,8 +174,8 @@ impl Rom {
 #[cfg(test)]
 mod tests {
     extern crate rand;
-    use super::*;
     use self::rand::{Rng, thread_rng};
+    use super::*;
 
     struct RomBuilder {
         header: Vec<u8>,
@@ -185,7 +190,7 @@ mod tests {
 
     fn generate_bytes(size: usize) -> Vec<u8> {
         let mut rng = thread_rng();
-        let mut bytes: Vec<u8> = vec!(0u8; size);
+        let mut bytes: Vec<u8> = vec![0u8; size];
         rng.fill_bytes(&mut bytes);
         bytes
     }

@@ -1,12 +1,12 @@
-use std::fs::File;
-use std::io::Result;
-use std::io::BufReader;
-use std::io::BufRead;
-use std::iter::Iterator;
+use io::IO;
 
 use io::OPEN_BUS;
-use io::IO;
 use memory::MemSegment;
+use std::fs::File;
+use std::io::BufRead;
+use std::io::BufReader;
+use std::io::Result;
+use std::iter::Iterator;
 use util::ShiftRegister8;
 
 pub struct FM2IO {
@@ -19,10 +19,11 @@ impl FM2IO {
     pub fn read(file: String) -> Result<FM2IO> {
         let file = try!(File::open(file));
         let reader = BufReader::new(file);
-        let iter = reader.lines()
-                         .map(|result| result.unwrap())
-                         .skip_while(|line| !line.contains('|'))
-                         .skip(1);
+        let iter = reader
+            .lines()
+            .map(|result| result.unwrap())
+            .skip_while(|line| !line.contains('|'))
+            .skip(1);
         Ok(FM2IO {
             iter: Box::new(iter),
             controller1: ShiftRegister8::new(0),
@@ -32,9 +33,14 @@ impl FM2IO {
 }
 
 fn parse(string: &str) -> u8 {
-    string.char_indices()
-          .filter(|&(_, c)| c != '.')
-          .fold(0u8, |acc, (idx, _)| acc | 1u8 << (7 - idx))
+    string.char_indices().filter(|&(_, c)| c != '.').fold(
+        0u8,
+        |acc,
+         (idx,
+          _)| {
+            acc | 1u8 << (7 - idx)
+        },
+    )
 }
 
 impl MemSegment for FM2IO {
@@ -51,9 +57,8 @@ impl MemSegment for FM2IO {
             0x4016 => {
                 if val & 0x01 != 0 {
                     if let Some(line) = self.iter.next() {
-                        let mut split = line.split('|')
-                                            .skip(1)
-                                            .skip(1); //Ignore the commands for now.
+                        // Ignore the commands for now.
+                        let mut split = line.split('|').skip(1).skip(1);
                         self.controller1.load(parse(split.next().unwrap()));
                         self.controller2.load(parse(split.next().unwrap()));
                     }

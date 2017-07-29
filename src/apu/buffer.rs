@@ -1,8 +1,8 @@
 //! Thin layer over `BlipBuf` which provides a slightly more convenient
 //! interface.
 
-use blip_buf::BlipBuf;
 use apu::Sample;
+use blip_buf::BlipBuf;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -16,8 +16,8 @@ pub struct SampleBuffer {
     transfer_samples: u32,
 }
 
-///Blip Buffer combined with a Vec to store the samples transferred out of the buffer, so we don't
-///have to either allocate memory every transfer.
+/// Blip Buffer combined with a Vec to store the samples transferred out of the
+/// buffer, so we don't have to either allocate memory every transfer.
 impl SampleBuffer {
     pub fn new(out_rate: f64) -> SampleBuffer {
         let samples_per_frame = out_rate as u32 / NES_FPS as u32;
@@ -53,7 +53,8 @@ impl SampleBuffer {
     }
 }
 
-///Allows multiple channels to share a `SampleBuffer` but maintain separate waveforms.
+/// Allows multiple channels to share a `SampleBuffer` but maintain separate
+/// waveforms.
 pub struct Waveform {
     buffer: Rc<RefCell<SampleBuffer>>,
     last_amp: Sample,
@@ -75,7 +76,10 @@ impl Waveform {
         if delta == 0 {
             return;
         }
-        self.buffer.borrow_mut().add_delta(cycle, delta * self.volume_mult);
+        self.buffer.borrow_mut().add_delta(
+            cycle,
+            delta * self.volume_mult,
+        );
         self.last_amp = amp;
     }
 }

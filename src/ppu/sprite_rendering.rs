@@ -230,11 +230,7 @@ impl Default for SpriteRenderer {
 
 fn get_fine_scroll(size: u16, screen_dist: u16, sprite_dist: u16, flip: bool) -> u16 {
     let scroll = screen_dist - sprite_dist;
-    if flip {
-        (size - 1) - scroll
-    } else {
-        scroll
-    }
+    if flip { (size - 1) - scroll } else { scroll }
 }
 
 impl SpriteRenderer {

@@ -33,19 +33,25 @@ fn load_config() -> Config {
 }
 
 fn make_emulator_settings(config: &Config) -> Settings {
-    let defaults : Settings = Default::default();
+    let defaults: Settings = Default::default();
     Settings {
         jit: config.get_bool("jit").unwrap_or(defaults.jit),
 
-        trace_cpu: config.get_bool("debug.trace_cpu").unwrap_or(defaults.trace_cpu),
-        disassemble_functions: config.get_bool("debug.disassemble_functions").unwrap_or(defaults.disassemble_functions),
+        trace_cpu: config.get_bool("debug.trace_cpu").unwrap_or(
+            defaults.trace_cpu,
+        ),
+        disassemble_functions: config.get_bool("debug.disassemble_functions").unwrap_or(
+            defaults.disassemble_functions,
+        ),
     }
 }
 
 #[cfg(feature = "debug_features")]
 fn mouse_pick(event_pump: &Rc<RefCell<EventPump>>, emulator: &Emulator) {
     let mouse_state = event_pump.borrow().mouse_state();
-    let (px_x, px_y) = (mouse_state.x() / 3, mouse_state.y() / 3); // Should get this from the screen, but eh.
+    // Should get this from the screen, but eh.
+    let size_factor = 3;
+    let (px_x, px_y) = (mouse_state.x() / size_factor, mouse_state.y() / size_factor);
     emulator.mouse_pick(px_x, px_y);
 }
 
@@ -72,7 +78,8 @@ fn start_emulator(cart: Cart, config: Config) {
     let sdl = corrosion::sdl2::init().unwrap();
     let event_pump = Rc::new(RefCell::new(sdl.event_pump().unwrap()));
 
-    let mut builder = EmulatorBuilder::new_sdl(cart, make_emulator_settings(&config), &sdl, &event_pump);
+    let mut builder =
+        EmulatorBuilder::new_sdl(cart, make_emulator_settings(&config), &sdl, &event_pump);
 
     if let Some(file) = get_movie_file() {
         let fm2io = corrosion::io::fm2::FM2IO::read(file).unwrap();
