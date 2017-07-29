@@ -529,20 +529,6 @@ impl CPU {
     #[cfg(not(feature="debug_features"))]
     fn trace(&self) {}
 
-    #[cfg(feature="stacktrace")]
-    fn stack_dump(&mut self) {
-        println!{
-            "Stack: {:>60}",
-            (self.regs.sp..0xFF)
-                .map(|idx| self.read(STACK_PAGE + idx as u16))
-                .map(|byte| format!("{:02X}", byte))
-                .fold("".to_string(), |left, right| left + " " + &right )
-        }
-    }
-
-    #[cfg(not(feature="stacktrace"))]
-    fn stack_dump(&self) {}
-
     // Addressing modes
     fn immediate(&mut self) -> ImmediateAddressingMode {
         ImmediateAddressingMode
@@ -1175,7 +1161,6 @@ impl CPU {
             if self.settings.trace_cpu {
                 self.trace();
             }
-            self.stack_dump();
             let opcode: u8 = self.load_incr_pc();
             self.incr_cycle(CYCLE_TABLE[opcode as usize]);
             decode_opcode!(opcode, self);
