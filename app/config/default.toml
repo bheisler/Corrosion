@@ -1,3 +1,15 @@
+# These settings will be ignored unless the executable is compiled with the
+# debug_features feature.
 [debug]
+
+# Print to the console detailed information about the pixel underneath the mouse.
+# Useful for PPU debugging
 mousepick = false
-cputrace = false
+
+# Print to the console a detailed trace of every 6502 instruction executed by
+# the emulated CPU. Works in both JIT and regular mode.
+trace_cpu = false
+
+# Print to the console a disassembly of each block of 6502 code when it's compiled
+# by the JIT compiler.
+disassemble_functions = false

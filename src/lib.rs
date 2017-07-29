@@ -57,12 +57,16 @@ use std::rc::Rc;
 #[derive(Debug, Clone)]
 pub struct Settings {
     // The following will only be used if compiled with the debug_features feature
-    pub cputrace: bool,
+    pub trace_cpu: bool,
+    pub disassemble_functions: bool,
 }
 
 impl Default for Settings {
     fn default() -> Settings {
-        Settings { cputrace: false }
+        Settings {
+            trace_cpu: false,
+            disassemble_functions: false,
+        }
     }
 }
 
@@ -104,12 +108,20 @@ impl EmulatorBuilder {
     }
 
     pub fn build(mut self) -> Emulator {
+        let settings = Rc::new(self.settings);
         let dispatcher = Rc::new(UnsafeCell::new(cpu::dispatcher::Dispatcher::new()));
         self.cart.set_dispatcher(dispatcher.clone());
         let cart: Rc<UnsafeCell<Cart>> = Rc::new(UnsafeCell::new(self.cart));
         let ppu = PPU::new(cart.clone(), self.screen);
         let apu = APU::new(self.audio_out);
-        let mut cpu = CPU::new(self.settings.clone().into(), ppu, apu, self.io, cart, dispatcher);
+        let mut cpu = CPU::new(
+            settings,
+            ppu,
+            apu,
+            self.io,
+            cart,
+            dispatcher,
+        );
         cpu.init();
 
         Emulator { cpu: cpu }

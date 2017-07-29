@@ -237,7 +237,7 @@ impl<'a> Compiler<'a> {
             self.emit_branch_target();
             self.check_for_interrupt();
 
-            if self.cpu.settings.cputrace {
+            if self.cpu.settings.trace_cpu {
                 call_trace!(self);
             }
 

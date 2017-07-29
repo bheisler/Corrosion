@@ -537,7 +537,7 @@ impl<'a> Disassembler<'a> {
         );
     }
 
-    #[cfg(feature = "function_disasm")]
+    #[cfg(feature = "debug_features")]
     pub fn disasm_function(self, entry_point: u16) {
         let exit_point = ::cpu::nes_analyst::Analyst::new(self.cpu).find_exit_point(entry_point);
         let function = self.decode_function(entry_point, exit_point);
@@ -568,6 +568,6 @@ impl<'a> Disassembler<'a> {
         println!("");
     }
 
-    #[cfg(not(feature = "function_disasm"))]
+    #[cfg(not(feature = "debug_features"))]
     fn disasm_function(&self) {}
 }

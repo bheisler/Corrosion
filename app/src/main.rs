@@ -3,7 +3,7 @@ extern crate stopwatch;
 extern crate config;
 
 
-use config::{Config, File, Environment};
+use config::{Config, File};
 
 use corrosion::{Emulator, EmulatorBuilder, Settings};
 use corrosion::cart::Cart;
@@ -29,14 +29,14 @@ fn load_config() -> Config {
     let mut s = Config::new();
     s.merge(File::with_name("config/default").required(false))
         .expect("Failed to read config file");
-    s.merge(Environment::with_prefix("corrosion")).unwrap();
     s
 }
 
 fn make_emulator_settings(config: &Config) -> Settings {
     let defaults : Settings = Default::default();
     Settings {
-        cputrace: config.get_bool("debug.cputrace").unwrap_or(defaults.cputrace),
+        trace_cpu: config.get_bool("debug.trace_cpu").unwrap_or(defaults.trace_cpu),
+        disassemble_functions: config.get_bool("debug.disassemble_functions").unwrap_or(defaults.disassemble_functions),
     }
 }
 

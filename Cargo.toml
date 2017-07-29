@@ -7,10 +7,8 @@ authors = ["Brook Heisler <redattack34@gmail.com>"]
 default = ["jit"]
 vectorize = ["simd"]
 stacktrace = []
-function_disasm = ["disasm"]
-disasm = []
 jit = ["dynasmrt"]
-debug_features = ["disasm"]
+debug_features = []
 
 [dependencies]
 bitflags = "0.9"

@@ -20,7 +20,9 @@ pub struct InstructionAnalysis {
 
 impl Default for InstructionAnalysis {
     fn default() -> InstructionAnalysis {
-        InstructionAnalysis { is_branch_target: false }
+        InstructionAnalysis {
+            is_branch_target: false,
+        }
     }
 }
 
@@ -45,7 +47,7 @@ impl<'a> Analyst<'a> {
         }
     }
 
-    #[cfg(feature = "function_disasm")]
+    #[cfg(feature = "debug_features")]
     pub fn find_exit_point(self, entry_point: u16) -> u16 {
         self.analyze(entry_point).exit_point
     }

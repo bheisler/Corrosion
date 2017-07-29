@@ -299,10 +299,10 @@ macro_rules! decode_opcode {
     } }
 }
 
-#[cfg(feature="disasm")]
+#[cfg(feature="debug_features")]
 pub mod disasm;
 
-#[cfg(any(feature="function_disasm", feature="jit"))]
+#[cfg(any(feature="debug_features", feature="jit"))]
 mod nes_analyst;
 
 #[cfg(all(target_arch="x86_64", feature="jit"))]
@@ -323,7 +323,7 @@ use std::rc::Rc;
 use std::cell::UnsafeCell;
 use cpu::dispatcher::Dispatcher;
 
-#[cfg(feature="disasm")]
+#[cfg(feature="debug_features")]
 use cpu::disasm::Disassembler;
 
 /// The number of cycles that each machine operation takes. Indexed by opcode
@@ -444,22 +444,8 @@ impl JitInterrupt {
     }
 }
 
-#[derive(Debug)]
-pub struct CpuSettings {
-    // The following will only be used if compiled with the debug_features feature
-    pub cputrace: bool
-}
-
-impl From<Settings> for CpuSettings {
-    fn from(settings: Settings) -> Self {
-        CpuSettings {
-            cputrace: settings.cputrace
-        }
-    }
-}
-
 pub struct CPU {
-    settings: CpuSettings,
+    settings: Rc<Settings>,
 
     pub regs: Registers,
     pub interrupt: JitInterrupt,
@@ -962,7 +948,7 @@ impl CPU {
         panic!( "Unknown or unsupported opcode: 0x{:02X}", opcode )
     }
 
-    pub fn new(settings: CpuSettings, ppu: PPU, apu: APU, io: Box<IO>, cart: Rc<UnsafeCell<Cart>>, dispatcher: Rc<UnsafeCell<Dispatcher>>) -> CPU {
+    pub fn new(settings: Rc<Settings>, ppu: PPU, apu: APU, io: Box<IO>, cart: Rc<UnsafeCell<Cart>>, dispatcher: Rc<UnsafeCell<Dispatcher>>) -> CPU {
         let mut cpu = CPU {
             settings: settings,
             regs: Registers {
@@ -1186,7 +1172,7 @@ impl CPU {
             unsafe { (*self.dispatcher.get()).jump(self) }
         }
         else {
-            if self.settings.cputrace {
+            if self.settings.trace_cpu {
                 self.trace();
             }
             self.stack_dump();
@@ -1258,6 +1244,7 @@ mod tests {
     fn create_test_cpu() -> CPU {
         let path_buf = ::std::path::PathBuf::new();
         let path = path_buf.as_path();
+        let settings : Rc<Settings> = Rc::new(Default::default());
         let nrom = Mapper::new(0,
                                MapperParams::simple(path, vec!(0u8; 0x4000), vec!(0u8; 0x4000)));
         let cart = ::cart::Cart::new(nrom);
@@ -1266,8 +1253,7 @@ mod tests {
         let apu = ::apu::APU::new(Box::new(DummyAudioOut));
         let io = DummyIO::new();
         let dispatcher = Rc::new(UnsafeCell::new(Dispatcher::new()));
-        let settings : Settings = Default::default();
-        CPU::new(settings.into(), ppu, apu, Box::new(io), cart, dispatcher)
+        CPU::new(settings, ppu, apu, Box::new(io), cart, dispatcher)
     }
 
     #[test]

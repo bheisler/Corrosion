@@ -1,16 +1,14 @@
 use cpu::CPU;
 
-#[cfg(feature="jit")]
+#[cfg(feature = "jit")]
 use cpu::compiler;
 
-#[cfg(feature="jit")]
+#[cfg(feature = "jit")]
 use cpu::compiler::ExecutableBlock;
 
-#[cfg(not(feature="jit"))]
-pub struct Dispatcher {
-
-}
-#[cfg(not(feature="jit"))]
+#[cfg(not(feature = "jit"))]
+pub struct Dispatcher {}
+#[cfg(not(feature = "jit"))]
 impl Dispatcher {
     pub fn new() -> Dispatcher {
         Dispatcher {}
@@ -21,31 +19,32 @@ impl Dispatcher {
     pub fn dirty(&mut self, _: usize, _: usize) {}
 }
 
-#[cfg(feature="jit")]
+#[cfg(feature = "jit")]
 pub struct Dispatcher {
     table: Box<[Option<Block>]>,
 }
-#[cfg(feature="jit")]
+#[cfg(feature = "jit")]
 struct Block {
     dirty: bool,
     start_addr: u16,
     end_addr: u16,
     code: ExecutableBlock,
 }
-#[cfg(feature="jit")]
+#[cfg(feature = "jit")]
 impl Block {
     fn overlaps_with(&self, start: usize, end: usize) -> bool {
         (self.start_addr as usize) < end || (self.end_addr as usize) >= start
     }
 }
 
-#[cfg(feature="function_disasm")]
+#[cfg(feature = "debug_features")]
 fn disasm_function(cpu: &mut CPU, addr: u16) {
     ::cpu::disasm::Disassembler::new(cpu).disasm_function(addr);
 }
 
-#[cfg(not(feature="function_disasm"))]
-fn disasm_function(_: &mut CPU, _: u16) {}
+#[cfg(not(feature = "debug_features"))]
+fn disasm_function(_: &mut CPU, _: u16) {
+}
 
 impl Default for Dispatcher {
     fn default() -> Dispatcher {
@@ -53,7 +52,7 @@ impl Default for Dispatcher {
     }
 }
 
-#[cfg(feature="jit")]
+#[cfg(feature = "jit")]
 impl Dispatcher {
     pub fn new() -> Dispatcher {
         let mut table: Vec<Option<Block>> = vec![];
@@ -62,7 +61,9 @@ impl Dispatcher {
             table.push(None);
         }
 
-        Dispatcher { table: table.into_boxed_slice() }
+        Dispatcher {
+            table: table.into_boxed_slice(),
+        }
     }
 
     fn put(&mut self, start_addr: u16, end_addr: u16, code: ExecutableBlock) -> &Block {
@@ -90,13 +91,13 @@ impl Dispatcher {
     }
 
     fn should_compile(&self, addr: u16) -> bool {
-        self.table[addr as usize]
-            .as_ref()
-            .map_or(true, |b| b.dirty)
+        self.table[addr as usize].as_ref().map_or(true, |b| b.dirty)
     }
 
     fn compile(&mut self, addr: u16, cpu: &mut CPU) -> &Block {
-        disasm_function(cpu, addr);
+        if cpu.settings.disassemble_functions {
+            disasm_function(cpu, addr);
+        }
         let (end_addr, executable) = compiler::compile(addr, cpu);
         self.put(addr, end_addr, executable)
     }
