@@ -1,6 +1,4 @@
 
-use memory::MemSegment;
-use std::cmp;
 use super::PaletteIndex;
 use super::SCREEN_BUFFER_SIZE;
 use super::SCREEN_HEIGHT;
@@ -8,6 +6,8 @@ use super::SCREEN_WIDTH;
 use super::TilePattern;
 use super::ppu_memory::PPUMemory;
 use super::ppu_reg::PPUReg;
+use memory::MemSegment;
+use std::cmp;
 
 const TILES_PER_LINE: usize = 34;
 
@@ -33,7 +33,7 @@ impl TileAttribute {
         at & 0x03
     }
 
-    #[cfg(feature="mousepick")]
+    #[cfg(feature = "debug_features")]
     fn get_palette_mask(&self, x: u16, y: u16) -> u8 {
         let y = y % SCREEN_HEIGHT as u16;
         let mut at = 0xFF;
@@ -64,22 +64,26 @@ pub struct BackgroundRenderer {
     attr: Box<[[u8; TILES_PER_LINE]; SCREEN_HEIGHT]>,
 }
 
-fn draw_segment(pattern_line: &[TilePattern; TILES_PER_LINE],
-                attr_line: &[u8; TILES_PER_LINE],
-                pixel_line: &mut [PaletteIndex],
-                fine_x_scroll: usize,
-                start: usize,
-                stop: usize) {
+fn draw_segment(
+    pattern_line: &[TilePattern; TILES_PER_LINE],
+    attr_line: &[u8; TILES_PER_LINE],
+    pixel_line: &mut [PaletteIndex],
+    fine_x_scroll: usize,
+    start: usize,
+    stop: usize,
+) {
     for (pixel, item) in pixel_line.iter_mut().enumerate().take(stop).skip(start) {
         let displayed_pixel = pixel + fine_x_scroll;
         render_single_pixel(pattern_line, attr_line, displayed_pixel, item);
     }
 }
 
-fn render_single_pixel(pattern_line: &[TilePattern],
-                       attr_line: &[u8],
-                       displayed_pixel: usize,
-                       item: &mut PaletteIndex) {
+fn render_single_pixel(
+    pattern_line: &[TilePattern],
+    attr_line: &[u8],
+    displayed_pixel: usize,
+    item: &mut PaletteIndex,
+) {
     let tile_idx = displayed_pixel / 8;
     let pattern = pattern_line[tile_idx];
     let fine_x = displayed_pixel as u32 & 0x07;
@@ -91,11 +95,13 @@ fn render_single_pixel(pattern_line: &[TilePattern],
 }
 
 impl BackgroundRenderer {
-    pub fn render(&mut self,
-                  buffer: &mut [PaletteIndex; SCREEN_BUFFER_SIZE],
-                  start: usize,
-                  stop: usize,
-                  reg: &PPUReg) {
+    pub fn render(
+        &mut self,
+        buffer: &mut [PaletteIndex; SCREEN_BUFFER_SIZE],
+        start: usize,
+        stop: usize,
+        reg: &PPUReg,
+    ) {
         let mut current_scanline = start / SCREEN_WIDTH;
         let mut last_scanline_boundary = current_scanline * SCREEN_WIDTH;
         let next_scanline = current_scanline + 1;
@@ -111,12 +117,14 @@ impl BackgroundRenderer {
             let attr_line = &self.attr[current_scanline];
             let pixel_line = &mut buffer[last_scanline_boundary..next_scanline_boundary];
 
-            draw_segment(pattern_line,
-                         attr_line,
-                         pixel_line,
-                         fine_x_scroll,
-                         segment_start,
-                         segment_end);
+            draw_segment(
+                pattern_line,
+                attr_line,
+                pixel_line,
+                fine_x_scroll,
+                segment_start,
+                segment_end,
+            );
             current_scanline += 1;
             last_scanline_boundary = next_scanline_boundary;
             current = next_scanline_boundary;
@@ -137,9 +145,39 @@ impl BackgroundRenderer {
                 280 if sl == -1 => self.copy_vertical(reg),
                 256 => self.increment_y(reg),
                 257 => self.copy_horizontal(reg),
-                8 | 16 | 24 | 32 | 40 | 48 | 56 | 64 | 72 | 80 | 88 | 96 | 104 | 112 | 120 |
-                128 | 136 | 144 | 152 | 160 | 168 | 176 | 184 | 192 | 200 | 208 | 216 | 224 |
-                232 | 240 | 248 | 328 | 336 => self.increment_x(reg),
+                8 |
+                16 |
+                24 |
+                32 |
+                40 |
+                48 |
+                56 |
+                64 |
+                72 |
+                80 |
+                88 |
+                96 |
+                104 |
+                112 |
+                120 |
+                128 |
+                136 |
+                144 |
+                152 |
+                160 |
+                168 |
+                176 |
+                184 |
+                192 |
+                200 |
+                208 |
+                216 |
+                224 |
+                232 |
+                240 |
+                248 |
+                328 |
+                336 => self.increment_x(reg),
                 _ => (),
             }
         }
@@ -160,15 +198,102 @@ impl BackgroundRenderer {
         } else if sl < 240 {
             match cyc {
                 // Normal fetches
-                1 | 9 | 17 | 25 | 33 | 41 | 49 | 57 | 65 | 73 | 81 | 89 | 97 | 105 | 113 |
-                121 | 129 | 137 | 145 | 153 | 161 | 169 | 177 | 185 | 193 | 201 | 209 | 217 |
-                225 | 233 | 241 | 249 => self.fetch_nametable((cyc + 16) / 8, sl, reg, mem),
-                3 | 11 | 19 | 27 | 35 | 43 | 51 | 59 | 67 | 75 | 83 | 91 | 99 | 107 | 115 |
-                123 | 131 | 139 | 147 | 155 | 163 | 171 | 179 | 187 | 195 | 203 | 211 | 219 |
-                227 | 235 | 243 | 251 => self.fetch_attribute((cyc + 16) / 8, sl, reg, mem),
-                5 | 13 | 21 | 29 | 37 | 45 | 53 | 61 | 69 | 77 | 85 | 93 | 101 | 109 | 117 |
-                125 | 133 | 141 | 149 | 157 | 165 | 173 | 181 | 189 | 197 | 205 | 213 | 221 |
-                229 | 237 | 245 | 253 => self.fetch_tile_pattern((cyc + 16) / 8, sl, reg, mem),
+                1 |
+                9 |
+                17 |
+                25 |
+                33 |
+                41 |
+                49 |
+                57 |
+                65 |
+                73 |
+                81 |
+                89 |
+                97 |
+                105 |
+                113 |
+                121 |
+                129 |
+                137 |
+                145 |
+                153 |
+                161 |
+                169 |
+                177 |
+                185 |
+                193 |
+                201 |
+                209 |
+                217 |
+                225 |
+                233 |
+                241 |
+                249 => self.fetch_nametable((cyc + 16) / 8, sl, reg, mem),
+                3 |
+                11 |
+                19 |
+                27 |
+                35 |
+                43 |
+                51 |
+                59 |
+                67 |
+                75 |
+                83 |
+                91 |
+                99 |
+                107 |
+                115 |
+                123 |
+                131 |
+                139 |
+                147 |
+                155 |
+                163 |
+                171 |
+                179 |
+                187 |
+                195 |
+                203 |
+                211 |
+                219 |
+                227 |
+                235 |
+                243 |
+                251 => self.fetch_attribute((cyc + 16) / 8, sl, reg, mem),
+                5 |
+                13 |
+                21 |
+                29 |
+                37 |
+                45 |
+                53 |
+                61 |
+                69 |
+                77 |
+                85 |
+                93 |
+                101 |
+                109 |
+                117 |
+                125 |
+                133 |
+                141 |
+                149 |
+                157 |
+                165 |
+                173 |
+                181 |
+                189 |
+                197 |
+                205 |
+                213 |
+                221 |
+                229 |
+                237 |
+                245 |
+                253 => self.fetch_tile_pattern((cyc + 16) / 8, sl, reg, mem),
 
                 // Fetches for next scanline
                 321 | 329 => self.fetch_nametable((cyc - 320) / 8, (sl + 1) % 240, reg, mem),
@@ -194,28 +319,28 @@ impl BackgroundRenderer {
 
     fn increment_x(&self, reg: &mut PPUReg) {
         if (reg.v & 0x001F) == 31 {
-            reg.v &= !0x001F; //clear coarse x
-            reg.v ^= 0x0400; //Switch nametable
+            reg.v &= !0x001F; // clear coarse x
+            reg.v ^= 0x0400; // Switch nametable
         } else {
-            reg.v += 1; //increment coarse x
+            reg.v += 1; // increment coarse x
         }
     }
 
     fn increment_y(&self, reg: &mut PPUReg) {
         if (reg.v & 0x7000) != 0x7000 {
-            reg.v += 0x1000; //Increment fine Y
+            reg.v += 0x1000; // Increment fine Y
         } else {
-            reg.v &= !0x7000; //Clear fine Y
+            reg.v &= !0x7000; // Clear fine Y
             let mut coarse_y = (reg.v & 0x03E0) >> 5;
             if coarse_y == 29 {
                 coarse_y = 0;
-                reg.v ^= 0x0800; //Switch vertical nametable
+                reg.v ^= 0x0800; // Switch vertical nametable
             } else if coarse_y == 31 {
-                coarse_y = 0; //Clear coarse_y, but do not switch nametable
+                coarse_y = 0; // Clear coarse_y, but do not switch nametable
             } else {
                 coarse_y += 1;
             }
-            reg.v = (reg.v & !0x03E0) | (coarse_y << 5); //copy coarse_y back into V.
+            reg.v = (reg.v & !0x03E0) | (coarse_y << 5); // copy coarse_y back into V.
         }
     }
 
@@ -235,10 +360,11 @@ impl BackgroundRenderer {
     }
 
     fn fetch_tile_pattern(&mut self, tile_x: u16, y: i16, reg: &PPUReg, mem: &mut PPUMemory) {
-        self.tile[y as usize][tile_x as usize] =
-            mem.read_tile_pattern(self.idx[y as usize][tile_x as usize],
-                                  reg.scroll_y_fine(),
-                                  reg.ppuctrl.background_table());
+        self.tile[y as usize][tile_x as usize] = mem.read_tile_pattern(
+            self.idx[y as usize][tile_x as usize],
+            reg.scroll_y_fine(),
+            reg.ppuctrl.background_table(),
+        );
     }
 
     fn garbage_nametable_fetch(&mut self, reg: &PPUReg, mem: &mut PPUMemory) {
@@ -246,7 +372,7 @@ impl BackgroundRenderer {
         mem.read(nametable_addr);
     }
 
-    #[cfg(feature="mousepick")]
+    #[cfg(feature = "debug_features")]
     pub fn mouse_pick(&self, reg: &PPUReg, px_x: i32, px_y: i32) {
         let scanline = px_y as usize;
         let tile = (px_x / 8) as usize;
@@ -256,13 +382,15 @@ impl BackgroundRenderer {
         let scrolled_y = px_y as u16 + reg.get_scroll_y() as u16;
         let palette = attr.get_palette(scrolled_x, scrolled_y);
         let palette_mask = attr.get_palette_mask(scrolled_x, scrolled_y);
-        println!("{:03}/{:03}: Tile: {:03}, Attribute: {:08b} & {:08b}, Palette: {}",
-                 scrolled_x / 8,
-                 scrolled_y / 8,
-                 tile_id,
-                 attr.bits,
-                 palette_mask,
-                 palette);
+        println!(
+            "{:03}/{:03}: Tile: {:03}, Attribute: {:08b} & {:08b}, Palette: {}",
+            scrolled_x / 8,
+            scrolled_y / 8,
+            tile_id,
+            attr.bits,
+            palette_mask,
+            palette
+        );
     }
 }
 

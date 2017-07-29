@@ -8,10 +8,10 @@ default = ["jit"]
 vectorize = ["simd"]
 cputrace = ["disasm"]
 stacktrace = []
-mousepick = []
 function_disasm = ["disasm"]
 disasm = []
 jit = ["dynasmrt"]
+debug_features = []
 
 [dependencies]
 bitflags = "0.9"

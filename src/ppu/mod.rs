@@ -371,7 +371,7 @@ impl PPU {
         self.frame
     }
 
-    #[cfg(feature="mousepick")]
+    #[cfg(feature="debug_features")]
     pub fn mouse_pick(&self, px_x: i32, px_y: i32) {
         self.background_data.mouse_pick(&self.reg, px_x, px_y);
         self.sprite_data.mouse_pick(px_x, px_y);

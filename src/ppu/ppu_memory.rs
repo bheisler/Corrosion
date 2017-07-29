@@ -1,14 +1,15 @@
+
+use super::Color;
+use super::TilePattern;
 use cart::Cart;
 use memory::MemSegment;
 use std::cell::UnsafeCell;
 use std::rc::Rc;
-use super::Color;
-use super::TilePattern;
 
 /// Represents the PPU's memory map.
 pub struct PPUMemory {
     cart: Rc<UnsafeCell<Cart>>,
-    vram: [u8; 0x0F00],
+    vram: Box<[u8; 0x0F00]>,
     palette: [Color; 0x20],
 }
 
@@ -16,7 +17,7 @@ impl PPUMemory {
     pub fn new(cart: Rc<UnsafeCell<Cart>>) -> PPUMemory {
         PPUMemory {
             cart: cart,
-            vram: [0u8; 0x0F00],
+            vram: Box::new([0u8; 0x0F00]),
             palette: [Color::from_bits_truncate(0); 0x20],
         }
     }
@@ -25,9 +26,9 @@ impl PPUMemory {
 fn get_tile_addr(tile_id: u8, plane: u8, fine_y_scroll: u16, tile_table: u16) -> u16 {
     let mut tile_addr = 0u16;
     tile_addr |= fine_y_scroll;
-    tile_addr |= plane as u16; //Plane must be 0 for low or 8 for high
+    tile_addr |= plane as u16; // Plane must be 0 for low or 8 for high
     tile_addr |= (tile_id as u16) << 4;
-    tile_addr |= tile_table; //Table must be 0x0000 or 0x1000
+    tile_addr |= tile_table; // Table must be 0x0000 or 0x1000
     tile_addr
 }
 
@@ -46,22 +47,26 @@ impl PPUMemory {
         translated as usize % self.vram.len()
     }
 
-    #[cfg(feature="vectorize")]
+    #[cfg(feature = "vectorize")]
     pub fn get_palettes(&self) -> (::simd::u8x16, ::simd::u8x16) {
         let palette_bytes: &[u8; 0x20] = unsafe { ::std::mem::transmute(&self.palette) };
-        (::simd::u8x16::load(palette_bytes, 0), ::simd::u8x16::load(palette_bytes, 16))
+        (
+            ::simd::u8x16::load(palette_bytes, 0),
+            ::simd::u8x16::load(palette_bytes, 16),
+        )
     }
 
-    #[cfg(not(feature="vectorize"))]
+    #[cfg(not(feature = "vectorize"))]
     pub fn read_palette(&self, idx: super::PaletteIndex) -> Color {
         self.palette[idx.to_index()]
     }
 
-    pub fn read_tile_pattern(&mut self,
-                             tile_id: u8,
-                             fine_y_scroll: u16,
-                             tile_table: u16)
-                             -> TilePattern {
+    pub fn read_tile_pattern(
+        &mut self,
+        tile_id: u8,
+        fine_y_scroll: u16,
+        tile_table: u16,
+    ) -> TilePattern {
         let lo_addr = get_tile_addr(tile_id, 0, fine_y_scroll, tile_table);
         let hi_addr = get_tile_addr(tile_id, 8, fine_y_scroll, tile_table);
         TilePattern {
@@ -181,7 +186,8 @@ mod tests {
             let tbl1_idx = to_nametable_idx(idx, tbl1);
             let tbl2_idx = to_nametable_idx(idx, tbl2);
 
-            println!("Translated: tbl1: {:04X}, tbl2: {:04X}",
+            println!(
+                "Translated: tbl1: {:04X}, tbl2: {:04X}",
                 ppu.ppu_mem.translate_vram_address(tbl1_idx),
                 ppu.ppu_mem.translate_vram_address(tbl2_idx),
             );
@@ -199,7 +205,8 @@ mod tests {
             let tbl1_idx = to_nametable_idx(idx, tbl1);
             let tbl2_idx = to_nametable_idx(idx, tbl2);
 
-            println!("Translated: tbl1: {:04X}, tbl2: {:04X}",
+            println!(
+                "Translated: tbl1: {:04X}, tbl2: {:04X}",
                 ppu.ppu_mem.translate_vram_address(tbl1_idx),
                 ppu.ppu_mem.translate_vram_address(tbl2_idx),
             );

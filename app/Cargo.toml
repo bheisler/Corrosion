@@ -4,11 +4,12 @@ version = "0.1.0"
 authors = ["Brook Heisler <redattack34@gmail.com>"]
 
 [features]
-mousepick = ["corrosion/mousepick"]
+debug_features = ["corrosion/debug_features"]
 
 [dependencies]
 corrosion = { path = "..", features = [] }
 stopwatch = "0.0.6"
+config = "0.6.0"
 
 [profile.release]
 #lto = true

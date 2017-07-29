@@ -113,7 +113,7 @@ impl Emulator {
         self.cpu.halted()
     }
 
-    #[cfg(feature = "mousepick")]
+    #[cfg(feature = "debug_features")]
     pub fn mouse_pick(&self, px_x: i32, px_y: i32) {
         self.cpu.ppu.mouse_pick(px_x, px_y);
     }

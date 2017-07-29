@@ -1,4 +1,3 @@
-
 use super::PaletteIndex;
 use super::PaletteSet;
 use super::SCREEN_BUFFER_SIZE;
@@ -231,7 +230,11 @@ impl Default for SpriteRenderer {
 
 fn get_fine_scroll(size: u16, screen_dist: u16, sprite_dist: u16, flip: bool) -> u16 {
     let scroll = screen_dist - sprite_dist;
-    if flip { (size - 1) - scroll } else { scroll }
+    if flip {
+        (size - 1) - scroll
+    } else {
+        scroll
+    }
 }
 
 impl SpriteRenderer {
@@ -330,7 +333,7 @@ impl SpriteRenderer {
         }
     }
 
-    #[cfg(feature = "mousepick")]
+    #[cfg(feature = "debug_features")]
     pub fn mouse_pick(&self, px_x: i32, px_y: i32) {
         let scanline = px_y as usize;
         let pixel = px_x as u16;
