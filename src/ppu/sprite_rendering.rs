@@ -215,15 +215,15 @@ impl Interval {
 }
 
 pub struct SpriteRenderer {
-    primary_oam: [OAMEntry; 64],
-    secondary_oam: [[SpriteDetails; 8]; SCREEN_HEIGHT],
+    primary_oam: Box<[OAMEntry; 64]>,
+    secondary_oam: Box<[[SpriteDetails; 8]; SCREEN_HEIGHT]>,
 }
 
 impl Default for SpriteRenderer {
     fn default() -> SpriteRenderer {
         SpriteRenderer {
-            primary_oam: [Default::default(); 64],
-            secondary_oam: [[Default::default(); 8]; SCREEN_HEIGHT],
+            primary_oam: Box::new([Default::default(); 64]),
+            secondary_oam: Box::new([[Default::default(); 8]; SCREEN_HEIGHT]),
         }
     }
 }

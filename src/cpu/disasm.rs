@@ -25,34 +25,42 @@ pub struct Instruction {
     pub address: u16,
 }
 
-#[cfg(feature="cputrace")]
+#[cfg(feature = "debug_features")]
 impl<'a> Disassembler<'a> {
     // Addressing modes
     fn immediate(&mut self) -> PartialInstruction {
-        PartialInstruction { pattern: format!("$$$ #${:02X}", self.read_incr_pc()) }
+        PartialInstruction {
+            pattern: format!("$$$ #${:02X}", self.read_incr_pc()),
+        }
     }
     fn absolute(&mut self) -> PartialInstruction {
         let arg = self.read_w_incr_pc();
-        PartialInstruction { pattern: format!("$$$ ${:04X} = {:02X}", arg, self.read_safe(arg)) }
+        PartialInstruction {
+            pattern: format!("$$$ ${:04X} = {:02X}", arg, self.read_safe(arg)),
+        }
     }
     fn absolute_x(&mut self) -> PartialInstruction {
         let arg = self.read_w_incr_pc();
         let target = arg.wrapping_add(self.cpu.regs.x as u16);
         PartialInstruction {
-            pattern: format!("$$$ ${:04X},X @ {:04X} = {:02X}",
-                             arg,
-                             target,
-                             self.read_safe(target)),
+            pattern: format!(
+                "$$$ ${:04X},X @ {:04X} = {:02X}",
+                arg,
+                target,
+                self.read_safe(target)
+            ),
         }
     }
     fn absolute_y(&mut self) -> PartialInstruction {
         let arg = self.read_w_incr_pc();
         let target = arg.wrapping_add(self.cpu.regs.y as u16);
         PartialInstruction {
-            pattern: format!("$$$ ${:04X},Y @ {:04X} = {:02X}",
-                             arg,
-                             target,
-                             self.read_safe(target)),
+            pattern: format!(
+                "$$$ ${:04X},Y @ {:04X} = {:02X}",
+                arg,
+                target,
+                self.read_safe(target)
+            ),
         }
     }
     fn zero_page(&mut self) -> PartialInstruction {
@@ -65,20 +73,24 @@ impl<'a> Disassembler<'a> {
         let arg = self.read_incr_pc();
         let target = arg.wrapping_add(self.cpu.regs.x);
         PartialInstruction {
-            pattern: format!("$$$ ${:02X},X @ {:02X} = {:02X}",
-                             arg,
-                             target,
-                             self.read_safe(target as u16)),
+            pattern: format!(
+                "$$$ ${:02X},X @ {:02X} = {:02X}",
+                arg,
+                target,
+                self.read_safe(target as u16)
+            ),
         }
     }
     fn zero_page_y(&mut self) -> PartialInstruction {
         let arg = self.read_incr_pc();
         let target = arg.wrapping_add(self.cpu.regs.y);
         PartialInstruction {
-            pattern: format!("$$$ ${:02X},Y @ {:02X} = {:02X}",
-                             arg,
-                             target,
-                             self.read_safe(target as u16)),
+            pattern: format!(
+                "$$$ ${:02X},Y @ {:02X} = {:02X}",
+                arg,
+                target,
+                self.read_safe(target as u16)
+            ),
         }
     }
     fn indirect_x(&mut self) -> PartialInstruction {
@@ -87,11 +99,13 @@ impl<'a> Disassembler<'a> {
         let ptr = self.read_safe_w_zero_page(zp_idx);
         let target = self.read_safe(ptr);
         PartialInstruction {
-            pattern: format!("$$$ (${:02X},X) @ {:02X} = {:04X} = {:02X}",
-                             arg,
-                             zp_idx,
-                             ptr,
-                             target),
+            pattern: format!(
+                "$$$ (${:02X},X) @ {:02X} = {:04X} = {:02X}",
+                arg,
+                zp_idx,
+                ptr,
+                target
+            ),
         }
     }
     fn indirect_y(&mut self) -> PartialInstruction {
@@ -100,15 +114,19 @@ impl<'a> Disassembler<'a> {
         let ptr = base_ptr.wrapping_add(self.cpu.regs.y as u16);
         let target = self.read_safe(ptr);
         PartialInstruction {
-            pattern: format!("$$$ (${:02X}),Y = {:04X} @ {:04X} = {:02X}",
-                             arg,
-                             base_ptr,
-                             ptr,
-                             target),
+            pattern: format!(
+                "$$$ (${:02X}),Y = {:04X} @ {:04X} = {:02X}",
+                arg,
+                base_ptr,
+                ptr,
+                target
+            ),
         }
     }
     fn accumulator(&mut self) -> PartialInstruction {
-        PartialInstruction { pattern: format!("$$$ A") }
+        PartialInstruction {
+            pattern: format!("$$$ A"),
+        }
     }
 
     fn read_safe_w_zero_page(&mut self, zp_idx: u8) -> u16 {
@@ -118,46 +136,66 @@ impl<'a> Disassembler<'a> {
     }
 }
 
-#[cfg(not(feature="cputrace"))]
+#[cfg(not(feature = "debug_features"))]
 impl<'a> Disassembler<'a> {
     // Addressing modes
     fn immediate(&mut self) -> PartialInstruction {
-        PartialInstruction { pattern: format!("$$$ #${:02X}", self.read_incr_pc()) }
+        PartialInstruction {
+            pattern: format!("$$$ #${:02X}", self.read_incr_pc()),
+        }
     }
     fn absolute(&mut self) -> PartialInstruction {
         let arg = self.read_w_incr_pc();
-        PartialInstruction { pattern: format!("$$$ ${:04X}", arg) }
+        PartialInstruction {
+            pattern: format!("$$$ ${:04X}", arg),
+        }
     }
     fn absolute_x(&mut self) -> PartialInstruction {
         let arg = self.read_w_incr_pc();
-        PartialInstruction { pattern: format!("$$$ ${:04X},X", arg) }
+        PartialInstruction {
+            pattern: format!("$$$ ${:04X},X", arg),
+        }
     }
     fn absolute_y(&mut self) -> PartialInstruction {
         let arg = self.read_w_incr_pc();
-        PartialInstruction { pattern: format!("$$$ ${:04X},Y", arg) }
+        PartialInstruction {
+            pattern: format!("$$$ ${:04X},Y", arg),
+        }
     }
     fn zero_page(&mut self) -> PartialInstruction {
         let arg = self.read_incr_pc();
-        PartialInstruction { pattern: format!("$$$ ${:02X}", arg) }
+        PartialInstruction {
+            pattern: format!("$$$ ${:02X}", arg),
+        }
     }
     fn zero_page_x(&mut self) -> PartialInstruction {
         let arg = self.read_incr_pc();
-        PartialInstruction { pattern: format!("$$$ ${:02X},X", arg) }
+        PartialInstruction {
+            pattern: format!("$$$ ${:02X},X", arg),
+        }
     }
     fn zero_page_y(&mut self) -> PartialInstruction {
         let arg = self.read_incr_pc();
-        PartialInstruction { pattern: format!("$$$ ${:02X},Y", arg) }
+        PartialInstruction {
+            pattern: format!("$$$ ${:02X},Y", arg),
+        }
     }
     fn indirect_x(&mut self) -> PartialInstruction {
         let arg = self.read_incr_pc();
-        PartialInstruction { pattern: format!("$$$ (${:02X},X)", arg) }
+        PartialInstruction {
+            pattern: format!("$$$ (${:02X},X)", arg),
+        }
     }
     fn indirect_y(&mut self) -> PartialInstruction {
         let arg = self.read_incr_pc();
-        PartialInstruction { pattern: format!("$$$ (${:02X}),Y", arg) }
+        PartialInstruction {
+            pattern: format!("$$$ (${:02X}),Y", arg),
+        }
     }
     fn accumulator(&mut self) -> PartialInstruction {
-        PartialInstruction { pattern: format!("$$$ A") }
+        PartialInstruction {
+            pattern: format!("$$$ A"),
+        }
     }
 }
 
@@ -433,7 +471,7 @@ impl<'a> Disassembler<'a> {
     }
 
     fn relative_addr(&self, disp: u8) -> u16 {
-        let disp = (disp as i8) as i16; //We want to sign-extend here.
+        let disp = (disp as i8) as i16; // We want to sign-extend here.
         let pc = self.pc as i16;
         pc.wrapping_add(disp) as u16
     }
@@ -472,56 +510,64 @@ impl<'a> Disassembler<'a> {
             sl = -1;
         }
 
-        println!("{:04X}  {:9}{}{:30}  A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:3} \
-                  SL:{}",
-                 self.cpu.regs.pc,
-                 opcode.bytes
-                     .iter()
-                     .map(|byte| format!("{:02X}", byte))
-                     .fold(None as Option<String>, |opt, right| {
-                         match opt {
-                             Some(left) => Some(left + " " + &right),
-                             None => Some(right),
-                         }
-                     })
-                     .unwrap(),
-                 if opcode.unofficial { "*" } else { " " },
-                 opcode.str,
-                 self.cpu.regs.a,
-                 self.cpu.regs.x,
-                 self.cpu.regs.y,
-                 self.cpu.regs.p.bits(),
-                 self.cpu.regs.sp,
-                 cyc,
-                 sl);
+        println!(
+            "{:04X}  {:9}{}{:30}  A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:3} \
+             SL:{}",
+            self.cpu.regs.pc,
+            opcode
+                .bytes
+                .iter()
+                .map(|byte| format!("{:02X}", byte))
+                .fold(None as Option<String>, |opt, right| {
+                    match opt {
+                        Some(left) => Some(left + " " + &right),
+                        None => Some(right),
+                    }
+                })
+                .unwrap(),
+            if opcode.unofficial { "*" } else { " " },
+            opcode.str,
+            self.cpu.regs.a,
+            self.cpu.regs.x,
+            self.cpu.regs.y,
+            self.cpu.regs.p.bits(),
+            self.cpu.regs.sp,
+            cyc,
+            sl
+        );
     }
 
-    #[cfg(feature="function_disasm")]
+    #[cfg(feature = "function_disasm")]
     pub fn disasm_function(self, entry_point: u16) {
         let exit_point = ::cpu::nes_analyst::Analyst::new(self.cpu).find_exit_point(entry_point);
         let function = self.decode_function(entry_point, exit_point);
-        println!("Disassembly of function at {:04X} -> {:04X}",
-                 entry_point,
-                 exit_point);
+        println!(
+            "Disassembly of function at {:04X} -> {:04X}",
+            entry_point,
+            exit_point
+        );
         for opcode in function.into_iter() {
-            println!("{:04X}:{:9} {}{:30}",
-                     opcode.address,
-                     opcode.bytes
-                         .iter()
-                         .map(|byte| format!("{:02X}", byte))
-                         .fold(None as Option<String>, |opt, right| {
-                             match opt {
-                                 Some(left) => Some(left + " " + &right),
-                                 None => Some(right),
-                             }
-                         })
-                         .unwrap(),
-                     if opcode.unofficial { "*" } else { " " },
-                     opcode.str);
+            println!(
+                "{:04X}:{:9} {}{:30}",
+                opcode.address,
+                opcode
+                    .bytes
+                    .iter()
+                    .map(|byte| format!("{:02X}", byte))
+                    .fold(None as Option<String>, |opt, right| {
+                        match opt {
+                            Some(left) => Some(left + " " + &right),
+                            None => Some(right),
+                        }
+                    })
+                    .unwrap(),
+                if opcode.unofficial { "*" } else { " " },
+                opcode.str
+            );
         }
         println!("");
     }
 
-    #[cfg(not(feature="function_disasm"))]
+    #[cfg(not(feature = "function_disasm"))]
     fn disasm_function(&self) {}
 }

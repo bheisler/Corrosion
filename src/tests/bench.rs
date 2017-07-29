@@ -22,7 +22,7 @@ fn bench_blocks(b: &mut Bencher) {
 fn run_benchmark(bencher: &mut Bencher, file_name: &Path, commands: HashMap<u32, &'static str>) {
 
     let cart = ::cart::Cart::read(file_name).expect("Failed to read ROM File");
-    let mut builder = ::EmulatorBuilder::new(cart);
+    let mut builder = ::EmulatorBuilder::new(cart, Default::default());
     builder.io = Box::new(test_io::TestIO::new(commands));
 
     let mut emulator = builder.build();

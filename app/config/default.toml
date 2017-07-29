@@ -1,2 +1,3 @@
 [debug]
 mousepick = false
+cputrace = false

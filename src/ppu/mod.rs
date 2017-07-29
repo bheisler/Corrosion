@@ -352,17 +352,17 @@ impl PPU {
         }
     }
 
-    #[cfg(feature="cputrace")]
+    #[cfg(feature="debug_features")]
     pub fn cycle(&self) -> u16 {
         self.cyc
     }
 
-    #[cfg(feature="cputrace")]
+    #[cfg(feature="debug_features")]
     pub fn scanline(&self) -> i16 {
         self.sl
     }
 
-    #[cfg(feature="cputrace")]
+    #[cfg(feature="debug_features")]
     pub fn vram_addr(&self) -> u16 {
         self.reg.v
     }

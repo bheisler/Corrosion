@@ -102,7 +102,7 @@ macro_rules! store_registers {
     }};
 }
 
-#[cfg(feature = "cputrace")]
+#[cfg(feature = "debug_features")]
 macro_rules! call_trace {
     ($this:ident) => {dynasm!($this.asm
         ; mov n_pc, WORD $this.pc as _
@@ -127,12 +127,12 @@ macro_rules! call_trace {
     );};
 }
 
-#[cfg(not(feature = "cputrace"))]
+#[cfg(not(feature = "debug_features"))]
 macro_rules! call_trace {
     ($this:ident) => {};
 }
 
-#[cfg(feature = "cputrace")]
+#[cfg(feature = "debug_features")]
 pub extern "win64" fn trace(cpu: *mut CPU) {
     unsafe { (*cpu).trace() }
 }
@@ -237,7 +237,9 @@ impl<'a> Compiler<'a> {
             self.emit_branch_target();
             self.check_for_interrupt();
 
-            self.do_call_trace();
+            if self.cpu.settings.cputrace {
+                call_trace!(self);
+            }
 
             let opcode = self.read_incr_pc();
             self.emit_cycle_count(opcode);
@@ -278,10 +280,6 @@ impl<'a> Compiler<'a> {
         dynasm!(self.asm
             ; add cyc, cycles as _
         )
-    }
-
-    fn do_call_trace(&mut self) {
-        call_trace!(self);
     }
 
     fn check_for_interrupt(&mut self) {

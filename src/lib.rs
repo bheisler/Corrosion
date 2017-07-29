@@ -54,8 +54,21 @@ use std::cell::UnsafeCell;
 
 use std::rc::Rc;
 
+#[derive(Debug, Clone)]
+pub struct Settings {
+    // The following will only be used if compiled with the debug_features feature
+    pub cputrace: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Settings {
+        Settings { cputrace: false }
+    }
+}
+
 pub struct EmulatorBuilder {
-    pub cart: Cart,
+    cart: Cart,
+    settings: Settings,
 
     pub screen: Box<screen::Screen>,
     pub audio_out: Box<audio::AudioOut>,
@@ -63,9 +76,10 @@ pub struct EmulatorBuilder {
 }
 
 impl EmulatorBuilder {
-    pub fn new(cart: Cart) -> EmulatorBuilder {
+    pub fn new(cart: Cart, settings: Settings) -> EmulatorBuilder {
         EmulatorBuilder {
             cart: cart,
+            settings: settings,
 
             screen: Box::new(screen::DummyScreen::default()),
             audio_out: Box::new(audio::DummyAudioOut),
@@ -75,11 +89,13 @@ impl EmulatorBuilder {
 
     pub fn new_sdl(
         cart: Cart,
+        settings: Settings,
         sdl: &sdl2::Sdl,
         event_pump: &Rc<RefCell<sdl2::EventPump>>,
     ) -> EmulatorBuilder {
         EmulatorBuilder {
             cart: cart,
+            settings: settings,
 
             screen: Box::new(screen::sdl::SDLScreen::new(sdl)),
             audio_out: Box::new(audio::sdl::SDLAudioOut::new(sdl)),
@@ -93,7 +109,7 @@ impl EmulatorBuilder {
         let cart: Rc<UnsafeCell<Cart>> = Rc::new(UnsafeCell::new(self.cart));
         let ppu = PPU::new(cart.clone(), self.screen);
         let apu = APU::new(self.audio_out);
-        let mut cpu = CPU::new(ppu, apu, self.io, cart, dispatcher);
+        let mut cpu = CPU::new(self.settings.clone().into(), ppu, apu, self.io, cart, dispatcher);
         cpu.init();
 
         Emulator { cpu: cpu }

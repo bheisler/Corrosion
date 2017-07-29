@@ -174,7 +174,7 @@ fn run_system_test(frames: u32,
                    commands: HashMap<u32, &'static str>) {
 
     let cart = ::cart::Cart::read(file_name).expect("Failed to read ROM File");
-    let mut builder = ::EmulatorBuilder::new(cart);
+    let mut builder = ::EmulatorBuilder::new(cart, Default::default());
     builder.io = Box::new(test_io::TestIO::new(commands));
     builder.screen = Box::new(hash_screen::HashVerifier::new(hashes));
     builder.screen = Box::new(hash_screen::HashPrinter::new(builder.screen));

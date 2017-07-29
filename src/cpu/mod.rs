@@ -1,5 +1,7 @@
 #![macro_use]
 
+use Settings;
+
 pub const NMI_VECTOR: u16 = 0xFFFA;
 pub const RESET_VECTOR: u16 = 0xFFFC;
 pub const IRQ_VECTOR: u16 = 0xFFFE;
@@ -442,7 +444,23 @@ impl JitInterrupt {
     }
 }
 
+#[derive(Debug)]
+pub struct CpuSettings {
+    // The following will only be used if compiled with the debug_features feature
+    pub cputrace: bool
+}
+
+impl From<Settings> for CpuSettings {
+    fn from(settings: Settings) -> Self {
+        CpuSettings {
+            cputrace: settings.cputrace
+        }
+    }
+}
+
 pub struct CPU {
+    settings: CpuSettings,
+
     pub regs: Registers,
     pub interrupt: JitInterrupt,
     pub ram: [u8; 0x0800],
@@ -517,12 +535,12 @@ impl MemSegment for CPU {
 }
 
 impl CPU {
-    #[cfg(feature="cputrace")]
+    #[cfg(feature="debug_features")]
     fn trace(&mut self) {
         Disassembler::new(self).trace();
     }
 
-    #[cfg(not(feature="cputrace"))]
+    #[cfg(not(feature="debug_features"))]
     fn trace(&self) {}
 
     #[cfg(feature="stacktrace")]
@@ -944,8 +962,9 @@ impl CPU {
         panic!( "Unknown or unsupported opcode: 0x{:02X}", opcode )
     }
 
-    pub fn new(ppu: PPU, apu: APU, io: Box<IO>, cart: Rc<UnsafeCell<Cart>>, dispatcher: Rc<UnsafeCell<Dispatcher>>) -> CPU {
+    pub fn new(settings: CpuSettings, ppu: PPU, apu: APU, io: Box<IO>, cart: Rc<UnsafeCell<Cart>>, dispatcher: Rc<UnsafeCell<Dispatcher>>) -> CPU {
         let mut cpu = CPU {
+            settings: settings,
             regs: Registers {
                 a: 0,
                 x: 0,
@@ -1141,7 +1160,7 @@ impl CPU {
 
     pub fn run_frame(&mut self) {
         let frame = self.ppu.frame();
-        while frame == self.ppu.frame() {
+        while frame == self.ppu.frame() && !self.halted {
             self.step();
         }
     }
@@ -1167,7 +1186,9 @@ impl CPU {
             unsafe { (*self.dispatcher.get()).jump(self) }
         }
         else {
-            self.trace();
+            if self.settings.cputrace {
+                self.trace();
+            }
             self.stack_dump();
             let opcode: u8 = self.load_incr_pc();
             self.incr_cycle(CYCLE_TABLE[opcode as usize]);
@@ -1245,7 +1266,8 @@ mod tests {
         let apu = ::apu::APU::new(Box::new(DummyAudioOut));
         let io = DummyIO::new();
         let dispatcher = Rc::new(UnsafeCell::new(Dispatcher::new()));
-        CPU::new(ppu, apu, Box::new(io), cart, dispatcher)
+        let settings : Settings = Default::default();
+        CPU::new(settings.into(), ppu, apu, Box::new(io), cart, dispatcher)
     }
 
     #[test]

@@ -5,7 +5,7 @@ extern crate config;
 
 use config::{Config, File, Environment};
 
-use corrosion::{Emulator, EmulatorBuilder};
+use corrosion::{Emulator, EmulatorBuilder, Settings};
 use corrosion::cart::Cart;
 use corrosion::sdl2::EventPump;
 use corrosion::sdl2::event::Event;
@@ -27,10 +27,17 @@ fn main() {
 
 fn load_config() -> Config {
     let mut s = Config::new();
-    s.merge(File::with_name("config/default"))
+    s.merge(File::with_name("config/default").required(false))
         .expect("Failed to read config file");
     s.merge(Environment::with_prefix("corrosion")).unwrap();
     s
+}
+
+fn make_emulator_settings(config: &Config) -> Settings {
+    let defaults : Settings = Default::default();
+    Settings {
+        cputrace: config.get_bool("debug.cputrace").unwrap_or(defaults.cputrace),
+    }
 }
 
 #[cfg(feature = "debug_features")]
@@ -41,7 +48,7 @@ fn mouse_pick(event_pump: &Rc<RefCell<EventPump>>, emulator: &Emulator) {
 }
 
 #[cfg(not(feature = "debug_features"))]
-fn mouse_pick(_: &Sdl, _: &Emulator) {}
+fn mouse_pick(_: &Rc<RefCell<EventPump>>, _: &Emulator) {}
 
 fn pump_events(pump: &Rc<RefCell<EventPump>>) -> bool {
     for event in pump.borrow_mut().poll_iter() {
@@ -63,7 +70,7 @@ fn start_emulator(cart: Cart, config: Config) {
     let sdl = corrosion::sdl2::init().unwrap();
     let event_pump = Rc::new(RefCell::new(sdl.event_pump().unwrap()));
 
-    let mut builder = EmulatorBuilder::new_sdl(cart, &sdl, &event_pump);
+    let mut builder = EmulatorBuilder::new_sdl(cart, make_emulator_settings(&config), &sdl, &event_pump);
 
     if let Some(file) = get_movie_file() {
         let fm2io = corrosion::io::fm2::FM2IO::read(file).unwrap();
@@ -75,7 +82,7 @@ fn start_emulator(cart: Cart, config: Config) {
     let mut stopwatch = Stopwatch::start_new();
     let smoothing = 0.9;
     let mut avg_frame_time = 0.0f64;
-    let mousepick_enabled = config.get_bool("debug.mousepick").unwrap();
+    let mousepick_enabled = config.get_bool("debug.mousepick").unwrap_or(false);
     loop {
         if pump_events(&event_pump) || emulator.halted() {
             break;
