@@ -5,6 +5,7 @@ mod triangle;
 mod noise;
 mod dmc;
 
+use Settings;
 use apu::buffer::*;
 use apu::dmc::*;
 use apu::noise::*;
@@ -35,7 +36,11 @@ bitflags! {
 
 impl Frame {
     fn mode(&self) -> usize {
-        if self.contains(MODE) { 1 } else { 0 }
+        if self.contains(MODE) {
+            1
+        } else {
+            0
+        }
     }
 }
 
@@ -49,6 +54,8 @@ enum Jitter {
 }
 
 pub struct APU {
+    settings: Rc<Settings>,
+
     square1: Square,
     square2: Square,
     triangle: Triangle,
@@ -73,7 +80,7 @@ pub struct APU {
 }
 
 impl APU {
-    pub fn new(device: Box<AudioOut>) -> APU {
+    pub fn new(settings: Rc<Settings>, device: Box<AudioOut>) -> APU {
         let sample_rate = device.sample_rate();
 
         let square_buffer = Rc::new(RefCell::new(SampleBuffer::new(sample_rate)));
@@ -81,6 +88,7 @@ impl APU {
         let clocks_needed = square_buffer.borrow().clocks_needed() as u64;
 
         APU {
+            settings: settings,
             square1: Square::new(false, Waveform::new(square_buffer.clone(), VOLUME_MULT)),
             square2: Square::new(true, Waveform::new(square_buffer.clone(), VOLUME_MULT)),
             triangle: Triangle::new(Waveform::new(tnd_buffer.clone(), VOLUME_MULT)),
@@ -118,7 +126,9 @@ impl APU {
                 next_step = cmp::min(next_step, time);
             }
 
-            self.play(current_cycle, next_step);
+            if self.settings.sound_enabled {
+                self.play(current_cycle, next_step);
+            }
             self.global_cyc = next_step;
 
             if let Jitter::Delay(time, val) = self.jitter {
@@ -234,17 +244,21 @@ impl APU {
         let cycles_since_last_frame = (cpu_cyc - self.last_frame_cyc) as u32;
         self.last_frame_cyc = cpu_cyc;
 
-        let mut square_buf = self.square_buffer.borrow_mut();
-        let mut tnd_buf = self.tnd_buffer.borrow_mut();
-        square_buf.end_frame(cycles_since_last_frame);
-        tnd_buf.end_frame(cycles_since_last_frame);
-        let samples: Vec<Sample> = {
-            let iter1 = square_buf.read().iter().cloned();
-            let iter2 = tnd_buf.read().iter().cloned();
-            iter1.zip(iter2).map(|(s, t)| s.saturating_add(t)).collect()
-        };
-        self.next_transfer_cyc = cpu_cyc + square_buf.clocks_needed() as u64;
-        self.device.play(&samples);
+        if self.settings.sound_enabled {
+            let mut square_buf = self.square_buffer.borrow_mut();
+            let mut tnd_buf = self.tnd_buffer.borrow_mut();
+            tnd_buf.end_frame(cycles_since_last_frame);
+            square_buf.end_frame(cycles_since_last_frame);
+            let samples: Vec<Sample> = {
+                let iter1 = square_buf.read().iter().cloned();
+                let iter2 = tnd_buf.read().iter().cloned();
+                iter1.zip(iter2).map(|(s, t)| s.saturating_add(t)).collect()
+            };
+            self.next_transfer_cyc = cpu_cyc + square_buf.clocks_needed() as u64;
+            self.device.play(&samples);
+        } else {
+            self.next_transfer_cyc += 100000000;
+        }
     }
 
     /// Returns the cycle number representing the next time the CPU should run

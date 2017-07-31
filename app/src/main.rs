@@ -32,17 +32,19 @@ fn load_config() -> Config {
     s
 }
 
+fn get_bool(config: &Config, key: &str, default: bool) -> bool {
+    config.get_bool(key).unwrap_or(default)
+}
+
 fn make_emulator_settings(config: &Config) -> Settings {
     let defaults: Settings = Default::default();
     Settings {
-        jit: config.get_bool("jit").unwrap_or(defaults.jit),
+        jit: get_bool(&config, "jit", defaults.jit),
+        graphics_enabled: get_bool(&config, "graphics_enabled", defaults.graphics_enabled),
+        sound_enabled: get_bool(&config, "sound_enabled", defaults.sound_enabled),
 
-        trace_cpu: config.get_bool("debug.trace_cpu").unwrap_or(
-            defaults.trace_cpu,
-        ),
-        disassemble_functions: config.get_bool("debug.disassemble_functions").unwrap_or(
-            defaults.disassemble_functions,
-        ),
+        trace_cpu: get_bool(&config, "debug.trace_cpu", defaults.trace_cpu),
+        disassemble_functions: get_bool(&config, "debug.disassemble_functions", defaults.disassemble_functions),
     }
 }
 

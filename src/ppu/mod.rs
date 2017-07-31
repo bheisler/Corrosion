@@ -1,3 +1,4 @@
+use Settings;
 use cart::Cart;
 use memory::MemSegment;
 use screen::Screen;
@@ -118,6 +119,8 @@ impl TilePattern {
 }
 
 pub struct PPU {
+    settings: Rc<Settings>,
+
     reg: PPUReg,
     ppudata_read_buffer: u8,
     ppu_mem: PPUMemory,
@@ -150,7 +153,11 @@ fn div_rem(num: u64, den: u64) -> (u64, u64) {
 
 fn ppu_to_cpu_cyc(ppu_cyc: u64) -> u64 {
     let (div, rem) = div_rem(ppu_cyc, 3);
-    if rem == 0 { div } else { div + 1 }
+    if rem == 0 {
+        div
+    } else {
+        div + 1
+    }
 }
 
 fn cpu_to_ppu_cyc(cpu_cyc: u64) -> u64 {
@@ -185,8 +192,10 @@ fn cyc_to_px(ppu_cyc: u64) -> usize {
 }
 
 impl PPU {
-    pub fn new(cart: Rc<UnsafeCell<Cart>>, screen: Box<Screen>) -> PPU {
+    pub fn new(settings: Rc<Settings>, cart: Rc<UnsafeCell<Cart>>, screen: Box<Screen>) -> PPU {
         PPU {
+            settings: settings,
+
             reg: Default::default(),
             ppudata_read_buffer: 0,
             ppu_mem: PPUMemory::new(cart),
@@ -225,29 +234,23 @@ impl PPU {
             self.run_cycle(rendering_enabled, &mut hit_nmi);
         }
 
-        if self.reg.ppumask.contains(S_BCK) {
-            self.background_data.render(
-                &mut self.palette_buffer,
-                start_px,
-                stop_px,
-                &self.reg,
-            );
-        } else {
-            let slice = &mut self.palette_buffer[start_px..stop_px];
-            for dest in slice.iter_mut() {
-                *dest = TRANSPARENT;
+        if self.settings.graphics_enabled {
+            if self.reg.ppumask.contains(S_BCK) {
+                self.background_data
+                    .render(&mut self.palette_buffer, start_px, stop_px, &self.reg);
+            } else {
+                let slice = &mut self.palette_buffer[start_px..stop_px];
+                for dest in slice.iter_mut() {
+                    *dest = TRANSPARENT;
+                }
             }
-        }
-        if self.reg.ppumask.contains(S_SPR) {
-            self.sprite_data.render(
-                &mut self.palette_buffer,
-                &mut self.reg,
-                start_px,
-                stop_px,
-            );
-        }
+            if self.reg.ppumask.contains(S_SPR) {
+                self.sprite_data
+                    .render(&mut self.palette_buffer, &mut self.reg, start_px, stop_px);
+            }
 
-        self.colorize(start_px, stop_px);
+            self.colorize(start_px, stop_px);
+        }
 
         if hit_nmi {
             StepResult::NMI
@@ -278,13 +281,9 @@ impl PPU {
 
     fn run_cycle(&mut self, rendering_enabled: bool, hit_nmi: &mut bool) {
         if let -1...239 = self.sl {
-            if rendering_enabled {
-                self.background_data.run_cycle(
-                    self.cyc,
-                    self.sl,
-                    &mut self.reg,
-                    &mut self.ppu_mem,
-                );
+            if rendering_enabled && self.settings.graphics_enabled {
+                self.background_data
+                    .run_cycle(self.cyc, self.sl, &mut self.reg, &mut self.ppu_mem);
             }
         }
         match (self.cyc, self.sl) {
@@ -292,11 +291,10 @@ impl PPU {
 
             // Visible scanlines
             (0, 0...239) => {
-                self.sprite_data.sprite_eval(
-                    self.sl as u16,
-                    &self.reg,
-                    &mut self.ppu_mem,
-                )
+                if self.settings.graphics_enabled {
+                    self.sprite_data
+                        .sprite_eval(self.sl as u16, &self.reg, &mut self.ppu_mem)
+                }
             }
             (_, 0...239) => (),
 
@@ -460,7 +458,12 @@ mod tests {
     pub fn create_test_ppu_with_rom(chr_rom: Vec<u8>) -> PPU {
         let mapper = create_test_mapper(vec![0u8; 0x1000], chr_rom, ScreenMode::FourScreen);
         let cart = Cart::new(mapper);
+        let settings = Settings {
+            graphics_enabled: true,
+            ..Default::default()
+        };
         PPU::new(
+            Rc::new(settings),
             Rc::new(UnsafeCell::new(cart)),
             Box::new(DummyScreen::default()),
         )
@@ -469,7 +472,12 @@ mod tests {
     pub fn create_test_ppu_with_mirroring(mode: ScreenMode) -> PPU {
         let mapper = create_test_mapper(vec![0u8; 0x1000], vec![0u8; 0x1000], mode);
         let cart = Cart::new(mapper);
+        let settings = Settings {
+            graphics_enabled: true,
+            ..Default::default()
+        };
         PPU::new(
+            Rc::new(settings),
             Rc::new(UnsafeCell::new(cart)),
             Box::new(DummyScreen::default()),
         )

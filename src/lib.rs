@@ -57,6 +57,8 @@ use std::rc::Rc;
 #[derive(Debug, Clone)]
 pub struct Settings {
     pub jit: bool,
+    pub graphics_enabled: bool,
+    pub sound_enabled: bool,
 
     // The following will only be used if compiled with the debug_features feature
     pub trace_cpu: bool,
@@ -67,6 +69,8 @@ impl Default for Settings {
     fn default() -> Settings {
         Settings {
             jit: false,
+            graphics_enabled: true,
+            sound_enabled: true,
 
             trace_cpu: false,
             disassemble_functions: false,
@@ -101,14 +105,16 @@ impl EmulatorBuilder {
         sdl: &sdl2::Sdl,
         event_pump: &Rc<RefCell<sdl2::EventPump>>,
     ) -> EmulatorBuilder {
-        EmulatorBuilder {
-            cart: cart,
-            settings: settings,
+        let sound_enabled = settings.sound_enabled;
+        let mut builder = EmulatorBuilder::new(cart, settings);
 
-            screen: Box::new(screen::sdl::SDLScreen::new(sdl)),
-            audio_out: Box::new(audio::sdl::SDLAudioOut::new(sdl)),
-            io: Box::new(io::sdl::SdlIO::new(event_pump.clone())),
+        builder.screen = Box::new(screen::sdl::SDLScreen::new(sdl));
+        if sound_enabled {
+            builder.audio_out = Box::new(audio::sdl::SDLAudioOut::new(sdl));
         }
+        builder.io = Box::new(io::sdl::SdlIO::new(event_pump.clone()));
+
+        builder
     }
 
     pub fn build(mut self) -> Emulator {
@@ -116,8 +122,8 @@ impl EmulatorBuilder {
         let dispatcher = Rc::new(UnsafeCell::new(cpu::dispatcher::Dispatcher::new()));
         self.cart.set_dispatcher(dispatcher.clone());
         let cart: Rc<UnsafeCell<Cart>> = Rc::new(UnsafeCell::new(self.cart));
-        let ppu = PPU::new(cart.clone(), self.screen);
-        let apu = APU::new(self.audio_out);
+        let ppu = PPU::new(settings.clone(), cart.clone(), self.screen);
+        let apu = APU::new(settings.clone(), self.audio_out);
         let mut cpu = CPU::new(settings, ppu, apu, self.io, cart, dispatcher);
         cpu.init();
 

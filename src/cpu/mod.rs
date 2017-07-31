@@ -1267,7 +1267,11 @@ mod tests {
         );
         let cart = ::cart::Cart::new(nrom);
         let cart = Rc::new(UnsafeCell::new(cart));
-        let ppu = ::ppu::PPU::new(cart.clone(), Box::new(DummyScreen::default()));
+        let ppu = ::ppu::PPU::new(
+            settings.clone(),
+            cart.clone(),
+            Box::new(DummyScreen::default()),
+        );
         let apu = ::apu::APU::new(Box::new(DummyAudioOut));
         let io = DummyIO::new();
         let dispatcher = Rc::new(UnsafeCell::new(Dispatcher::new()));
