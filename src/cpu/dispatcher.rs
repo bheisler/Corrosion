@@ -60,7 +60,9 @@ impl Dispatcher {
             table.push(None);
         }
 
-        Dispatcher { table: table.into_boxed_slice() }
+        Dispatcher {
+            table: table.into_boxed_slice(),
+        }
     }
 
     fn put(&mut self, start_addr: u16, end_addr: u16, code: ExecutableBlock) -> &Block {

@@ -2,6 +2,7 @@ mod hash_screen;
 mod test_io;
 mod bench;
 
+use Settings;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -200,7 +201,11 @@ fn run_system_test(
 ) {
 
     let cart = ::cart::Cart::read(file_name).expect("Failed to read ROM File");
-    let mut builder = ::EmulatorBuilder::new(cart, Default::default());
+    let settings = Settings {
+        jit: true,
+        ..Default::default()
+    };
+    let mut builder = ::EmulatorBuilder::new(cart, settings);
     builder.io = Box::new(test_io::TestIO::new(commands));
     builder.screen = Box::new(hash_screen::HashVerifier::new(hashes));
     builder.screen = Box::new(hash_screen::HashPrinter::new(builder.screen));

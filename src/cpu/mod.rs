@@ -1272,7 +1272,7 @@ mod tests {
             cart.clone(),
             Box::new(DummyScreen::default()),
         );
-        let apu = ::apu::APU::new(Box::new(DummyAudioOut));
+        let apu = ::apu::APU::new(settings.clone(), Box::new(DummyAudioOut));
         let io = DummyIO::new();
         let dispatcher = Rc::new(UnsafeCell::new(Dispatcher::new()));
         CPU::new(settings, ppu, apu, Box::new(io), cart, dispatcher)
