@@ -6,6 +6,7 @@ use cpu::compiler;
 #[cfg(target_arch = "x86_64")]
 use cpu::compiler::ExecutableBlock;
 
+use fnv::FnvHashMap;
 #[cfg(not(target_arch = "x86_64"))]
 pub struct Dispatcher {}
 #[cfg(not(target_arch = "x86_64"))]
@@ -21,7 +22,7 @@ impl Dispatcher {
 
 #[cfg(target_arch = "x86_64")]
 pub struct Dispatcher {
-    table: Box<[Option<Block>]>,
+    table: FnvHashMap<u16, Block>,
 }
 #[cfg(target_arch = "x86_64")]
 struct Block {
@@ -54,25 +55,22 @@ impl Default for Dispatcher {
 #[cfg(target_arch = "x86_64")]
 impl Dispatcher {
     pub fn new() -> Dispatcher {
-        let mut table: Vec<Option<Block>> = vec![];
-        table.reserve_exact(0x10000);
-        for _ in 0..0x10000 {
-            table.push(None);
-        }
-
         Dispatcher {
-            table: table.into_boxed_slice(),
+            table: FnvHashMap::default(),
         }
     }
 
     fn put(&mut self, start_addr: u16, end_addr: u16, code: ExecutableBlock) -> &Block {
-        self.table[start_addr as usize] = Some(Block {
-            dirty: false,
-            start_addr: start_addr,
-            end_addr: end_addr,
-            code: code,
-        });
-        self.table[start_addr as usize].as_ref().unwrap()
+        self.table.insert(
+            start_addr,
+            Block {
+                dirty: false,
+                start_addr: start_addr,
+                end_addr: end_addr,
+                code: code,
+            },
+        );
+        self.table.get(&start_addr).unwrap()
     }
 
     pub fn jump(&mut self, cpu: &mut CPU) {
@@ -85,12 +83,12 @@ impl Dispatcher {
         if self.should_compile(addr) {
             self.compile(addr, cpu)
         } else {
-            self.table[addr as usize].as_ref().unwrap()
+            self.table.get(&addr).unwrap()
         }
     }
 
     fn should_compile(&self, addr: u16) -> bool {
-        self.table[addr as usize].as_ref().map_or(true, |b| b.dirty)
+        self.table.get(&addr).map_or(true, |b| b.dirty)
     }
 
     fn compile(&mut self, addr: u16, cpu: &mut CPU) -> &Block {
@@ -102,11 +100,9 @@ impl Dispatcher {
     }
 
     pub fn dirty(&mut self, start: usize, end: usize) {
-        for opt_block in self.table.iter_mut() {
-            if let Some(ref mut block) = *opt_block {
-                if block.overlaps_with(start, end) {
-                    block.dirty = true;
-                }
+        for block in self.table.values_mut() {
+            if block.overlaps_with(start, end) {
+                block.dirty = true;
             }
         }
     }

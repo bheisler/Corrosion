@@ -12,8 +12,8 @@ use cpu::nes_analyst::BlockAnalysis;
 use cpu::nes_analyst::InstructionAnalysis;
 
 use dynasmrt::{AssemblyOffset, DynasmApi, DynasmLabelApi, ExecutableBuffer, DynamicLabel};
+use fnv::FnvHashMap;
 use memory::MemSegment;
-use std::collections::HashMap;
 use std::mem;
 
 const CARRY: u8 = 0b0000_0001;
@@ -209,7 +209,7 @@ struct Compiler<'a> {
     pc: u16,
     current_instruction: u16,
 
-    branch_targets: HashMap<u16, DynamicLabel>,
+    branch_targets: FnvHashMap<u16, DynamicLabel>,
 }
 
 impl<'a> Compiler<'a> {
@@ -223,7 +223,7 @@ impl<'a> Compiler<'a> {
             current_instruction: entry_point,
             analysis: analysis,
 
-            branch_targets: HashMap::new(),
+            branch_targets: FnvHashMap::default(),
         }
     }
 

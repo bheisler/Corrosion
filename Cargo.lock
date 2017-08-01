@@ -6,6 +6,7 @@ dependencies = [
  "blip_buf 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "dynasm 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "dynasmrt 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "fnv 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "memmap 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "nom 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "quick-error 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -65,6 +66,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "memmap 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "fnv"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "fs2"
@@ -248,6 +254,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum compiler_error 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "ef975f6d3622b15ea669c8075fefa5a9bc4bfae1b8b221ab9962daff003b3047"
 "checksum dynasm 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "9138246ef326d159671e52a890f02b204e3dc11bd3f890e4d2b13ebfb4aa4623"
 "checksum dynasmrt 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "095f5f6a53ba822966de6379c162f99cfd8b05a56baf8ffb1c66333fcdbd154a"
+"checksum fnv 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)" = "6cc484842f1e2884faf56f529f960cc12ad8c71ce96cc7abba0a067c98fee344"
 "checksum fs2 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)" = "bcd414e5a1a979b931bb92f41b7a54106d3f6d2e6c253e9ce943b7cd468251ef"
 "checksum fs2 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "9ab76cfd2aaa59b7bf6688ad9ba15bbae64bff97f04ea02144cfd3443e5c2866"
 "checksum gcc 0.3.51 (registry+https://github.com/rust-lang/crates.io-index)" = "120d07f202dcc3f72859422563522b66fe6463a4c513df062874daad05f85f0a"

@@ -25,6 +25,7 @@ extern crate nom;
 pub extern crate sdl2;
 extern crate blip_buf;
 extern crate memmap;
+extern crate fnv;
 
 #[cfg(feature = "vectorize")]
 extern crate simd;

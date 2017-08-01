@@ -1,7 +1,7 @@
 use cpu::CPU;
+use fnv::FnvHashMap;
+use fnv::FnvHashSet;
 use memory::MemSegment;
-use std::collections::HashMap;
-use std::collections::HashSet;
 
 pub struct Analyst<'a> {
     entry_point: u16,
@@ -11,7 +11,7 @@ pub struct Analyst<'a> {
     furthest_branch: u16,
     found_exit_point: bool,
 
-    instructions: HashMap<u16, InstructionAnalysis>,
+    instructions: FnvHashMap<u16, InstructionAnalysis>,
 }
 
 pub struct InstructionAnalysis {
@@ -20,7 +20,9 @@ pub struct InstructionAnalysis {
 
 impl Default for InstructionAnalysis {
     fn default() -> InstructionAnalysis {
-        InstructionAnalysis { is_branch_target: false }
+        InstructionAnalysis {
+            is_branch_target: false,
+        }
     }
 }
 
@@ -28,7 +30,7 @@ pub struct BlockAnalysis {
     pub entry_point: u16,
     pub exit_point: u16,
 
-    pub instructions: HashMap<u16, InstructionAnalysis>,
+    pub instructions: FnvHashMap<u16, InstructionAnalysis>,
 }
 
 impl<'a> Analyst<'a> {
@@ -41,7 +43,7 @@ impl<'a> Analyst<'a> {
             furthest_branch: 0,
             found_exit_point: false,
 
-            instructions: HashMap::new(),
+            instructions: FnvHashMap::default(),
         }
     }
 
@@ -54,7 +56,7 @@ impl<'a> Analyst<'a> {
         self.entry_point = entry_point;
         self.pc = entry_point;
 
-        let mut valid_instr_addrs: HashSet<u16> = HashSet::new();
+        let mut valid_instr_addrs: FnvHashSet<u16> = FnvHashSet::default();
 
         while !self.found_exit_point {
             // Ensure that every instruction has an entry
@@ -76,8 +78,8 @@ impl<'a> Analyst<'a> {
         }
     }
 
-    fn remove_invalid_instructions(&mut self, valid_instr_addrs: HashSet<u16>) {
-        let mut invalid_instrs: HashSet<u16> = HashSet::new();
+    fn remove_invalid_instructions(&mut self, valid_instr_addrs: FnvHashSet<u16>) {
+        let mut invalid_instrs: FnvHashSet<u16> = FnvHashSet::default();
 
         {
             for addr in self.instructions.keys().cloned() {
