@@ -1,8 +1,5 @@
 use super::{Mapper, MapperParams};
 use super::bank::*;
-use cpu::dispatcher::Dispatcher;
-use std::cell::UnsafeCell;
-use std::rc::Rc;
 
 struct Mapper000 {
     prg_rom: MappingTable,
@@ -44,6 +41,10 @@ impl Mapper for Mapper000 {
         self.prg_rom.get_bank_mut(idx)
     }
 
+    fn prg_rom_bank_id(&self, idx: u16) -> usize {
+        self.prg_rom.get_bank_id(idx)
+    }
+
     fn prg_ram_read(&mut self, idx: u16) -> u8 {
         self.prg_ram[((idx - 0x6000) as usize % self.prg_ram.len())]
     }
@@ -70,10 +71,6 @@ impl Mapper for Mapper000 {
 
     fn get_mirroring_table(&self) -> &[u16; 4] {
         self.mode
-    }
-
-    fn set_dispatcher(&mut self, dispatcher: Rc<UnsafeCell<Dispatcher>>) {
-        self.prg_rom.set_dispatcher(dispatcher);
     }
 }
 

@@ -3,10 +3,7 @@ use super::bank::*;
 use super::battery::BatteryBackedRam;
 use super::volatile::VolatileRam;
 use cart::ScreenMode;
-use cpu::dispatcher::Dispatcher;
 use memory::MemSegment;
-use std::cell::UnsafeCell;
-use std::rc::Rc;
 
 #[derive(Debug, Clone, PartialEq)]
 struct Ctrl {
@@ -45,23 +42,17 @@ impl MMC1 {
     fn update_mapping(&mut self) {
         match self.regs.control.mode {
             PrgMode::Switch32Kb => {
-                self.prg_rom.map_pages_linear(
-                    0..8,
-                    (self.regs.prg_bank & 0b0000_1110) * 8,
-                )
+                self.prg_rom
+                    .map_pages_linear(0..8, (self.regs.prg_bank & 0b0000_1110) * 8)
             }
             PrgMode::FixFirst => {
                 self.prg_rom.map_pages_linear(0..4, 0);
-                self.prg_rom.map_pages_linear(
-                    4..8,
-                    (self.regs.prg_bank & 0b0000_1111) * 4,
-                );
+                self.prg_rom
+                    .map_pages_linear(4..8, (self.regs.prg_bank & 0b0000_1111) * 4);
             }
             PrgMode::FixLast => {
-                self.prg_rom.map_pages_linear(
-                    0..4,
-                    (self.regs.prg_bank & 0b0000_1111) * 4,
-                );
+                self.prg_rom
+                    .map_pages_linear(0..4, (self.regs.prg_bank & 0b0000_1111) * 4);
                 let bank_count = self.prg_rom.bank_count();
                 self.prg_rom.map_pages_linear(4..8, bank_count - 4);
             }
@@ -171,6 +162,10 @@ impl Mapper for MMC1 {
         self.prg_rom.get_bank_mut(idx)
     }
 
+    fn prg_rom_bank_id(&self, idx: u16) -> usize {
+        self.prg_rom.get_bank_id(idx)
+    }
+
     fn prg_ram_read(&mut self, idx: u16) -> u8 {
         self.prg_ram.read(prg_ram_addr(idx))
     }
@@ -189,9 +184,5 @@ impl Mapper for MMC1 {
 
     fn get_mirroring_table(&self) -> &[u16; 4] {
         self.regs.control.mirroring
-    }
-
-    fn set_dispatcher(&mut self, dispatcher: Rc<UnsafeCell<Dispatcher>>) {
-        self.prg_rom.set_dispatcher(dispatcher);
     }
 }

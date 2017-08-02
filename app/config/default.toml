@@ -1,9 +1,8 @@
 graphics_enabled = true
 sound_enabled = true
 
-
 # Enable the JIT compiler. Currently only available on x86_64.
-jit = false
+jit = true
 
 # These settings will be ignored unless the executable is compiled with the
 # debug_features feature.

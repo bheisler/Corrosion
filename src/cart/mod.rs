@@ -2,14 +2,11 @@ pub mod ines;
 
 
 use cart::ines::{Rom, RomError};
-use cpu::dispatcher::Dispatcher;
 use mappers::{Mapper, MapperParams, RomBank};
-use std::cell::UnsafeCell;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 use std::path::Path;
-use std::rc::Rc;
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum ScreenMode {
@@ -64,6 +61,9 @@ impl Cart {
     pub fn prg_rom_write(&mut self, idx: u16, val: u8) -> &mut RomBank {
         self.mapper.prg_rom_write(idx, val)
     }
+    pub fn prg_rom_bank_id(&self, idx: u16) -> usize {
+        self.mapper.prg_rom_bank_id(idx)
+    }
     pub fn prg_ram_read(&mut self, idx: u16) -> u8 {
         self.mapper.prg_ram_read(idx)
     }
@@ -75,10 +75,6 @@ impl Cart {
     }
     pub fn chr_write(&mut self, idx: u16, val: u8) {
         self.mapper.chr_write(idx, val)
-    }
-
-    pub fn set_dispatcher(&mut self, dispatcher: Rc<UnsafeCell<Dispatcher>>) {
-        self.mapper.set_dispatcher(dispatcher);
     }
 
     pub fn new(mapper: Box<Mapper>) -> Cart {

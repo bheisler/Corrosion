@@ -477,7 +477,7 @@ pub struct CPU {
     pub apu: APU,
     pub io: Box<IO>,
     cart: Rc<UnsafeCell<Cart>>,
-    dispatcher: Rc<UnsafeCell<Dispatcher>>,
+    dispatcher: UnsafeCell<Dispatcher>,
     pub cycle: u64,
     pub halted: bool,
     io_strobe: bool,
@@ -967,7 +967,7 @@ impl CPU {
         apu: APU,
         io: Box<IO>,
         cart: Rc<UnsafeCell<Cart>>,
-        dispatcher: Rc<UnsafeCell<Dispatcher>>,
+        dispatcher: Dispatcher,
     ) -> CPU {
         let mut cpu = CPU {
             settings: settings,
@@ -986,7 +986,7 @@ impl CPU {
             apu: apu,
             io: io,
             cart: cart,
-            dispatcher: dispatcher,
+            dispatcher: UnsafeCell::new(dispatcher),
             halted: false,
             io_strobe: false,
         };
@@ -1274,7 +1274,7 @@ mod tests {
         );
         let apu = ::apu::APU::new(settings.clone(), Box::new(DummyAudioOut));
         let io = DummyIO::new();
-        let dispatcher = Rc::new(UnsafeCell::new(Dispatcher::new()));
+        let dispatcher = Dispatcher::new();
         CPU::new(settings, ppu, apu, Box::new(io), cart, dispatcher)
     }
 

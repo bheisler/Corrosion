@@ -43,10 +43,9 @@ impl ExecutableBlock {
     }
 }
 
-pub fn compile(addr: u16, cpu: &mut CPU) -> (u16, ExecutableBlock) {
+pub fn compile(addr: u16, cpu: &mut CPU) -> ExecutableBlock {
     let analysis = Analyst::new(cpu).analyze(addr);
-    let end_addr = analysis.exit_point;
-    (end_addr, Compiler::new(cpu, analysis).compile_block())
+    Compiler::new(cpu, analysis).compile_block()
 }
 
 // rcx and sub-sections thereof are the general-purpose scratch register.
