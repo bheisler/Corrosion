@@ -207,6 +207,7 @@ struct Compiler<'a> {
 
     pc: u16,
     current_instruction: u16,
+    current_instr_analysis: InstructionAnalysis,
 
     branch_targets: FnvHashMap<u16, DynamicLabel>,
 }
@@ -217,10 +218,11 @@ impl<'a> Compiler<'a> {
         Compiler {
             asm: ::dynasmrt::x64::Assembler::new(),
             cpu: cpu,
+            analysis: analysis,
 
             pc: entry_point,
             current_instruction: entry_point,
-            analysis: analysis,
+            current_instr_analysis: Default::default(),
 
             branch_targets: FnvHashMap::default(),
         }
@@ -233,6 +235,9 @@ impl<'a> Compiler<'a> {
 
         while self.pc <= self.analysis.exit_point {
             self.current_instruction = self.pc;
+            let temp = self.current_instruction;
+            self.current_instr_analysis = self.analysis.instructions.get(&temp).unwrap().clone();
+
             self.emit_branch_target();
             self.check_for_interrupt();
 
@@ -265,7 +270,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn emit_branch_target(&mut self) {
-        if self.get_current_instr_analysis().is_branch_target {
+        if self.current_instr_analysis.is_branch_target {
             let temp_pc = self.current_instruction;
             let target_label = self.get_dynamic_label(temp_pc);
             dynasm!{self.asm
@@ -322,24 +327,21 @@ impl<'a> Compiler<'a> {
         dynasm!{self.asm
             ;; mode.read_to_arg(self, true)
             ; mov n_x, arg
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
+            ;; self.set_sign_zero_from_arg()
         }
     }
     fn lda<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
             ;; mode.read_to_arg(self, true)
             ; mov n_a, arg
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
+            ;; self.set_sign_zero_from_arg()
         }
     }
     fn ldy<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
             ;; mode.read_to_arg(self, true)
             ; mov n_y, arg
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
+            ;; self.set_sign_zero_from_arg()
         }
     }
 
@@ -347,30 +349,39 @@ impl<'a> Compiler<'a> {
     fn bit<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
             ;; mode.read_to_arg(self, false)
+        }
 
-            //Set the sign flag
-            ;; call_naked!(self, set_sign_flag)
+        // Set the sign flag
+        if self.current_instr_analysis.sign_flag_used {
+            call_naked!(self, set_sign_flag);
+        }
 
-            //Set the overflow flag
-            ; test arg, BYTE 0b0100_0000
-            ; jz >clear
-            ; or n_p, BYTE OVERFLOW as _
-            ; jmp >next
-            ; clear:
-            ; and n_p, BYTE (!OVERFLOW) as _
-            ; next:
+        if self.current_instr_analysis.overflow_flag_used {
+            dynasm!{self.asm
+                //Set the overflow flag
+                ; test arg, BYTE 0b0100_0000
+                ; jz >clear
+                ; or n_p, BYTE OVERFLOW as _
+                ; jmp >next
+                ; clear:
+                ; and n_p, BYTE (!OVERFLOW) as _
+                ; next:
+            }
+        }
 
-            //Set the zero flag
-            ; and arg, n_a
-            ;; call_naked!(self, set_zero_flag)
+        if self.current_instr_analysis.zero_flag_used {
+            dynasm!{self.asm
+                //Set the zero flag
+                ; and arg, n_a
+                ;; call_naked!(self, set_zero_flag)
+            }
         }
     }
     fn and<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
             ;; mode.read_to_arg(self, true)
             ; and arg, n_a
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
+            ;; self.set_sign_zero_from_arg()
             ; mov n_a, arg
         }
     }
@@ -378,8 +389,7 @@ impl<'a> Compiler<'a> {
         dynasm!{self.asm
             ;; mode.read_to_arg(self, true)
             ; or arg, n_a
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
+            ;; self.set_sign_zero_from_arg()
             ; mov n_a, arg
         }
     }
@@ -387,8 +397,7 @@ impl<'a> Compiler<'a> {
         dynasm!{self.asm
             ;; mode.read_to_arg(self, true)
             ; xor arg, n_a
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
+            ;; self.set_sign_zero_from_arg()
             ; mov n_a, arg
         }
     }
@@ -416,100 +425,117 @@ impl<'a> Compiler<'a> {
             ; jz >next
             ; inc r8w // add the carry flag
             ; next:
+        }
 
-            //Set carry based on result
-            ; cmp r8w, 0xFF
-            ; ja >set_carry
-            ; and n_p, (!CARRY) as _
-            ; jmp >next
-            ; set_carry:
-            ; or n_p, CARRY as _
-            ; next:
+        if self.current_instr_analysis.carry_flag_used {
+            dynasm!{self.asm
+                //Set carry based on result
+                ; cmp r8w, 0xFF
+                ; ja >set_carry
+                ; and n_p, (!CARRY) as _
+                ; jmp >next
+                ; set_carry:
+                ; or n_p, CARRY as _
+                ; next:
+            }
+        }
 
-            //Calculate the overflow flag
-            ; mov al, n_a
-            ; xor al, [rsp]
-            ; test al, BYTE HIGH_BIT as _
-            ; jnz >clear_overflow
-            ; mov al, n_a
-            ; xor al, arg
-            ; test al, BYTE HIGH_BIT as _
-            ; jz >clear_overflow
-            ; or n_p, OVERFLOW as _
-            ; jmp >next
-            ; clear_overflow:
-            ; and n_p, (!OVERFLOW) as _
-            ; next:
+        if self.current_instr_analysis.overflow_flag_used {
+            dynasm!{self.asm
+                //Calculate the overflow flag
+                ; mov al, n_a
+                ; xor al, [rsp]
+                ; test al, BYTE HIGH_BIT as _
+                ; jnz >clear_overflow
+                ; mov al, n_a
+                ; xor al, arg
+                ; test al, BYTE HIGH_BIT as _
+                ; jz >clear_overflow
+                ; or n_p, OVERFLOW as _
+                ; jmp >next
+                ; clear_overflow:
+                ; and n_p, (!OVERFLOW) as _
+                ; next:
+           }
+        }
+
+        dynasm!{self.asm
             ; mov n_a, arg
             ; inc rsp
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
+            ;; self.set_sign_zero_from_arg()
         }
     }
 
     fn cmp<M: AddressingMode>(&mut self, mode: M) {
+        mode.read_to_arg(self, true);
+        if self.current_instr_analysis.carry_flag_used {
+            dynasm!{self.asm
+                ; cmp n_a, arg
+                ; jb >clear
+                ; or n_p, BYTE CARRY as _
+                ; jmp >next
+                ; clear:
+                ; and n_p, BYTE (!CARRY) as _
+                ; next:
+            }
+        }
+
         dynasm!{self.asm
-            ;; mode.read_to_arg(self, true)
-
-            ; cmp n_a, arg
-            ; jb >clear
-            ; or n_p, BYTE CARRY as _
-            ; jmp >next
-            ; clear:
-            ; and n_p, BYTE (!CARRY) as _
-            ; next:
-
             ; mov cl, n_a
             ; sub cl, arg
             ; mov arg, cl
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
+            ;; self.set_sign_zero_from_arg()
         }
     }
     fn cpx<M: AddressingMode>(&mut self, mode: M) {
+        mode.read_to_arg(self, false);
+
+        if self.current_instr_analysis.carry_flag_used {
+            dynasm!{self.asm
+                ; cmp n_x, arg
+                ; jb >clear
+                ; or n_p, BYTE CARRY as _
+                ; jmp >next
+                ; clear:
+                ; and n_p, BYTE (!CARRY) as _
+                ; next:
+            }
+        }
+
         dynasm!{self.asm
-            ;; mode.read_to_arg(self, false)
-
-            ; cmp n_x, arg
-            ; jb >clear
-            ; or n_p, BYTE CARRY as _
-            ; jmp >next
-            ; clear:
-            ; and n_p, BYTE (!CARRY) as _
-            ; next:
-
             ; mov cl, n_x
             ; sub cl, arg
             ; mov arg, cl
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
+            ;; self.set_sign_zero_from_arg()
         }
     }
     fn cpy<M: AddressingMode>(&mut self, mode: M) {
+        mode.read_to_arg(self, false);
+
+        if self.current_instr_analysis.carry_flag_used {
+            dynasm!{self.asm
+                ; cmp n_y, arg
+                ; jb >clear
+                ; or n_p, BYTE CARRY as _
+                ; jmp >next
+                ; clear:
+                ; and n_p, BYTE (!CARRY) as _
+                ; next:
+            }
+        }
+
         dynasm!{self.asm
-            ;; mode.read_to_arg(self, false)
-
-            ; cmp n_y, arg
-            ; jb >clear
-            ; or n_p, BYTE CARRY as _
-            ; jmp >next
-            ; clear:
-            ; and n_p, BYTE (!CARRY) as _
-            ; next:
-
             ; mov cl, n_y
             ; sub cl, arg
             ; mov arg, cl
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
+            ;; self.set_sign_zero_from_arg()
         }
     }
     fn inc<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
             ;; mode.read_to_arg(self, false)
             ; inc arg
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
+            ;; self.set_sign_zero_from_arg()
             ;; mode.write_from_arg(self)
         }
     }
@@ -517,24 +543,21 @@ impl<'a> Compiler<'a> {
         dynasm!{self.asm
             ; inc n_y
             ; mov arg, n_y
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
+            ;; self.set_sign_zero_from_arg()
         }
     }
     fn inx(&mut self) {
         dynasm!{self.asm
             ; inc n_x
             ; mov arg, n_x
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
+            ;; self.set_sign_zero_from_arg()
         }
     }
     fn dec<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
             ;; mode.read_to_arg(self, false)
             ; dec arg
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
+            ;; self.set_sign_zero_from_arg()
             ;; mode.write_from_arg(self)
         }
     }
@@ -542,47 +565,55 @@ impl<'a> Compiler<'a> {
         dynasm!{self.asm
             ; dec n_y
             ; mov arg, n_y
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
+            ;; self.set_sign_zero_from_arg()
         }
     }
     fn dex(&mut self) {
         dynasm!{self.asm
             ; dec n_x
             ; mov arg, n_x
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
+            ;; self.set_sign_zero_from_arg()
         }
     }
     fn lsr<M: AddressingMode>(&mut self, mode: M) {
+        mode.read_to_arg(self, false);
+
+        if self.current_instr_analysis.carry_flag_used {
+            dynasm!{self.asm
+                ; test arg, BYTE 0x01
+                ; jz >clear_carry
+                ; or n_p, CARRY as _
+                ; jmp >next
+                ; clear_carry:
+                ; and n_p, (!CARRY) as _
+                ; next:
+            }
+        }
+
         dynasm!{self.asm
-            ;; mode.read_to_arg(self, false)
-            ; test arg, BYTE 0x01
-            ; jz >clear_carry
-            ; or n_p, CARRY as _
-            ; jmp >next
-            ; clear_carry:
-            ; and n_p, (!CARRY) as _
-            ; next:
             ; shr arg, BYTE 1
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
+            ;; self.set_sign_zero_from_arg()
             ;; mode.write_from_arg(self)
         }
     }
     fn asl<M: AddressingMode>(&mut self, mode: M) {
+        mode.read_to_arg(self, false);
+
+        if self.current_instr_analysis.carry_flag_used {
+            dynasm!{self.asm
+                ; test arg, BYTE HIGH_BIT as _
+                ; jz >clear_carry
+                ; or n_p, CARRY as _
+                ; jmp >next
+                ; clear_carry:
+                ; and n_p, (!CARRY) as _
+                ; next:
+            }
+        }
+
         dynasm!{self.asm
-            ;; mode.read_to_arg(self, false)
-            ; test arg, BYTE HIGH_BIT as _
-            ; jz >clear_carry
-            ; or n_p, CARRY as _
-            ; jmp >next
-            ; clear_carry:
-            ; and n_p, (!CARRY) as _
-            ; next:
             ; shl arg, BYTE 1
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
+            ;; self.set_sign_zero_from_arg()
             ;; mode.write_from_arg(self)
         }
     }
@@ -595,19 +626,22 @@ impl<'a> Compiler<'a> {
             ; jz >next
             ; or arg, BYTE HIGH_BIT as _
             ; next:
-
-            ; test al, BYTE LOW_BIT as _
-            ; jz >clear_carry
-            ; or n_p, CARRY as _
-            ; jmp >next
-            ; clear_carry:
-            ; and n_p, (!CARRY) as _
-            ; next:
-
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
-            ;; mode.write_from_arg(self)
         }
+
+        if self.current_instr_analysis.carry_flag_used {
+            dynasm!{self.asm
+                ; test al, BYTE LOW_BIT as _
+                ; jz >clear_carry
+                ; or n_p, CARRY as _
+                ; jmp >next
+                ; clear_carry:
+                ; and n_p, (!CARRY) as _
+                ; next:
+            }
+        }
+
+        self.set_sign_zero_from_arg();
+        mode.write_from_arg(self);
     }
     fn rol<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
@@ -618,19 +652,22 @@ impl<'a> Compiler<'a> {
             ; jz >next
             ; or arg, BYTE LOW_BIT as _
             ; next:
-
-            ; test al, BYTE HIGH_BIT as _
-            ; jz >clear_carry
-            ; or n_p, CARRY as _
-            ; jmp >next
-            ; clear_carry:
-            ; and n_p, (!CARRY) as _
-            ; next:
-
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
-            ;; mode.write_from_arg(self)
         }
+
+        if self.current_instr_analysis.carry_flag_used {
+            dynasm!{self.asm
+                ; test al, BYTE HIGH_BIT as _
+                ; jz >clear_carry
+                ; or n_p, CARRY as _
+                ; jmp >next
+                ; clear_carry:
+                ; and n_p, (!CARRY) as _
+                ; next:
+            }
+        }
+
+        self.set_sign_zero_from_arg();
+        mode.write_from_arg(self);
     }
 
     // Jumps
@@ -803,8 +840,7 @@ impl<'a> Compiler<'a> {
             }
         } else {
             // Target may be before this block, or misaligned with the instructions in this
-            // block.
-            // Either way, safest to treat it as a conditional JMP.
+            // block. Either way, safest to treat it as a conditional JMP.
             dynasm!{self.asm
                 ; mov n_pc, target as _
                 ;; epilogue!{self}
@@ -834,8 +870,7 @@ impl<'a> Compiler<'a> {
             ; mov n_a, BYTE [ram + r13 + 0x101]
             ; inc n_sp
             ; mov arg, n_a
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
+            ;; self.set_sign_zero_from_arg()
         }
     }
     fn pha(&mut self) {
@@ -886,32 +921,28 @@ impl<'a> Compiler<'a> {
         dynasm!{self.asm
             ; mov n_x, n_a
             ; mov arg, n_a
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
+            ;; self.set_sign_zero_from_arg()
         }
     }
     fn tay(&mut self) {
         dynasm!{self.asm
             ; mov n_y, n_a
             ; mov arg, n_a
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
+            ;; self.set_sign_zero_from_arg()
         }
     }
     fn tsx(&mut self) {
         dynasm!{self.asm
             ; mov n_x, n_sp
             ; mov arg, n_sp
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
+            ;; self.set_sign_zero_from_arg()
         }
     }
     fn txa(&mut self) {
         dynasm!{self.asm
             ; mov n_a, n_x
             ; mov arg, n_x
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
+            ;; self.set_sign_zero_from_arg()
         }
     }
     fn txs(&mut self) {
@@ -923,8 +954,7 @@ impl<'a> Compiler<'a> {
         dynasm!{self.asm
             ; mov n_a, n_y
             ; mov arg, n_y
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
+            ;; self.set_sign_zero_from_arg()
         }
     }
 
@@ -935,8 +965,7 @@ impl<'a> Compiler<'a> {
     fn lax<M: AddressingMode>(&mut self, mode: M) {
         dynasm!{self.asm
             ;; mode.read_to_arg(self, true)
-            ;; call_naked!(self, set_zero_flag)
-            ;; call_naked!(self, set_sign_flag)
+            ;; self.set_sign_zero_from_arg()
             ; mov n_a, arg
             ; mov n_x, arg
         }
@@ -995,6 +1024,15 @@ impl<'a> Compiler<'a> {
         )
     }
 
+    fn set_sign_zero_from_arg(&mut self) {
+        if self.current_instr_analysis.zero_flag_used {
+            call_naked!(self, set_zero_flag);
+        }
+        if self.current_instr_analysis.sign_flag_used {
+            call_naked!(self, set_sign_flag);
+        }
+    }
+
     fn relative_addr(&self, disp: u8) -> u16 {
         let disp = (disp as i8) as i16; // We want to sign-extend here.
         let pc = self.pc as i16;
@@ -1010,14 +1048,6 @@ impl<'a> Compiler<'a> {
 
     fn read_w_incr_pc(&mut self) -> u16 {
         self.read_incr_pc() as u16 | ((self.read_incr_pc() as u16) << 8)
-    }
-
-    fn get_current_instr_analysis(&mut self) -> &InstructionAnalysis {
-        let temp = self.current_instruction;
-        // There will always be an instruction for the current PC unless something went
-        // horribly
-        // wrong.
-        self.analysis.instructions.get(&temp).unwrap()
     }
 
     fn get_branch_target(&mut self) -> (u16, bool) {

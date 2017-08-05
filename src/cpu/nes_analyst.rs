@@ -180,7 +180,7 @@ impl<'a> Analyst<'a> {
     // Logic/Math Ops
     fn bit(&mut self, _: u8) {
         self.sign_set();
-        self.carry_set();
+        self.overflow_set();
         self.zero_set();
     }
     fn and(&mut self, _: u8) {
