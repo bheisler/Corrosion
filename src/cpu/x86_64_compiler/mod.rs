@@ -27,6 +27,18 @@ const SIGN: u8 = 0b1000_0000;
 const HIGH_BIT: u8 = 0b1000_0000;
 const LOW_BIT: u8 = 0b0000_0001;
 
+macro_rules! offset_of {
+    ($ty:ty, $field:ident) => {
+        &(*(0 as *const $ty)).$field as *const _ as usize
+    }
+}
+
+macro_rules! offset_of_2 {
+    ($ty:ty, $field:ident, $field2:ident) => {
+        &(*(0 as *const $ty)).$field.$field2 as *const _ as usize
+    }
+}
+
 pub struct ExecutableBlock {
     offset: AssemblyOffset,
     buffer: ExecutableBuffer,
@@ -36,10 +48,10 @@ impl ExecutableBlock {
     pub fn call(&self, cpu: &mut CPU) {
         let cpu: *mut CPU = cpu as _;
         let offset = self.offset;
-        let f: extern "win64" fn(*mut CPU, *mut [u8; 0x800]) -> () =
+        let f: fn(*mut CPU, *mut [u8; 0x800]) -> () =
             unsafe { mem::transmute(self.buffer.ptr(offset)) };
         let ram = unsafe { &mut (*cpu).ram };
-        f(cpu, ram as _);
+        trampoline_to_nes(f, cpu, ram);
     }
 }
 
@@ -130,25 +142,63 @@ pub extern "win64" fn trace(cpu: *mut CPU) {
     unsafe { (*cpu).trace() }
 }
 
-macro_rules! epilogue {
-    ($this:ident) => {{
-        store_registers!($this);
-        dynasm!{$this.asm
-            ; pop r15
-            ; pop r14
-            ; pop r13
-            ; pop r12
-            ; pop rbx
-            ; ret
-        }
-    }};
-}
-
 macro_rules! call_naked {
     ($this:ident, $addr:expr) => {dynasm!($this.asm
         ; mov rax, QWORD $addr as _
         ; call rax
     );};
+}
+
+fn trampoline_to_nes(
+    f: fn(*mut CPU, *mut [u8; 0x800]) -> (),
+    cpu: *mut CPU,
+    ram: *mut [u8; 0x800],
+) {
+    unsafe {
+        asm!(
+            "
+                ${:comment} Recieve the function pointer, CPU and RAM
+                mov rax, $0
+                mov rbx, $1
+                mov rdx, $2
+
+                ${:comment} Load registers, etc. from struct
+                xor r8, r8
+                movzx r9, byte ptr [rbx+$3]
+                movzx r10, byte ptr [rbx+$4]
+                movzx r11, byte ptr [rbx+$5]
+                movzx r12, byte ptr [rbx+$6]
+                movzx r13, byte ptr [rbx+$7]
+                movzx r14, word ptr [rbx+$8]
+                mov r15, qword ptr [rbx+$9]
+
+                ${:comment} Call generated code block
+                call rax
+
+                ${:comment} Store registers, etc. back in struct
+                mov qword ptr [rbx+$9], r15
+                mov word ptr [rbx+$8], r14w
+                mov byte ptr [rbx+$7], r13b
+                mov byte ptr [rbx+$6], r12b
+                mov byte ptr [rbx+$5], r11b
+                mov byte ptr [rbx+$4], r10b
+                mov byte ptr [rbx+$3], r9b
+           "
+            :
+            : "r"(f),
+              "r"(cpu),
+              "r"(ram),
+              "n"(offset_of_2!(CPU, regs, a))
+              "n"(offset_of_2!(CPU, regs, x))
+              "n"(offset_of_2!(CPU, regs, y))
+              "n"(offset_of_2!(CPU, regs, p))
+              "n"(offset_of_2!(CPU, regs, sp))
+              "n"(offset_of_2!(CPU, regs, pc))
+              "n"(offset_of!(CPU, cycle))
+            : "rax", "rbx", "rdx", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"
+            : "intel", "alignstack"
+        )
+    }
 }
 
 #[naked]
@@ -223,8 +273,6 @@ impl<'a> Compiler<'a> {
     fn compile_block(mut self) -> ExecutableBlock {
         let start = self.asm.offset();
 
-        self.prologue();
-
         while self.pc <= self.analysis.exit_point {
             self.current_instruction = self.pc;
             let temp = self.current_instruction;
@@ -246,19 +294,6 @@ impl<'a> Compiler<'a> {
             offset: start,
             buffer: self.asm.finalize().unwrap(),
         }
-    }
-
-    fn prologue(&mut self) {
-        dynasm!{self.asm
-            ; push rbx
-            ; push r12
-            ; push r13
-            ; push r14
-            ; push r15
-            ; mov rbx, rcx //Move the CPU pointer to the CPU pointer register
-            //Leave the RAM pointer in the RAM pointer register
-        }
-        load_registers!(self);
     }
 
     fn emit_branch_target(&mut self) {
@@ -289,7 +324,7 @@ impl<'a> Compiler<'a> {
             ; test rcx, rcx
             ; mov rcx, WORD self.pc as _
             ; cmovnz n_pc, cx
-            ;; epilogue!(self)
+            ; ret
             ; next:
         }
     }
@@ -667,7 +702,7 @@ impl<'a> Compiler<'a> {
         let target = self.read_w_incr_pc();
         dynasm!(self.asm
             ; mov n_pc, WORD target as _
-            ;; epilogue!(self)
+            ; ret
         )
     }
     fn jmpi(&mut self) {
@@ -690,7 +725,9 @@ impl<'a> Compiler<'a> {
         } else {
             self.jmpi_slow(lo_addr, hi_addr);
         }
-        epilogue!(self);
+        dynasm!{self.asm
+            ; ret
+        }
     }
     fn jmpi_slow(&mut self, lo_addr: u16, hi_addr: u16) {
         dynasm!{self.asm
@@ -710,7 +747,7 @@ impl<'a> Compiler<'a> {
         dynasm!(self.asm
             ;; self.stack_push_w(ret_addr)
             ; mov n_pc, WORD target as _
-            ;; epilogue!(self)
+            ; ret
         )
     }
     fn rts(&mut self) {
@@ -719,7 +756,7 @@ impl<'a> Compiler<'a> {
             ; mov ax, WORD [ram + r13 + 0xFF]
             ; inc ax
             ; mov n_pc, ax
-            ;; epilogue!(self)
+            ; ret
         }
     }
     fn rti(&mut self) {
@@ -729,7 +766,7 @@ impl<'a> Compiler<'a> {
             ; or n_p, BYTE 0b0010_0000
             ; add n_sp, BYTE 2
             ; mov n_pc, WORD [ram + r13 + 0xFF]
-            ;; epilogue!(self)
+            ; ret
         }
     }
     fn brk(&mut self) {
@@ -742,11 +779,13 @@ impl<'a> Compiler<'a> {
             ; or arg, BYTE 0b0011_0000
             ; dec n_sp
             ; mov BYTE [ram + r13 + 0x101], arg
-            ;; epilogue!(self)
+            ; ret
         }
     }
     fn unsupported(&mut self, _: u8) {
-        epilogue!(self);
+        dynasm!(self.asm
+            ; ret
+        )
     }
 
     fn unofficial(&self) {}
@@ -835,7 +874,7 @@ impl<'a> Compiler<'a> {
             // block. Either way, safest to treat it as a conditional JMP.
             dynasm!{self.asm
                 ; mov n_pc, target as _
-                ;; epilogue!{self}
+                ; ret
             }
         }
     }
@@ -1002,7 +1041,7 @@ impl<'a> Compiler<'a> {
     fn kil(&mut self) {
         dynasm!{self.asm
             ; mov BYTE cpu => CPU.halted, BYTE true as _
-            ;; epilogue!(self)
+            ; ret
         }
     }
 

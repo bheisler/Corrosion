@@ -19,9 +19,9 @@ macro_rules! call_read {
         ; pop rdx // Move the 6502 address to the second argument register
         ; mov rax, QWORD ::cpu::x86_64_compiler::addressing_modes::read_memory as _
         ; mov rcx, rbx //Pointer to CPU is first arg
-        ; sub rsp, 0x28
+        ; sub rsp, 0x30
         ; call rax
-        ; add rsp, 0x28
+        ; add rsp, 0x30
         ;; load_registers!($this)
         ; mov r8, rax //rax contains returned value, move it to r8 (which is arg)
         ; pop rdx
@@ -61,9 +61,9 @@ macro_rules! call_write {
         ; mov rax, QWORD ::cpu::x86_64_compiler::addressing_modes::write_memory as _
         ; mov rcx, rbx //Pointer to CPU is first arg
         //Conveniently, we already have the value in r8
-        ; sub rsp, 0x28
+        ; sub rsp, 0x30
         ; call rax
-        ; add rsp, 0x28
+        ; add rsp, 0x30
         ;; load_registers!($this)
         ; pop rdx
     );};
@@ -425,28 +425,44 @@ impl<'a> Compiler<'a> {
         ImmediateAddressingMode
     }
     pub fn absolute(&mut self) -> AbsoluteAddressingMode {
-        AbsoluteAddressingMode { addr: self.read_w_incr_pc() }
+        AbsoluteAddressingMode {
+            addr: self.read_w_incr_pc(),
+        }
     }
     pub fn absolute_x(&mut self) -> AbsoluteXAddressingMode {
-        AbsoluteXAddressingMode { addr: self.read_w_incr_pc() }
+        AbsoluteXAddressingMode {
+            addr: self.read_w_incr_pc(),
+        }
     }
     pub fn absolute_y(&mut self) -> AbsoluteYAddressingMode {
-        AbsoluteYAddressingMode { addr: self.read_w_incr_pc() }
+        AbsoluteYAddressingMode {
+            addr: self.read_w_incr_pc(),
+        }
     }
     pub fn zero_page(&mut self) -> ZeroPageAddressingMode {
-        ZeroPageAddressingMode { addr: self.read_incr_pc() }
+        ZeroPageAddressingMode {
+            addr: self.read_incr_pc(),
+        }
     }
     pub fn zero_page_x(&mut self) -> ZeroPageXAddressingMode {
-        ZeroPageXAddressingMode { addr: self.read_incr_pc() }
+        ZeroPageXAddressingMode {
+            addr: self.read_incr_pc(),
+        }
     }
     pub fn zero_page_y(&mut self) -> ZeroPageYAddressingMode {
-        ZeroPageYAddressingMode { addr: self.read_incr_pc() }
+        ZeroPageYAddressingMode {
+            addr: self.read_incr_pc(),
+        }
     }
     pub fn indirect_x(&mut self) -> IndirectXAddressingMode {
-        IndirectXAddressingMode { addr: self.read_incr_pc() }
+        IndirectXAddressingMode {
+            addr: self.read_incr_pc(),
+        }
     }
     pub fn indirect_y(&mut self) -> IndirectYAddressingMode {
-        IndirectYAddressingMode { addr: self.read_incr_pc() }
+        IndirectYAddressingMode {
+            addr: self.read_incr_pc(),
+        }
     }
     pub fn accumulator(&mut self) -> AccumulatorAddressingMode {
         AccumulatorAddressingMode
