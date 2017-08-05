@@ -69,18 +69,12 @@ macro_rules! load_registers {
         dynasm!($this.asm
             ; lea rcx, cpu => CPU.regs
             ; xor r8, r8
-            ; xor r9, r9
-            ; mov n_a, BYTE rcx => Registers.a
-            ; xor r10, r10
-            ; mov n_x, BYTE rcx => Registers.x
-            ; xor r11, r11
-            ; mov n_y, BYTE rcx => Registers.y
-            ; xor r12, r12
-            ; mov n_p, BYTE rcx => Registers.p
-            ; xor r13, r13
-            ; mov n_sp, BYTE rcx => Registers.sp
-            ; xor r14, r14
-            ; mov n_pc, WORD rcx => Registers.pc
+            ; movzx r9, BYTE rcx => Registers.a
+            ; movzx r10, BYTE rcx => Registers.x
+            ; movzx r11, BYTE rcx => Registers.y
+            ; movzx r12, BYTE rcx => Registers.p
+            ; movzx r13, BYTE rcx => Registers.sp
+            ; movzx r14, WORD rcx => Registers.pc
             ; mov cyc, QWORD cpu => CPU.cycle
         );
     }};
@@ -152,10 +146,8 @@ macro_rules! epilogue {
 
 macro_rules! call_naked {
     ($this:ident, $addr:expr) => {dynasm!($this.asm
-        ; push rax
         ; mov rax, QWORD $addr as _
         ; call rax
-        ; pop rax
     );};
 }
 
