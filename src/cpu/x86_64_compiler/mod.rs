@@ -120,9 +120,9 @@ macro_rules! call_trace {
         ; push r11
         ; mov rax, QWORD ::cpu::x86_64_compiler::trace as _
         ; mov rcx, rbx //Pointer to CPU is first arg
-        ; sub rsp, 0x20
+        ; sub rsp, 0x28
         ; call rax
-        ; add rsp, 0x20
+        ; add rsp, 0x28
         ; pop r11
         ; pop r10
         ; pop r9
