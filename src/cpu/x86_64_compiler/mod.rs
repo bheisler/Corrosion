@@ -7,6 +7,7 @@ use cpu::CYCLE_TABLE;
 use cpu::IRQ_VECTOR;
 use cpu::JitInterrupt;
 use cpu::Registers;
+use cpu::dispatcher::Dispatcher;
 use cpu::nes_analyst::Analyst;
 use cpu::nes_analyst::BlockAnalysis;
 use cpu::nes_analyst::InstructionAnalysis;
@@ -48,17 +49,24 @@ pub struct ExecutableBlock {
 impl ExecutableBlock {
     pub fn call(&self, cpu: &mut CPU) {
         let cpu: *mut CPU = cpu as _;
-        let offset = self.offset;
-        let f: fn(*mut CPU, *mut [u8; 0x800]) -> () =
-            unsafe { mem::transmute(self.buffer.ptr(offset)) };
+        let ptr = self.get_ptr();
+        let f: fn(*mut CPU, *mut [u8; 0x800]) -> () = unsafe { mem::transmute(ptr) };
         let ram = unsafe { &mut (*cpu).ram };
         trampoline_to_nes(f, cpu, ram);
     }
+
+    pub fn get_ptr(&self) -> *const u8 {
+        self.buffer.ptr(self.offset)
+    }
 }
 
-pub fn compile(addr: u16, cpu: &mut CPU) -> FnvHashMap<u16, ExecutableBlock> {
+pub fn compile(
+    addr: u16,
+    cpu: &mut CPU,
+    dispatcher: &mut Dispatcher,
+) -> FnvHashMap<u16, ExecutableBlock> {
     let analysis = Analyst::new(cpu).analyze(addr);
-    Compiler::new(cpu, analysis).compile_block()
+    Compiler::new(cpu, dispatcher, analysis).compile_block()
 }
 
 // rcx and sub-sections thereof are the general-purpose scratch register.
@@ -106,6 +114,29 @@ macro_rules! store_registers {
             ; mov QWORD cpu => CPU.cycle, cyc
         );
     }};
+}
+
+#[allow(unused_macros)]
+macro_rules! debug_call {
+    ($this:ident, $func:path) => {dynasm!($this.asm
+        ; mov n_pc, WORD $this.pc as _
+        ;; store_registers!($this)
+
+        ; push rcx
+        ; push rdx
+        ; push r9
+        ; push r10
+        ; push r11
+        ; mov rax, QWORD $func as _
+        ; sub rsp, 0x20
+        ; call rax
+        ; add rsp, 0x20
+        ; pop r11
+        ; pop r10
+        ; pop r9
+        ; pop rdx
+        ; pop rcx
+    );};
 }
 
 #[cfg(feature = "debug_features")]
@@ -246,8 +277,10 @@ use self::addressing_modes::AddressingMode;
 struct Compiler<'a> {
     asm: ::dynasmrt::x64::Assembler,
     cpu: &'a mut CPU,
+    dispatcher: &'a mut Dispatcher,
     analysis: BlockAnalysis,
 
+    entry_point: u16,
     pc: u16,
     current_instruction: u16,
     current_instr_analysis: InstructionAnalysis,
@@ -256,13 +289,19 @@ struct Compiler<'a> {
 }
 
 impl<'a> Compiler<'a> {
-    fn new(cpu: &'a mut CPU, analysis: BlockAnalysis) -> Compiler<'a> {
+    fn new(
+        cpu: &'a mut CPU,
+        dispatcher: &'a mut Dispatcher,
+        analysis: BlockAnalysis,
+    ) -> Compiler<'a> {
         let entry_point = analysis.entry_point;
         Compiler {
             asm: ::dynasmrt::x64::Assembler::new(),
             cpu: cpu,
+            dispatcher: dispatcher,
             analysis: analysis,
 
+            entry_point: entry_point,
             pc: entry_point,
             current_instruction: entry_point,
             current_instr_analysis: Default::default(),
@@ -713,10 +752,22 @@ impl<'a> Compiler<'a> {
     // Jumps
     fn jmp(&mut self) {
         let target = self.read_w_incr_pc();
-        dynasm!(self.asm
-            ; mov n_pc, WORD target as _
-            ; ret
-        )
+
+        let link = self.dispatcher
+            .lock_block(target, self.entry_point, self.cpu);
+        match link {
+            Some(block) => {
+                let ptr = block.get_ptr();
+                dynasm!(self.asm
+                    ; mov rax, QWORD ptr as _
+                    ; jmp rax
+                )
+            }
+            None => dynasm!(self.asm
+                ; mov n_pc, WORD target as _
+                ; ret
+            ),
+        }
     }
     fn jmpi(&mut self) {
         let mut target = self.read_w_incr_pc();
@@ -757,11 +808,22 @@ impl<'a> Compiler<'a> {
     fn jsr(&mut self) {
         let target = self.read_w_incr_pc();
         let ret_addr = self.pc - 1;
-        dynasm!(self.asm
-            ;; self.stack_push_w(ret_addr)
-            ; mov n_pc, WORD target as _
-            ; ret
-        )
+        self.stack_push_w(ret_addr);
+        let link = self.dispatcher
+            .lock_block(target, self.entry_point, self.cpu);
+        match link {
+            Some(block) => {
+                let ptr = block.get_ptr();
+                dynasm!(self.asm
+                    ; mov rax, QWORD ptr as _
+                    ; jmp rax
+                )
+            }
+            None => dynasm!(self.asm
+                    ; mov n_pc, WORD target as _
+                    ; ret
+                ),
+        }
     }
     fn rts(&mut self) {
         dynasm!{self.asm

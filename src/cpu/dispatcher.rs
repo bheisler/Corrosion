@@ -6,7 +6,7 @@ use cpu::compiler;
 #[cfg(target_arch = "x86_64")]
 use cpu::compiler::ExecutableBlock;
 
-use fnv::FnvHashMap;
+use fnv::{FnvHashMap, FnvHashSet};
 #[cfg(not(target_arch = "x86_64"))]
 pub struct Dispatcher {}
 #[cfg(not(target_arch = "x86_64"))]
@@ -29,10 +29,12 @@ struct RomAddress {
 #[cfg(target_arch = "x86_64")]
 pub struct Dispatcher {
     table: FnvHashMap<RomAddress, Block>,
+    compiling: FnvHashSet<RomAddress>,
 }
 #[cfg(target_arch = "x86_64")]
 struct Block {
     code: ExecutableBlock,
+    locked: bool,
 }
 
 #[cfg(feature = "debug_features")]
@@ -54,6 +56,7 @@ impl Dispatcher {
     pub fn new() -> Dispatcher {
         Dispatcher {
             table: FnvHashMap::default(),
+            compiling: FnvHashSet::default(),
         }
     }
 
@@ -69,6 +72,26 @@ impl Dispatcher {
         let addr = cpu.regs.pc;
         let executable = &self.get_block(addr, cpu).code;
         executable.call(cpu);
+    }
+
+    pub fn lock_block(
+        &mut self,
+        target_addr: u16,
+        caller_addr: u16,
+        cpu: &mut CPU,
+    ) -> Option<&ExecutableBlock> {
+        let target_rom_addr = self.get_rom_addr(target_addr, cpu);
+
+        if self.compiling.contains(&target_rom_addr) {
+            // Prevent infinite recursion.
+            None
+        } else if target_rom_addr.bank == self.get_rom_addr(caller_addr, cpu).bank {
+            self.get_block(target_addr, cpu);
+            self.table.get_mut(&target_rom_addr).unwrap().locked = true;
+            Some(&self.table.get(&target_rom_addr).unwrap().code)
+        } else {
+            None
+        }
     }
 
     fn get_block(&mut self, addr: u16, cpu: &mut CPU) -> &Block {
@@ -87,10 +110,32 @@ impl Dispatcher {
         if cpu.settings.disassemble_functions {
             disasm_function(cpu, addr);
         }
-        let executables = compiler::compile(addr, cpu);
+
+        let target_rom_addr = self.get_rom_addr(addr, cpu);
+        self.compiling.insert(target_rom_addr.clone());
+
+        let executables = compiler::compile(addr, cpu, self);
         for (addr, block) in executables {
             let rom_addr = self.get_rom_addr(addr, cpu);
-            self.table.insert(rom_addr, Block { code: block });
+
+            // Don't overwrite (and therefore drop) locked blocks, they're linked to other
+            // blocks.
+            // TODO: Track those links and patch them to the new address
+            if let Some(block) = self.table.get(&rom_addr) {
+                if block.locked {
+                    continue;
+                }
+            }
+
+            self.table.insert(
+                rom_addr,
+                Block {
+                    code: block,
+                    locked: false,
+                },
+            );
         }
+
+        self.compiling.remove(&target_rom_addr);
     }
 }
