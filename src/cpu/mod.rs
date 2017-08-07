@@ -1186,7 +1186,9 @@ impl CPU {
             self.run_ppu();
         }
 
-        if self.regs.pc >= 0x4020 && self.settings.jit {
+        if (self.regs.pc >= 0x4020 && self.regs.pc < 0x6000 || self.regs.pc > 0x8000) &&
+            self.settings.jit
+        {
             unsafe { (*self.dispatcher.get()).jump(self) }
         } else {
             if self.settings.trace_cpu {

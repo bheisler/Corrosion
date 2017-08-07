@@ -40,6 +40,7 @@ pub struct MappingTable {
 }
 
 fn to_page_num(addr: u16) -> usize {
+    assert!(addr >= 0x8000);
     ((addr >> 12) & 0b0111) as usize
 }
 
