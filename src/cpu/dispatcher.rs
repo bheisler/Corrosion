@@ -57,11 +57,6 @@ impl Dispatcher {
         }
     }
 
-    fn put(&mut self, start_addr: RomAddress, code: ExecutableBlock) -> &Block {
-        self.table.insert(start_addr, Block { code: code });
-        self.table.get(&start_addr).unwrap()
-    }
-
     fn get_rom_addr(&self, addr: u16, cpu: &CPU) -> RomAddress {
         let rom_bank = unsafe { (*cpu.cart.get()).prg_rom_bank_id(addr) };
         RomAddress {
@@ -79,22 +74,23 @@ impl Dispatcher {
     fn get_block(&mut self, addr: u16, cpu: &mut CPU) -> &Block {
         let rom_addr = self.get_rom_addr(addr, cpu);
         if self.should_compile(rom_addr) {
-            self.compile(addr, cpu)
-        } else {
-            self.table.get(&rom_addr).unwrap()
+            self.compile(addr, cpu);
         }
+        self.table.get(&rom_addr).unwrap()
     }
 
     fn should_compile(&self, addr: RomAddress) -> bool {
         !self.table.contains_key(&addr)
     }
 
-    fn compile(&mut self, addr: u16, cpu: &mut CPU) -> &Block {
+    fn compile(&mut self, addr: u16, cpu: &mut CPU) {
         if cpu.settings.disassemble_functions {
             disasm_function(cpu, addr);
         }
-        let executable = compiler::compile(addr, cpu);
-        let rom_addr = self.get_rom_addr(addr, cpu);
-        self.put(rom_addr, executable)
+        let executables = compiler::compile(addr, cpu);
+        for (addr, block) in executables {
+            let rom_addr = self.get_rom_addr(addr, cpu);
+            self.table.insert(rom_addr, Block { code: block });
+        }
     }
 }

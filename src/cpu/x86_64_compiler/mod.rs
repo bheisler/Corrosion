@@ -11,10 +11,11 @@ use cpu::nes_analyst::Analyst;
 use cpu::nes_analyst::BlockAnalysis;
 use cpu::nes_analyst::InstructionAnalysis;
 
-use dynasmrt::{AssemblyOffset, DynasmApi, DynasmLabelApi, ExecutableBuffer, DynamicLabel};
+use dynasmrt::{AssemblyOffset, DynamicLabel, DynasmApi, DynasmLabelApi, ExecutableBuffer};
 use fnv::FnvHashMap;
 use memory::MemSegment;
 use std::mem;
+use std::rc::Rc;
 
 const CARRY: u8 = 0b0000_0001;
 const ZERO: u8 = 0b0000_0010;
@@ -41,7 +42,7 @@ macro_rules! offset_of_2 {
 
 pub struct ExecutableBlock {
     offset: AssemblyOffset,
-    buffer: ExecutableBuffer,
+    buffer: Rc<ExecutableBuffer>,
 }
 
 impl ExecutableBlock {
@@ -55,7 +56,7 @@ impl ExecutableBlock {
     }
 }
 
-pub fn compile(addr: u16, cpu: &mut CPU) -> ExecutableBlock {
+pub fn compile(addr: u16, cpu: &mut CPU) -> FnvHashMap<u16, ExecutableBlock> {
     let analysis = Analyst::new(cpu).analyze(addr);
     Compiler::new(cpu, analysis).compile_block()
 }
@@ -270,12 +271,13 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn compile_block(mut self) -> ExecutableBlock {
-        let start = self.asm.offset();
+    fn compile_block(mut self) -> FnvHashMap<u16, ExecutableBlock> {
+        let mut addr_to_offset = FnvHashMap::default();
 
         while self.pc <= self.analysis.exit_point {
             self.current_instruction = self.pc;
             let temp = self.current_instruction;
+            addr_to_offset.insert(temp, self.asm.offset());
             self.current_instr_analysis = self.analysis.instructions.get(&temp).unwrap().clone();
 
             self.emit_branch_target();
@@ -290,10 +292,21 @@ impl<'a> Compiler<'a> {
             decode_opcode!(opcode, self);
         }
 
-        ExecutableBlock {
-            offset: start,
-            buffer: self.asm.finalize().unwrap(),
-        }
+        let buffer = Rc::new(self.asm.finalize().unwrap());
+
+        let result: FnvHashMap<_, _> = addr_to_offset
+            .iter()
+            .map(|(addr, offset)| {
+                (
+                    *addr,
+                    ExecutableBlock {
+                        offset: offset.clone(),
+                        buffer: buffer.clone(),
+                    },
+                )
+            })
+            .collect();
+        result
     }
 
     fn emit_branch_target(&mut self) {
