@@ -1,4 +1,4 @@
-use super::{Mapper, MapperParams};
+use super::{Mapper, MapperParams, RomAddress};
 use super::bank::*;
 
 struct Mapper000 {
@@ -17,7 +17,7 @@ pub fn new(params: MapperParams) -> Box<Mapper> {
         vec![0u8; 0].into_boxed_slice()
     };
 
-    let mut prg_rom_table = MappingTable::new(params.prg_rom);
+    let mut prg_rom_table = MappingTable::new(params.prg_rom, 8);
     let bank_count = prg_rom_table.bank_count();
     for page in 0..8 {
         prg_rom_table.map_page(page, page % bank_count);
@@ -41,8 +41,8 @@ impl Mapper for Mapper000 {
         self.prg_rom.get_bank_mut(idx)
     }
 
-    fn prg_rom_bank_id(&self, idx: u16) -> usize {
-        self.prg_rom.get_bank_id(idx)
+    fn prg_rom_address(&self, idx: u16) -> RomAddress {
+        self.prg_rom.get_rom_address(idx)
     }
 
     fn prg_ram_read(&mut self, idx: u16) -> u8 {

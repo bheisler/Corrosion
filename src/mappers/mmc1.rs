@@ -1,4 +1,4 @@
-use super::{Mapper, MapperParams};
+use super::{Mapper, MapperParams, RomAddress};
 use super::bank::*;
 use super::battery::BatteryBackedRam;
 use super::volatile::VolatileRam;
@@ -41,10 +41,8 @@ struct MMC1 {
 impl MMC1 {
     fn update_mapping(&mut self) {
         match self.regs.control.mode {
-            PrgMode::Switch32Kb => {
-                self.prg_rom
-                    .map_pages_linear(0..8, (self.regs.prg_bank & 0b0000_1110) * 8)
-            }
+            PrgMode::Switch32Kb => self.prg_rom
+                .map_pages_linear(0..8, (self.regs.prg_bank & 0b0000_1110) * 8),
             PrgMode::FixFirst => {
                 self.prg_rom.map_pages_linear(0..4, 0);
                 self.prg_rom
@@ -131,7 +129,7 @@ pub fn new(params: MapperParams) -> Box<Mapper> {
         },
         accumulator: 0,
         write_counter: 0,
-        prg_rom: MappingTable::new(params.prg_rom),
+        prg_rom: MappingTable::new(params.prg_rom, 4),
         chr_ram: chr_ram,
         prg_ram: prg_ram,
     };
@@ -162,8 +160,8 @@ impl Mapper for MMC1 {
         self.prg_rom.get_bank_mut(idx)
     }
 
-    fn prg_rom_bank_id(&self, idx: u16) -> usize {
-        self.prg_rom.get_bank_id(idx)
+    fn prg_rom_address(&self, idx: u16) -> RomAddress {
+        self.prg_rom.get_rom_address(idx)
     }
 
     fn prg_ram_read(&mut self, idx: u16) -> u8 {

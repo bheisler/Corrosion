@@ -2,7 +2,7 @@ pub mod ines;
 
 
 use cart::ines::{Rom, RomError};
-use mappers::{Mapper, MapperParams, RomBank};
+use mappers::{Mapper, MapperParams, RomAddress, RomBank};
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
@@ -61,8 +61,8 @@ impl Cart {
     pub fn prg_rom_write(&mut self, idx: u16, val: u8) -> &mut RomBank {
         self.mapper.prg_rom_write(idx, val)
     }
-    pub fn prg_rom_bank_id(&self, idx: u16) -> usize {
-        self.mapper.prg_rom_bank_id(idx)
+    pub fn prg_rom_address(&self, idx: u16) -> RomAddress {
+        self.mapper.prg_rom_address(idx)
     }
     pub fn prg_ram_read(&mut self, idx: u16) -> u8 {
         self.mapper.prg_ram_read(idx)

@@ -1,3 +1,4 @@
+use mappers::RomAddress;
 use std::ops::Range;
 
 pub struct RomBank {
@@ -37,6 +38,9 @@ pub struct MappingTable {
     // Mappings from CPU addresses to bank indexes.
     // Indexed in terms of pages starting at 0x8000.
     mappings: [usize; 8],
+
+    // Minimum window size in units of BANK_SIZE bytes
+    min_window_size: usize,
 }
 
 fn to_page_num(addr: u16) -> usize {
@@ -45,7 +49,10 @@ fn to_page_num(addr: u16) -> usize {
 }
 
 impl MappingTable {
-    pub fn new(rom: Vec<u8>) -> MappingTable {
+    /// Create a MappingTable from the given PRM ROM data and minimum window
+    /// size (in units of BANK_SIZE bytes)
+    pub fn new(rom: Vec<u8>, min_window_size: usize) -> MappingTable {
+        assert!(min_window_size <= 8);
         let mut banks: Vec<RomBank> = vec![];
         let bank_count = rom.len() / BANK_SIZE;
         let mut remaining_rom = rom;
@@ -58,6 +65,7 @@ impl MappingTable {
         MappingTable {
             banks: banks.into_boxed_slice(),
             mappings: [0; 8],
+            min_window_size: min_window_size,
         }
     }
 
@@ -71,8 +79,12 @@ impl MappingTable {
         &mut self.banks[index]
     }
 
-    pub fn get_bank_id(&self, addr: u16) -> usize {
-        self.mappings[to_page_num(addr)]
+    pub fn get_rom_address(&self, addr: u16) -> RomAddress {
+        let bank_id = self.mappings[to_page_num(addr)];
+        RomAddress {
+            window_id: bank_id / self.min_window_size,
+            offset: ((self.min_window_size * BANK_SIZE) as u16 - 1) & addr,
+        }
     }
 
     pub fn bank_count(&self) -> usize {

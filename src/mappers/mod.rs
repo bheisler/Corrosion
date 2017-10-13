@@ -26,13 +26,19 @@ fn standard_mapping_tables(mode: ScreenMode) -> &'static [u16; 4] {
     }
 }
 
+#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
+pub struct RomAddress {
+    pub window_id: usize,
+    pub offset: u16,
+}
+
 pub trait Mapper {
     fn prg_rom_read(&mut self, idx: u16) -> &RomBank;
     fn prg_rom_write(&mut self, idx: u16, val: u8) -> &mut RomBank;
 
-    /// Returns a number which uniquely identifies the bank of ROM backing the
+    /// Returns a struct which uniquely identifies the ROM cell backing the
     /// given address.
-    fn prg_rom_bank_id(&self, idx: u16) -> usize;
+    fn prg_rom_address(&self, idx: u16) -> RomAddress;
 
     fn prg_ram_read(&mut self, idx: u16) -> u8;
     fn prg_ram_write(&mut self, idx: u16, val: u8);

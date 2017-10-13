@@ -118,7 +118,7 @@ macro_rules! store_registers {
 
 #[allow(unused_macros)]
 macro_rules! debug_call {
-    ($this:ident, $func:path) => {dynasm!($this.asm
+    ($this:ident, $func:ident) => {dynasm!($this.asm
         ; mov n_pc, WORD $this.pc as _
         ;; store_registers!($this)
 
@@ -947,9 +947,20 @@ impl<'a> Compiler<'a> {
         } else {
             // Target may be before this block, or misaligned with the instructions in this
             // block. Either way, safest to treat it as a conditional JMP.
-            dynasm!{self.asm
-                ; mov n_pc, target as _
-                ; ret
+            let link = self.dispatcher
+                .lock_block(target, self.entry_point, self.cpu);
+            match link {
+                Some(block) => {
+                    let ptr = block.get_ptr();
+                    dynasm!(self.asm
+                        ; mov rax, QWORD ptr as _
+                        ; jmp rax
+                    )
+                }
+                None => dynasm!(self.asm
+                    ; mov n_pc, WORD target as _
+                    ; ret
+                ),
             }
         }
     }

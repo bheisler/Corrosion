@@ -5,8 +5,11 @@ use cpu::compiler;
 
 #[cfg(target_arch = "x86_64")]
 use cpu::compiler::ExecutableBlock;
-
 use fnv::{FnvHashMap, FnvHashSet};
+
+#[cfg(target_arch = "x86_64")]
+use mappers::RomAddress;
+
 #[cfg(not(target_arch = "x86_64"))]
 pub struct Dispatcher {}
 #[cfg(not(target_arch = "x86_64"))]
@@ -16,14 +19,6 @@ impl Dispatcher {
     }
 
     pub fn jump(&mut self, _: &mut CPU) {}
-
-    pub fn dirty(&mut self, _: usize, _: usize) {}
-}
-
-#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
-struct RomAddress {
-    bank: usize,
-    offset: u16,
 }
 
 #[cfg(target_arch = "x86_64")]
@@ -61,11 +56,7 @@ impl Dispatcher {
     }
 
     fn get_rom_addr(&self, addr: u16, cpu: &CPU) -> RomAddress {
-        let rom_bank = unsafe { (*cpu.cart.get()).prg_rom_bank_id(addr) };
-        RomAddress {
-            bank: rom_bank,
-            offset: addr & 0xFFF,
-        }
+        unsafe { (*cpu.cart.get()).prg_rom_address(addr) }
     }
 
     pub fn jump(&mut self, cpu: &mut CPU) {
@@ -80,13 +71,18 @@ impl Dispatcher {
         caller_addr: u16,
         cpu: &mut CPU,
     ) -> Option<&ExecutableBlock> {
-        let target_rom_addr = self.get_rom_addr(target_addr, cpu);
+        if target_addr < 0x8000 {
+            return None;
+        }
 
+        let target_rom_addr = self.get_rom_addr(target_addr, cpu);
         if self.compiling.contains(&target_rom_addr) {
             // Prevent infinite recursion.
             None
-        } else if target_rom_addr.bank == self.get_rom_addr(caller_addr, cpu).bank {
-            self.get_block(target_addr, cpu);
+        } else if target_rom_addr.window_id == self.get_rom_addr(caller_addr, cpu).window_id {
+            if self.should_compile(&target_rom_addr) {
+                self.compile(target_addr, &target_rom_addr, cpu);
+            }
             self.table.get_mut(&target_rom_addr).unwrap().locked = true;
             Some(&self.table.get(&target_rom_addr).unwrap().code)
         } else {
@@ -96,23 +92,22 @@ impl Dispatcher {
 
     fn get_block(&mut self, addr: u16, cpu: &mut CPU) -> &Block {
         let rom_addr = self.get_rom_addr(addr, cpu);
-        if self.should_compile(rom_addr) {
-            self.compile(addr, cpu);
+        if self.should_compile(&rom_addr) {
+            self.compile(addr, &rom_addr, cpu);
         }
         self.table.get(&rom_addr).unwrap()
     }
 
-    fn should_compile(&self, addr: RomAddress) -> bool {
-        !self.table.contains_key(&addr)
+    fn should_compile(&self, addr: &RomAddress) -> bool {
+        !self.table.contains_key(addr)
     }
 
-    fn compile(&mut self, addr: u16, cpu: &mut CPU) {
+    fn compile(&mut self, addr: u16, rom_addr: &RomAddress, cpu: &mut CPU) {
         if cpu.settings.disassemble_functions {
             disasm_function(cpu, addr);
         }
 
-        let target_rom_addr = self.get_rom_addr(addr, cpu);
-        self.compiling.insert(target_rom_addr.clone());
+        self.compiling.insert(rom_addr.clone());
 
         let executables = compiler::compile(addr, cpu, self);
         for (addr, block) in executables {
@@ -136,6 +131,6 @@ impl Dispatcher {
             );
         }
 
-        self.compiling.remove(&target_rom_addr);
+        self.compiling.remove(rom_addr);
     }
 }
