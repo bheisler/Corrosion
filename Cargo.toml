@@ -15,7 +15,7 @@ sdl2 = "0.29"
 blip_buf = "0.1.4"
 memmap = "0.5"
 simd = { version = "0.2", optional = true }
-dynasm = "0.1.1"
+dynasm = "0.1.2"
 fnv = "1.0"
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
